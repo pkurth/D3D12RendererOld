@@ -3,16 +3,11 @@
 #include "common.h"
 #include "command_queue.h"
 #include "buffer.h"
+#include "math.h"
 
 #include <dx/d3dx12.h>
 #include <wrl.h>
 using namespace Microsoft::WRL;
-
-#include <DirectXMath.h>
-
-typedef DirectX::XMFLOAT3 vec3;
-typedef DirectX::XMVECTOR vec4;
-typedef DirectX::XMMATRIX mat4;
 
 struct scene_data
 {

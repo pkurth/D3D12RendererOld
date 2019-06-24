@@ -39,8 +39,8 @@ scene_data loadScene(ComPtr<ID3D12Device2> device, dx_command_queue& copyCommand
 	scene_data result;
 
 	ComPtr<ID3D12Resource> intermediateVertexBuffer, intermediateIndexBuffer;
-	result.vertexBuffer = createVertexBuffer(device, commandList, cubeVertices, arraysize(cubeVertices), intermediateVertexBuffer);
-	result.indexBuffer = createIndexBuffer(device, commandList, cubeIndicies, arraysize(cubeIndicies), intermediateIndexBuffer);
+	result.vertexBuffer = commandList->createVertexBuffer(cubeVertices, arraysize(cubeVertices), intermediateVertexBuffer);
+	result.indexBuffer = commandList->createIndexBuffer(cubeIndicies, arraysize(cubeIndicies), intermediateIndexBuffer);
 
 	ComPtr<ID3DBlob> vertexShaderBlob;
 	checkResult(D3DReadFileToBlob(L"shaders/bin/VertexShader.cso", &vertexShaderBlob));
@@ -214,21 +214,22 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 
+	// Clear.
 	commandList->clearRTV(rtv, clearColor);
 	commandList->clearDepth(dsv);
 
 	// Prepare for rendering.
+	commandList->setPipelineState(pipelineState);
+	commandList->setRootSignature(scene.rootSignature);
+
+	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	commandList->setVertexBuffer(0, scene.vertexBuffer);
+	commandList->setIndexBuffer(scene.indexBuffer);
+
+	commandList->setViewport(viewport);
+	commandList->setScissor(scissorRect);
+
 	ComPtr<ID3D12GraphicsCommandList2> d3d12CommandList = commandList->getD3D12CommandList();
-	d3d12CommandList->SetPipelineState(pipelineState.Get());
-	d3d12CommandList->SetGraphicsRootSignature(scene.rootSignature.Get());
-
-	d3d12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	d3d12CommandList->IASetVertexBuffers(0, 1, &scene.vertexBuffer.view);
-	d3d12CommandList->IASetIndexBuffer(&scene.indexBuffer.view);
-
-	d3d12CommandList->RSSetViewports(1, &viewport);
-	d3d12CommandList->RSSetScissorRects(1, &scissorRect);
-
 	d3d12CommandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
 
 	mat4 mvpMatrix = XMMatrixMultiply(modelMatrix, viewMatrix);
@@ -236,7 +237,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	d3d12CommandList->SetGraphicsRoot32BitConstants(0, sizeof(mat4) / 4, &mvpMatrix, 0);
 
 	// Render.
-	d3d12CommandList->DrawIndexedInstanced(arraysize(cubeIndicies), 1, 0, 0, 0);
+	commandList->drawIndexed(arraysize(cubeIndicies), 1, 0, 0, 0);
 }
 
 

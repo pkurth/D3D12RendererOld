@@ -71,6 +71,9 @@
     <ClInclude Include="src\thread_safe_vector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\math.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\VertexShader.hlsl" />

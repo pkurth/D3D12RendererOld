@@ -67,6 +67,51 @@ void dx_command_list::updateBufferResource(ID3D12Resource** pDestinationResource
 	}
 }
 
+void dx_command_list::setPipelineState(ComPtr<ID3D12PipelineState> pipelineState)
+{
+	commandList->SetPipelineState(pipelineState.Get());
+}
+
+void dx_command_list::setRootSignature(ComPtr<ID3D12RootSignature> rootSignature)
+{
+	commandList->SetGraphicsRootSignature(rootSignature.Get());
+}
+
+void dx_command_list::setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology)
+{
+	commandList->IASetPrimitiveTopology(topology);
+}
+
+void dx_command_list::setVertexBuffer(uint32 slot, dx_vertex_buffer& buffer)
+{
+	commandList->IASetVertexBuffers(slot, 1, &buffer.view);
+}
+
+void dx_command_list::setIndexBuffer(dx_index_buffer& buffer)
+{
+	commandList->IASetIndexBuffer(&buffer.view);
+}
+
+void dx_command_list::setViewport(const D3D12_VIEWPORT& viewport)
+{
+	commandList->RSSetViewports(1, &viewport);
+}
+
+void dx_command_list::setScissor(const D3D12_RECT& scissor)
+{
+	commandList->RSSetScissorRects(1, &scissor);
+}
+
+void dx_command_list::draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance)
+{
+	commandList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
+}
+
+void dx_command_list::drawIndexed(uint32 indexCount, uint32 instanceCount, uint32 startIndex, int32 baseVertex, uint32 startInstance)
+{
+	commandList->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
+}
+
 void dx_command_list::reset()
 {
 	checkResult(commandAllocator->Reset());
