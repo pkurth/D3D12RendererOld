@@ -89,6 +89,7 @@
   <ItemGroup>
     <ClCompile Include="src\commands.cpp" />
     <ClCompile Include="src\command_queue.cpp" />
+    <ClCompile Include="src\descriptor_allocator.cpp" />
     <ClCompile Include="src\game.cpp" />
     <ClCompile Include="src\upload_buffer.cpp" />
     <ClCompile Include="src\main.cpp" />
@@ -99,6 +100,7 @@
     <ClInclude Include="src\commands.h" />
     <ClInclude Include="src\command_queue.h" />
     <ClInclude Include="src\common.h" />
+    <ClInclude Include="src\descriptor_allocator.h" />
     <ClInclude Include="src\error.h" />
     <ClInclude Include="src\game.h" />
     <ClInclude Include="src\upload_buffer.h" />

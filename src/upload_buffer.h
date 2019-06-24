@@ -1,10 +1,11 @@
 #pragma once
 
 #include "common.h"
-#include "commands.h"
 
-#include <memory>
-#include <deque>
+#include <dx/d3dx12.h>
+#include <wrl.h> 
+using namespace Microsoft::WRL;
+
 #include <vector>
 
 class dx_upload_buffer
