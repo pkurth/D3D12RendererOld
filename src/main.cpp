@@ -5,6 +5,7 @@
 #include "common.h"
 #include "error.h"
 #include "command_queue.h"
+#include "game.h"
 
 // directx
 #include <d3d12.h>
@@ -19,12 +20,14 @@
 
 static bool useWarp = false;
 
-static dx_command_queue commandQueue;
+static dx_command_queue renderCommandQueue;
+static dx_command_queue copyCommandQueue;
 static dx_window window;
+static dx_game game;
 
 static ComPtr<ID3D12Device2> device;
 
-static float clearColor[] = { 1.f, 0.f, 1.f, 1.f };
+static uint32 fenceValues[dx_window::numFrames] = {};
 
 static void enableDebugLayer()
 {
@@ -131,66 +134,53 @@ static void update()
 
 	frameCounter++;
 	auto t1 = clock.now();
-	auto dt = t1 - t0;
+	auto deltaTime = t1 - t0;
 	t0 = t1;
 
-	elapsedSeconds += dt.count() * 1e-9f;
+	float dt = deltaTime.count() * 1e-9f;
+	elapsedSeconds += dt;
 	if (elapsedSeconds > 1.f)
 	{
 		char buffer[500];
 		float fps = frameCounter / elapsedSeconds;
 		sprintf_s(buffer, sizeof(buffer), "FPS: %f\n", fps);
-		OutputDebugString(buffer);
+		std::cout << buffer << std::endl;
 
 		frameCounter = 0;
 		elapsedSeconds = 0.0;
 	}
+
+	game.update(dt);
 }
 
 void render(dx_window* window)
 {
 	ComPtr<ID3D12Resource> backBuffer = window->backBuffers[window->currentBackBufferIndex];
 
-	auto commandList = commandQueue.getAvailableCommandList();
+	ComPtr<ID3D12GraphicsCommandList2> commandList = renderCommandQueue.getAvailableCommandList();
 
-	// Clear backbuffer.
-	{
-		// Transition backbuffer from "Present" to "Render Target", so we can render to it.
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			backBuffer.Get(),
-			D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	// Transition backbuffer from "Present" to "Render Target", so we can render to it.
+	transitionResource(commandList, backBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-		commandList->ResourceBarrier(1, &barrier);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(window->rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+		window->currentBackBufferIndex, window->rtvDescriptorSize);
 
-		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(window->rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-			window->currentBackBufferIndex, window->rtvDescriptorSize);
+	game.render(commandList, rtv);
 
-		commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
-	}
+	// Transition back to "Present".
+	transitionResource(commandList, backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
-	// Present to screen.
-	{
-		// Transition back to "Present".
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			backBuffer.Get(),
-			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-		commandList->ResourceBarrier(1, &barrier);
+	fenceValues[window->currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);
 
-		uint64 fenceValue = commandQueue.executeCommandList(commandList);
+	uint32 newCurrentBackbufferIndex = window->present();
 
-		UINT syncInterval = window->vSync ? 1 : 0;
-		UINT presentFlags = window->tearingSupported && !window->vSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
-		checkResult(window->swapChain->Present(syncInterval, presentFlags));
-
-		window->currentBackBufferIndex = window->swapChain->GetCurrentBackBufferIndex();
-
-		commandQueue.waitForFenceValue(fenceValue);
-	}
+	renderCommandQueue.waitForFenceValue(fenceValues[newCurrentBackbufferIndex]);
 }
 
 void flushApplication()
 {
-	commandQueue.flush();
+	renderCommandQueue.flush();
+	copyCommandQueue.flush();
 }
 
 LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPARAM lParam)
@@ -227,12 +217,6 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 				window->toggleFullscreen();
 				}
 				break;
-			case VK_UP:
-				clearColor[0] += 0.1f;
-				break;
-			case VK_DOWN:
-				clearColor[0] -= 0.1f;
-				break;
 			}
 		} break;
 
@@ -251,6 +235,7 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 			int height = clientRect.bottom - clientRect.top;
 
 			window->resize(width, height);
+			game.resize(width, height);
 		} break;
 
 		case WM_DESTROY:
@@ -304,9 +289,11 @@ int main()
 	ComPtr<IDXGIAdapter4> dxgiAdapter4 = getAdapter(useWarp);
 	device = createDevice(dxgiAdapter4);
 
-	commandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	renderCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	copyCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COPY);
 
-	window.initialize(windowClass.lpszClassName, device, 1280, 720, commandQueue);
+	window.initialize(windowClass.lpszClassName, device, 1280, 720, renderCommandQueue);
+	game.initialize(device, copyCommandQueue, 1280, 720);
 
 
 	MSG msg = {};
@@ -319,7 +306,7 @@ int main()
 		}
 	}
 
-	commandQueue.flush();
+	flushApplication();
 
 	return 0;
 }

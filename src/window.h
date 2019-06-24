@@ -3,14 +3,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-#if defined(min)
-#undef min
-#endif
-
-#if defined(max)
-#undef max
-#endif
-
 #include "common.h"
 #include "command_queue.h"
 
@@ -18,8 +10,6 @@
 #include <dxgi1_6.h>
 #include <wrl.h> 
 using namespace Microsoft::WRL;
-
-void flushApplication();
 
 class dx_window
 {
@@ -33,6 +23,8 @@ public:
 	void resize(uint32 width, uint32 height);
 	void toggleFullscreen();
 
+	uint32 present();
+
 private:
 	void updateRenderTargetViews();
 
@@ -43,7 +35,7 @@ private:
 	uint32 rtvDescriptorSize;
 	uint32 currentBackBufferIndex;
 
-	bool vSync = true;
+	bool vSync = false;
 	bool tearingSupported = false;
 	bool fullscreen = false;
 	bool initialized = false;

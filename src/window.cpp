@@ -1,5 +1,6 @@
 #include "window.h"
 #include "error.h"
+#include "commands.h"
 
 #include <iostream>
 #include <dx/d3dx12.h>
@@ -217,4 +218,14 @@ void dx_window::toggleFullscreen()
 
 		ShowWindow(windowHandle, SW_NORMAL);
 	}
+}
+
+uint32 dx_window::present()
+{
+	UINT syncInterval = vSync ? 1 : 0;
+	UINT presentFlags = tearingSupported && !vSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
+	checkResult(swapChain->Present(syncInterval, presentFlags));
+
+	currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
+	return currentBackBufferIndex;
 }

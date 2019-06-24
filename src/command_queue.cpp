@@ -71,12 +71,12 @@ uint64 dx_command_queue::executeCommandList(ComPtr<ID3D12GraphicsCommandList2> c
 	UINT dataSize = sizeof(commandAllocator);
 	checkResult(commandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &commandAllocator));
 
-	ID3D12CommandList* const ppCommandLists[] = {
+	ID3D12CommandList* const commandLists[] = {
 		commandList.Get()
 	};
 
-	commandQueue->ExecuteCommandLists(1, ppCommandLists);
-	uint64_t fenceValue = signal();
+	commandQueue->ExecuteCommandLists(1, commandLists);
+	uint64 fenceValue = signal();
 
 	commandAllocatorQueue.emplace(command_allocator_entry{ fenceValue, commandAllocator });
 	commandListQueue.push(commandList);
