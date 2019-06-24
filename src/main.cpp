@@ -28,6 +28,7 @@ using namespace Microsoft::WRL;
 
 #include "common.h"
 #include "error.h"
+#include "command_queue.h"
 
 static const uint32 numFrames = 3;
 static bool useWarp = false;
@@ -37,20 +38,14 @@ static uint32 clientHeight = 720;
 
 static bool initialized = false;
 
+static command_queue commandQueue;
+
 static ComPtr<ID3D12Device2> device;
-static ComPtr<ID3D12CommandQueue> commandQueue;
 static ComPtr<IDXGISwapChain4> swapChain;
 static ComPtr<ID3D12Resource> backBuffers[numFrames];
-static ComPtr<ID3D12GraphicsCommandList> commandList;
-static ComPtr<ID3D12CommandAllocator> commandAllocators[numFrames];
 static ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap;
 static UINT rtvDescriptorSize;
 static UINT currentBackBufferIndex;
-
-static ComPtr<ID3D12Fence> fence;
-static uint64 fenceValue = 0;
-static uint64 frameFenceValues[numFrames] = {};
-static HANDLE fenceEvent;
 
 static bool vSync = true;
 static bool tearingSupported = false;
@@ -277,70 +272,6 @@ static void updateRenderTargetViews(ComPtr<ID3D12Device2> device,
 	}
 }
 
-static ComPtr<ID3D12CommandAllocator> createCommandAllocator(ComPtr<ID3D12Device2> device,
-	D3D12_COMMAND_LIST_TYPE type)
-{
-	ComPtr<ID3D12CommandAllocator> commandAllocator;
-	checkResult(device->CreateCommandAllocator(type, IID_PPV_ARGS(&commandAllocator)));
-
-	return commandAllocator;
-}
-
-static ComPtr<ID3D12GraphicsCommandList> createCommandList(ComPtr<ID3D12Device2> device,
-	ComPtr<ID3D12CommandAllocator> commandAllocator, D3D12_COMMAND_LIST_TYPE type)
-{
-	ComPtr<ID3D12GraphicsCommandList> commandList;
-	checkResult(device->CreateCommandList(0, type, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList)));
-
-	checkResult(commandList->Close());
-
-	return commandList;
-}
-
-static ComPtr<ID3D12Fence> createFence(ComPtr<ID3D12Device2> device)
-{
-	ComPtr<ID3D12Fence> fence;
-	checkResult(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
-
-	return fence;
-}
-
-static HANDLE createEventHandle()
-{
-	HANDLE fenceEvent;
-
-	fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-	assert(fenceEvent && "Failed to create fence event.");
-
-	return fenceEvent;
-}
-
-static uint64 signal(ComPtr<ID3D12CommandQueue> commandQueue, ComPtr<ID3D12Fence> fence,
-	uint64& fenceValue)
-{
-	uint64 fenceValueForSignal = ++fenceValue;
-	checkResult(commandQueue->Signal(fence.Get(), fenceValueForSignal));
-
-	return fenceValueForSignal;
-}
-
-static void waitForFenceValue(ComPtr<ID3D12Fence> fence, uint64 fenceValue, HANDLE fenceEvent,
-	std::chrono::milliseconds duration = std::chrono::milliseconds::max())
-{
-	if (fence->GetCompletedValue() < fenceValue)
-	{
-		checkResult(fence->SetEventOnCompletion(fenceValue, fenceEvent));
-		WaitForSingleObject(fenceEvent, static_cast<DWORD>(duration.count()));
-	}
-}
-
-static void flush(ComPtr<ID3D12CommandQueue> commandQueue, ComPtr<ID3D12Fence> fence,
-	uint64& fenceValue, HANDLE fenceEvent)
-{
-	uint64 fenceValueForSignal = signal(commandQueue, fence, fenceValue);
-	waitForFenceValue(fence, fenceValueForSignal, fenceEvent);
-}
-
 static void update()
 {
 	static uint64 frameCounter = 0;
@@ -368,11 +299,9 @@ static void update()
 
 void render()
 {
-	ComPtr<ID3D12CommandAllocator> commandAllocator = commandAllocators[currentBackBufferIndex];
 	ComPtr<ID3D12Resource> backBuffer = backBuffers[currentBackBufferIndex];
 
-	commandAllocator->Reset();
-	commandList->Reset(commandAllocator.Get(), nullptr);
+	auto commandList = commandQueue.getAvailableCommandList();
 
 	// Clear backbuffer.
 	{
@@ -397,22 +326,15 @@ void render()
 			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 		commandList->ResourceBarrier(1, &barrier);
 
-		checkResult(commandList->Close());
-
-		ID3D12CommandList* const commandLists[] = {
-			commandList.Get()
-		};
-		commandQueue->ExecuteCommandLists(arraysize(commandLists), commandLists);
+		uint64 fenceValue = commandQueue.executeCommandList(commandList);
 
 		UINT syncInterval = vSync ? 1 : 0;
 		UINT presentFlags = tearingSupported && !vSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
 		checkResult(swapChain->Present(syncInterval, presentFlags));
 
-		frameFenceValues[currentBackBufferIndex] = signal(commandQueue, fence, fenceValue);
-
 		currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
 
-		waitForFenceValue(fence, frameFenceValues[currentBackBufferIndex], fenceEvent);
+		commandQueue.waitForFenceValue(fenceValue);
 	}
 }
 
@@ -425,14 +347,13 @@ static void resize(uint32 width, uint32 height)
 
 		// Flush the GPU queue to make sure the swap chain's back buffers
 		// are not being referenced by an in-flight command list.
-		flush(commandQueue, fence, fenceValue, fenceEvent);
+		commandQueue.flush();
 
 		for (uint32 i = 0; i < numFrames; ++i)
 		{
 			// Any references to the back buffers must be released
 			// before the swap chain can be resized.
 			backBuffers[i].Reset();
-			frameFenceValues[i] = frameFenceValues[currentBackBufferIndex];
 		}
 
 		DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
@@ -619,9 +540,9 @@ int main()
 
 	device = createDevice(dxgiAdapter4);
 
-	commandQueue = createCommandQueue(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	commandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-	swapChain = createSwapChain(windowHandle, commandQueue, clientWidth, clientHeight, numFrames);
+	swapChain = createSwapChain(windowHandle, commandQueue.getD3D12CommandQueue(), clientWidth, clientHeight, numFrames);
 
 	currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
 
@@ -629,16 +550,6 @@ int main()
 	rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 	updateRenderTargetViews(device, swapChain, rtvDescriptorHeap);
-
-	for (uint32 i = 0; i < numFrames; ++i)
-	{
-		commandAllocators[i] = createCommandAllocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	}
-	commandList = createCommandList(device, commandAllocators[currentBackBufferIndex], D3D12_COMMAND_LIST_TYPE_DIRECT);
-
-	fence = createFence(device);
-	fenceEvent = createEventHandle();
-
 
 
 	initialized = true;
@@ -655,9 +566,7 @@ int main()
 		}
 	}
 
-	flush(commandQueue, fence, fenceValue, fenceEvent);
-
-	CloseHandle(fenceEvent);
+	commandQueue.flush();
 
 	return 0;
 }
