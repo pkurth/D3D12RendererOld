@@ -2,7 +2,7 @@
 
 #include "common.h"
 #include "command_queue.h"
-#include "buffer.h"
+#include "resource.h"
 #include "math.h"
 
 #include <dx/d3dx12.h>

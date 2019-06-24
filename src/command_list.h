@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common.h"
-#include "buffer.h"
+#include "resource.h"
 
 #include <d3d12.h>
 #include <wrl.h> 
