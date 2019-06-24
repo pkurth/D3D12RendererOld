@@ -6,7 +6,7 @@
 #include "common.h"
 #include "command_queue.h"
 
-#include <d3d12.h>
+#include <dx/d3dx12.h>
 #include <dxgi1_6.h>
 #include <wrl.h> 
 using namespace Microsoft::WRL;
@@ -24,6 +24,18 @@ public:
 	void toggleFullscreen();
 
 	uint32 present();
+
+	inline uint32 getCurrentBackBufferIndex() const { return currentBackBufferIndex; }
+	inline CD3DX12_CPU_DESCRIPTOR_HANDLE getCurrentRenderTargetView()
+	{
+		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+			currentBackBufferIndex, rtvDescriptorSize);
+		return rtv;
+	}
+	inline ComPtr<ID3D12Resource> getCurrentBackBuffer()
+	{
+		return backBuffers[currentBackBufferIndex];
+	}
 
 private:
 	void updateRenderTargetViews();
@@ -47,5 +59,4 @@ private:
 	uint32 clientHeight;
 
 	friend LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPARAM lParam);
-	friend void render(dx_window* window);
 };

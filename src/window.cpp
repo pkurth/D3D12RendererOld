@@ -3,7 +3,6 @@
 #include "commands.h"
 
 #include <iostream>
-#include <dx/d3dx12.h>
 
 
 static bool checkTearingSupport()

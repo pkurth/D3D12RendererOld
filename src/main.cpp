@@ -27,7 +27,7 @@ static dx_game game;
 
 static ComPtr<ID3D12Device2> device;
 
-static uint32 fenceValues[dx_window::numFrames] = {};
+static uint64 fenceValues[dx_window::numFrames] = {};
 
 static void enableDebugLayer()
 {
@@ -155,25 +155,24 @@ static void update()
 
 void render(dx_window* window)
 {
-	ComPtr<ID3D12Resource> backBuffer = window->backBuffers[window->currentBackBufferIndex];
+	ComPtr<ID3D12Resource> backBuffer = window->getCurrentBackBuffer();
 
 	ComPtr<ID3D12GraphicsCommandList2> commandList = renderCommandQueue.getAvailableCommandList();
 
 	// Transition backbuffer from "Present" to "Render Target", so we can render to it.
 	transitionResource(commandList, backBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(window->rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-		window->currentBackBufferIndex, window->rtvDescriptorSize);
+	uint32 currentBackBufferIndex = window->getCurrentBackBufferIndex();
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = window->getCurrentRenderTargetView();
 
 	game.render(commandList, rtv);
 
 	// Transition back to "Present".
 	transitionResource(commandList, backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
-	fenceValues[window->currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);
-
+	// Run command list and wait for next one to become free.
+	fenceValues[currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);
 	uint32 newCurrentBackbufferIndex = window->present();
-
 	renderCommandQueue.waitForFenceValue(fenceValues[newCurrentBackbufferIndex]);
 }
 

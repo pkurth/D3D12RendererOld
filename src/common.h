@@ -3,10 +3,16 @@
 #define NOMINMAX
 
 #include <cstdint>
+#include <cassert>
 
+typedef uint8_t uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
+
+#define KB(x) (x * 1024)
+#define MB(x) (x * 1024 * 1024)
+#define GB(x) (x * 1024 * 1024 * 1024)
 
 #define arraysize(arr) (sizeof(arr) / sizeof(arr[0]))
 
@@ -35,4 +41,21 @@ template<typename T>
 constexpr T clamp(T val, T min, T max)
 {
 	return val < min ? min : val > max ? max : val;
+}
+
+template<typename T>
+inline T alignTo(T currentOffset, T alignment)
+{
+	assert(alignment > 0);
+	assert((alignment & (alignment - 1)) == 0);
+
+	T mask = alignment - 1;
+	T misalignment = currentOffset & mask;
+	T adjustment = (alignment - misalignment) & mask; // & mask ensures that a misalignment of 0 does not lead to an adjustment of 'alignment'
+	return currentOffset + adjustment;
+}
+
+inline void* alignTo(void* currentAddress, uint64 alignment)
+{
+	return (void*)alignTo((uint64)currentAddress, alignment);
 }
