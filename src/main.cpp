@@ -56,8 +56,10 @@ static bool vSync = true;
 static bool tearingSupported = false;
 static bool fullscreen = false;
 
-HWND windowHandle;
-RECT windowRect;
+static HWND windowHandle;
+static RECT windowRect;
+
+static FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 
 static void enableDebugLayer()
 {
@@ -381,7 +383,6 @@ void render()
 
 		commandList->ResourceBarrier(1, &barrier);
 
-		FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
 			currentBackBufferIndex, rtvDescriptorSize);
 
@@ -519,6 +520,12 @@ static LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARA
 				case VK_F11:
 					setFullscreen(!fullscreen);
 					}
+					break;
+				case VK_DOWN:
+					clearColor[0] -= 0.1f;
+					break;
+				case VK_UP:
+					clearColor[0] += 0.1f;
 					break;
 				}
 			} break;
