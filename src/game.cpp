@@ -34,7 +34,7 @@ static uint16 cubeIndicies[36] =
 
 scene_data loadScene(ComPtr<ID3D12Device2> device, dx_command_queue& copyCommandQueue, ComPtr<ID3D12PipelineState>& pipelineState)
 {
-	ComPtr<ID3D12GraphicsCommandList2> commandList = copyCommandQueue.getAvailableCommandList();
+	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
 	scene_data result;
 
@@ -208,34 +208,35 @@ void dx_game::update(float dt)
 	projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(DirectX::XMConvertToRadians(70.f), aspectRatio, 0.1f, 100.0f);
 }
 
-void dx_game::render(ComPtr<ID3D12GraphicsCommandList2> commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv)
+void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv)
 {
 	auto dsv = dsvHeap->GetCPUDescriptorHandleForHeapStart();
 
 	FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 
-	clearRTV(commandList, rtv, clearColor);
-	clearDepth(commandList, dsv);
+	commandList->clearRTV(rtv, clearColor);
+	commandList->clearDepth(dsv);
 
 	// Prepare for rendering.
-	commandList->SetPipelineState(pipelineState.Get());
-	commandList->SetGraphicsRootSignature(scene.rootSignature.Get());
+	ComPtr<ID3D12GraphicsCommandList2> d3d12CommandList = commandList->getD3D12CommandList();
+	d3d12CommandList->SetPipelineState(pipelineState.Get());
+	d3d12CommandList->SetGraphicsRootSignature(scene.rootSignature.Get());
 
-	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	commandList->IASetVertexBuffers(0, 1, &scene.vertexBuffer.view);
-	commandList->IASetIndexBuffer(&scene.indexBuffer.view);
+	d3d12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	d3d12CommandList->IASetVertexBuffers(0, 1, &scene.vertexBuffer.view);
+	d3d12CommandList->IASetIndexBuffer(&scene.indexBuffer.view);
 
-	commandList->RSSetViewports(1, &viewport);
-	commandList->RSSetScissorRects(1, &scissorRect);
+	d3d12CommandList->RSSetViewports(1, &viewport);
+	d3d12CommandList->RSSetScissorRects(1, &scissorRect);
 
-	commandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+	d3d12CommandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
 
 	mat4 mvpMatrix = XMMatrixMultiply(modelMatrix, viewMatrix);
 	mvpMatrix = XMMatrixMultiply(mvpMatrix, projectionMatrix);
-	commandList->SetGraphicsRoot32BitConstants(0, sizeof(mat4) / 4, &mvpMatrix, 0);
+	d3d12CommandList->SetGraphicsRoot32BitConstants(0, sizeof(mat4) / 4, &mvpMatrix, 0);
 
 	// Render.
-	commandList->DrawIndexedInstanced(arraysize(cubeIndicies), 1, 0, 0, 0);
+	d3d12CommandList->DrawIndexedInstanced(arraysize(cubeIndicies), 1, 0, 0, 0);
 }
 
 

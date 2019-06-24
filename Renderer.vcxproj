@@ -87,9 +87,8 @@
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\commands.cpp" />
+    <ClCompile Include="src\command_list.cpp" />
     <ClCompile Include="src\command_queue.cpp" />
-    <ClCompile Include="src\descriptor_allocator.cpp" />
     <ClCompile Include="src\game.cpp" />
     <ClCompile Include="src\upload_buffer.cpp" />
     <ClCompile Include="src\main.cpp" />
@@ -98,11 +97,14 @@
   <ItemGroup>
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\commands.h" />
+    <ClInclude Include="src\command_list.h" />
     <ClInclude Include="src\command_queue.h" />
     <ClInclude Include="src\common.h" />
-    <ClInclude Include="src\descriptor_allocator.h" />
     <ClInclude Include="src\error.h" />
     <ClInclude Include="src\game.h" />
+    <ClInclude Include="src\resource_state_tracker.h" />
+    <ClInclude Include="src\thread_safe_queue.h" />
+    <ClInclude Include="src\thread_safe_vector.h" />
     <ClInclude Include="src\upload_buffer.h" />
     <ClInclude Include="src\window.h" />
   </ItemGroup>

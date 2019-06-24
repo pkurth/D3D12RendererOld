@@ -30,7 +30,7 @@ public:
 	void resize(uint32 width, uint32 height);
 
 	void update(float dt);
-	void render(ComPtr<ID3D12GraphicsCommandList2> commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv);
+	void render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv);
 
 private:
 	void resizeDepthBuffer(uint32 width, uint32 height);

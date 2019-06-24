@@ -20,12 +20,12 @@ struct dx_index_buffer
 };
 
 template <typename vertex_t>
-static dx_vertex_buffer createVertexBuffer(ComPtr<ID3D12Device2> device, ComPtr<ID3D12GraphicsCommandList2> commandList,
+static dx_vertex_buffer createVertexBuffer(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
 	vertex_t* vertices, uint32 count, ComPtr<ID3D12Resource>& intermediateVertexBuffer)
 {
 	dx_vertex_buffer result;
 
-	updateBufferResource(device, commandList,
+	commandList->updateBufferResource(
 		&result.buffer, &intermediateVertexBuffer,
 		count, sizeof(vertex_t), vertices);
 
@@ -37,12 +37,12 @@ static dx_vertex_buffer createVertexBuffer(ComPtr<ID3D12Device2> device, ComPtr<
 }
 
 template <typename index_t>
-static dx_index_buffer createIndexBuffer(ComPtr<ID3D12Device2> device, ComPtr<ID3D12GraphicsCommandList2> commandList,
+static dx_index_buffer createIndexBuffer(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
 	index_t* indices, uint32 count, ComPtr<ID3D12Resource>& intermediateIndexBuffer)
 {
 	dx_index_buffer result;
 
-	updateBufferResource(device, commandList,
+	commandList->updateBufferResource(
 		&result.buffer, &intermediateIndexBuffer,
 		count, sizeof(index_t), indices);
 

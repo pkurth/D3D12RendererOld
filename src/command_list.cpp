@@ -1,9 +1,19 @@
-#include "commands.h"
+#include "command_list.h"
 #include "error.h"
 
 #include <dx/d3dx12.h>
 
-void transitionResource(ComPtr<ID3D12GraphicsCommandList2> commandList, ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState)
+void dx_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE commandListType)
+{
+	this->device = device;
+	this->commandListType = commandListType;
+	checkResult(device->CreateCommandAllocator(commandListType, IID_PPV_ARGS(&commandAllocator)));
+	checkResult(device->CreateCommandList(0, commandListType, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList)));
+
+	checkResult(commandList->SetPrivateDataInterface(__uuidof(ID3D12CommandAllocator), commandAllocator.Get()));
+}
+
+void dx_command_list::transitionResource(ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState)
 {
 	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
 		resource.Get(),
@@ -12,19 +22,17 @@ void transitionResource(ComPtr<ID3D12GraphicsCommandList2> commandList, ComPtr<I
 	commandList->ResourceBarrier(1, &barrier);
 }
 
-void clearRTV(ComPtr<ID3D12GraphicsCommandList2> commandList, D3D12_CPU_DESCRIPTOR_HANDLE rtv, FLOAT* clearColor)
+void dx_command_list::clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, FLOAT* clearColor)
 {
 	commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 }
 
-void clearDepth(ComPtr<ID3D12GraphicsCommandList2> commandList, D3D12_CPU_DESCRIPTOR_HANDLE dsv, FLOAT depth)
+void dx_command_list::clearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, FLOAT depth)
 {
 	commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, depth, 0, 0, nullptr);
 }
 
-void updateBufferResource(ComPtr<ID3D12Device2> device, ComPtr<ID3D12GraphicsCommandList2> commandList, 
-	ID3D12Resource** pDestinationResource, ID3D12Resource** pIntermediateResource, 
-	size_t numElements, size_t elementSize, const void* bufferData, D3D12_RESOURCE_FLAGS flags)
+void dx_command_list::updateBufferResource(ID3D12Resource** pDestinationResource, ID3D12Resource** pIntermediateResource, size_t numElements, size_t elementSize, const void* bufferData, D3D12_RESOURCE_FLAGS flags)
 {
 	size_t bufferSize = numElements * elementSize;
 
@@ -57,4 +65,15 @@ void updateBufferResource(ComPtr<ID3D12Device2> device, ComPtr<ID3D12GraphicsCom
 			*pDestinationResource, *pIntermediateResource,
 			0, 0, 1, &subresourceData);
 	}
+}
+
+void dx_command_list::reset()
+{
+	checkResult(commandAllocator->Reset());
+	checkResult(commandList->Reset(commandAllocator.Get(), nullptr));
+}
+
+void dx_command_list::close()
+{
+	checkResult(commandList->Close());
 }

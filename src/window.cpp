@@ -37,7 +37,7 @@ static ComPtr<IDXGISwapChain4> createSwapChain(HWND hWnd,
 {
 	ComPtr<IDXGISwapChain4> dxgiSwapChain4;
 	ComPtr<IDXGIFactory4> dxgiFactory4;
-	UINT createFactoryFlags = 0;
+	uint32 createFactoryFlags = 0;
 #if defined(_DEBUG)
 	createFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 #endif
@@ -133,7 +133,7 @@ void dx_window::initialize(const TCHAR* windowClassName, ComPtr<ID3D12Device2> d
 
 void dx_window::updateRenderTargetViews()
 {
-	UINT rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	uint32 rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
@@ -187,7 +187,7 @@ void dx_window::toggleFullscreen()
 	{
 		GetWindowRect(windowHandle, &windowRect);
 
-		UINT windowStyle = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+		uint32 windowStyle = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
 		SetWindowLongW(windowHandle, GWL_STYLE, windowStyle);
 
 		HMONITOR hMonitor = MonitorFromWindow(windowHandle, MONITOR_DEFAULTTONEAREST);
@@ -221,8 +221,8 @@ void dx_window::toggleFullscreen()
 
 uint32 dx_window::present()
 {
-	UINT syncInterval = vSync ? 1 : 0;
-	UINT presentFlags = tearingSupported && !vSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
+	uint32 syncInterval = vSync ? 1 : 0;
+	uint32 presentFlags = tearingSupported && !vSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
 	checkResult(swapChain->Present(syncInterval, presentFlags));
 
 	currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();

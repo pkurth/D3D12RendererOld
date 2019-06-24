@@ -41,7 +41,7 @@ static void enableDebugLayer()
 static ComPtr<IDXGIAdapter4> getAdapter(bool useWarp)
 {
 	ComPtr<IDXGIFactory4> dxgiFactory;
-	UINT createFactoryFlags = 0;
+	uint32 createFactoryFlags = 0;
 #if defined(_DEBUG)
 	createFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 #endif
@@ -58,8 +58,8 @@ static ComPtr<IDXGIAdapter4> getAdapter(bool useWarp)
 	}
 	else
 	{
-		SIZE_T maxDedicatedVideoMemory = 0;
-		for (UINT i = 0; dxgiFactory->EnumAdapters1(i, &dxgiAdapter1) != DXGI_ERROR_NOT_FOUND; ++i)
+		size_t maxDedicatedVideoMemory = 0;
+		for (uint32 i = 0; dxgiFactory->EnumAdapters1(i, &dxgiAdapter1) != DXGI_ERROR_NOT_FOUND; ++i)
 		{
 			DXGI_ADAPTER_DESC1 dxgiAdapterDesc1;
 			dxgiAdapter1->GetDesc1(&dxgiAdapterDesc1);
@@ -157,10 +157,10 @@ void render(dx_window* window)
 {
 	ComPtr<ID3D12Resource> backBuffer = window->getCurrentBackBuffer();
 
-	ComPtr<ID3D12GraphicsCommandList2> commandList = renderCommandQueue.getAvailableCommandList();
+	dx_command_list* commandList = renderCommandQueue.getAvailableCommandList();
 
 	// Transition backbuffer from "Present" to "Render Target", so we can render to it.
-	transitionResource(commandList, backBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	commandList->transitionResource(backBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	uint32 currentBackBufferIndex = window->getCurrentBackBufferIndex();
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = window->getCurrentRenderTargetView();
@@ -168,7 +168,7 @@ void render(dx_window* window)
 	game.render(commandList, rtv);
 
 	// Transition back to "Present".
-	transitionResource(commandList, backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	commandList->transitionResource(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
 	// Run command list and wait for next one to become free.
 	fenceValues[currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);

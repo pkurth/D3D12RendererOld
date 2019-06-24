@@ -1,12 +1,16 @@
 #pragma once
 
 #include "common.h"
+#include "command_list.h"
+#include "thread_safe_queue.h"
+#include "thread_safe_vector.h"
 
 #include <d3d12.h>
 #include <wrl.h> 
 using namespace Microsoft::WRL;
 
-#include <queue>
+#include <mutex>
+#include <atomic>
 
 class dx_command_queue
 {
@@ -14,11 +18,11 @@ public:
 	void initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
 	virtual ~dx_command_queue();
 
-	ComPtr<ID3D12GraphicsCommandList2> getAvailableCommandList();
+	dx_command_list* getAvailableCommandList();
 
 	// Execute a command list.
 	// Returns the fence value to wait for for this command list.
-	uint64 executeCommandList(ComPtr<ID3D12GraphicsCommandList2> commandList);
+	uint64 executeCommandList(dx_command_list* commandList);
 
 	bool isFenceComplete(uint64 fenceValue);
 	void waitForFenceValue(uint64 fenceValue);
@@ -28,28 +32,29 @@ public:
 
 protected:
 	uint64 signal();
-	ComPtr<ID3D12CommandAllocator> createCommandAllocator();
-	ComPtr<ID3D12GraphicsCommandList2> createCommandList(ComPtr<ID3D12CommandAllocator> allocator);
+	void processInFlightCommandLists();
 
 private:
-	// Keep track of command allocators that are "in-flight"
-	struct command_allocator_entry
-	{
-		uint64									fenceValue;
-		ComPtr<ID3D12CommandAllocator>			commandAllocator;
-	};
-
-	using command_allocator_queue = std::queue<command_allocator_entry>;
-	using command_list_queue = std::queue<ComPtr<ID3D12GraphicsCommandList2> >;
 
 	D3D12_COMMAND_LIST_TYPE                     commandListType;
 	ComPtr<ID3D12Device2>						device;
 	ComPtr<ID3D12CommandQueue>					commandQueue;
 	ComPtr<ID3D12Fence>							fence;
-	HANDLE                                      fenceEvent;
-	uint64	                                    fenceValue;
+	std::atomic_uint64_t	                    fenceValue;
 
-	command_allocator_queue                     commandAllocatorQueue;
-	command_list_queue                          commandListQueue;
+	struct command_list_entry
+	{
+		uint64				fenceValue;
+		dx_command_list*	commandList;
+	};
+
+	thread_safe_vector<dx_command_list*>		commandLists;
+	thread_safe_queue<dx_command_list*>			freeCommandLists;
+	thread_safe_queue<command_list_entry>		inFlightCommandLists;
+
+	bool										continueProcessingInFlightCommandLists = true;
+	std::mutex									inFlightCommandListsMutex;
+	std::condition_variable						processInFlightCommandListsCondition;
+	std::thread									processInFlightCommandListsThread;
 };
 
