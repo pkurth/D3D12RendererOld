@@ -81,11 +81,14 @@
   <ItemGroup>
     <ClCompile Include="src\command_queue.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\application.h" />
     <ClInclude Include="src\command_queue.h" />
     <ClInclude Include="src\common.h" />
     <ClInclude Include="src\error.h" />
+    <ClInclude Include="src\window.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

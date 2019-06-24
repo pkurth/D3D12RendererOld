@@ -3,7 +3,7 @@
 
 #include <cassert>
 
-void command_queue::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type)
+void dx_command_queue::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type)
 {
 	fenceValue = 0;
 	commandListType = type;
@@ -22,12 +22,12 @@ void command_queue::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_
 	assert(fenceEvent && "Failed to create fence event handle.");
 }
 
-command_queue::~command_queue()
+dx_command_queue::~dx_command_queue()
 {
 	CloseHandle(fenceEvent);
 }
 
-ComPtr<ID3D12GraphicsCommandList2> command_queue::getAvailableCommandList()
+ComPtr<ID3D12GraphicsCommandList2> dx_command_queue::getAvailableCommandList()
 {
 	ComPtr<ID3D12CommandAllocator> commandAllocator;
 	ComPtr<ID3D12GraphicsCommandList2> commandList;
@@ -63,7 +63,7 @@ ComPtr<ID3D12GraphicsCommandList2> command_queue::getAvailableCommandList()
 	return commandList;
 }
 
-uint64 command_queue::executeCommandList(ComPtr<ID3D12GraphicsCommandList2> commandList)
+uint64 dx_command_queue::executeCommandList(ComPtr<ID3D12GraphicsCommandList2> commandList)
 {
 	commandList->Close();
 
@@ -89,7 +89,7 @@ uint64 command_queue::executeCommandList(ComPtr<ID3D12GraphicsCommandList2> comm
 	return fenceValue;
 }
 
-uint64 command_queue::signal()
+uint64 dx_command_queue::signal()
 {
 	uint64 fenceValueForSignal = ++fenceValue;
 	checkResult(commandQueue->Signal(fence.Get(), fenceValueForSignal));
@@ -97,12 +97,12 @@ uint64 command_queue::signal()
 	return fenceValueForSignal;
 }
 
-bool command_queue::isFenceComplete(uint64 fenceValue)
+bool dx_command_queue::isFenceComplete(uint64 fenceValue)
 {
 	return fence->GetCompletedValue() >= fenceValue;
 }
 
-void command_queue::waitForFenceValue(uint64 fenceValue)
+void dx_command_queue::waitForFenceValue(uint64 fenceValue)
 {
 	if (!isFenceComplete(fenceValue))
 	{
@@ -111,17 +111,17 @@ void command_queue::waitForFenceValue(uint64 fenceValue)
 	}
 }
 
-void command_queue::flush()
+void dx_command_queue::flush()
 {
 	waitForFenceValue(signal());
 }
 
-ComPtr<ID3D12CommandQueue> command_queue::getD3D12CommandQueue() const
+ComPtr<ID3D12CommandQueue> dx_command_queue::getD3D12CommandQueue() const
 {
 	return commandQueue;
 }
 
-ComPtr<ID3D12CommandAllocator> command_queue::createCommandAllocator()
+ComPtr<ID3D12CommandAllocator> dx_command_queue::createCommandAllocator()
 {
 	ComPtr<ID3D12CommandAllocator> commandAllocator;
 	checkResult(device->CreateCommandAllocator(commandListType, IID_PPV_ARGS(&commandAllocator)));
@@ -129,7 +129,7 @@ ComPtr<ID3D12CommandAllocator> command_queue::createCommandAllocator()
 	return commandAllocator;
 }
 
-ComPtr<ID3D12GraphicsCommandList2> command_queue::createCommandList(ComPtr<ID3D12CommandAllocator> allocator)
+ComPtr<ID3D12GraphicsCommandList2> dx_command_queue::createCommandList(ComPtr<ID3D12CommandAllocator> allocator)
 {
 	ComPtr<ID3D12GraphicsCommandList2> commandList;
 	checkResult(device->CreateCommandList(0, commandListType, allocator.Get(), nullptr, IID_PPV_ARGS(&commandList)));

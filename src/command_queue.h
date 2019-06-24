@@ -8,11 +8,11 @@ using namespace Microsoft::WRL;
 
 #include <queue>
 
-class command_queue
+class dx_command_queue
 {
 public:
 	void initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
-	virtual ~command_queue();
+	virtual ~dx_command_queue();
 
 	ComPtr<ID3D12GraphicsCommandList2> getAvailableCommandList();
 

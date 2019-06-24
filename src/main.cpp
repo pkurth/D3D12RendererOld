@@ -1,19 +1,10 @@
 // Most code in this file is from this awesome tutorial: https://www.3dgep.com/learning-directx12-1/
 
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-
-#if defined(min)
-#undef min
-#endif
-
-#if defined(max)
-#undef max
-#endif
-
-#include <wrl.h>
-using namespace Microsoft::WRL;
+#include "window.h"
+#include "common.h"
+#include "error.h"
+#include "command_queue.h"
 
 // directx
 #include <d3d12.h>
@@ -26,35 +17,14 @@ using namespace Microsoft::WRL;
 #include <iostream>
 #include <chrono>
 
-#include "common.h"
-#include "error.h"
-#include "command_queue.h"
-
-static const uint32 numFrames = 3;
 static bool useWarp = false;
 
-static uint32 clientWidth = 1280;
-static uint32 clientHeight = 720;
-
-static bool initialized = false;
-
-static command_queue commandQueue;
+static dx_command_queue commandQueue;
+static dx_window window;
 
 static ComPtr<ID3D12Device2> device;
-static ComPtr<IDXGISwapChain4> swapChain;
-static ComPtr<ID3D12Resource> backBuffers[numFrames];
-static ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap;
-static UINT rtvDescriptorSize;
-static UINT currentBackBufferIndex;
 
-static bool vSync = true;
-static bool tearingSupported = false;
-static bool fullscreen = false;
-
-static HWND windowHandle;
-static RECT windowRect;
-
-static FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+static float clearColor[] = { 1.f, 0.f, 1.f, 1.f };
 
 static void enableDebugLayer()
 {
@@ -152,126 +122,6 @@ static ComPtr<ID3D12Device2> createDevice(ComPtr<IDXGIAdapter4> adapter)
 	return d3d12Device2;
 }
 
-static ComPtr<ID3D12CommandQueue> createCommandQueue(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type)
-{
-	ComPtr<ID3D12CommandQueue> d3d12CommandQueue;
-
-	D3D12_COMMAND_QUEUE_DESC desc = {};
-	desc.Type = type;
-	desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-	desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	desc.NodeMask = 0;
-
-	checkResult(device->CreateCommandQueue(&desc, IID_PPV_ARGS(&d3d12CommandQueue)));
-
-	return d3d12CommandQueue;
-}
-
-static bool checkTearingSupport()
-{
-	BOOL allowTearing = FALSE;
-
-	// Rather than create the DXGI 1.5 factory interface directly, we create the
-	// DXGI 1.4 interface and query for the 1.5 interface. This is to enable the 
-	// graphics debugging tools which will not support the 1.5 factory interface 
-	// until a future update.
-	ComPtr<IDXGIFactory4> factory4;
-	if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory4))))
-	{
-		ComPtr<IDXGIFactory5> factory5;
-		if (SUCCEEDED(factory4.As(&factory5)))
-		{
-			if (FAILED(factory5->CheckFeatureSupport(
-				DXGI_FEATURE_PRESENT_ALLOW_TEARING,
-				&allowTearing, sizeof(allowTearing))))
-			{
-				allowTearing = FALSE;
-			}
-		}
-	}
-
-	return allowTearing == TRUE;
-}
-
-static ComPtr<IDXGISwapChain4> createSwapChain(HWND hWnd,
-	ComPtr<ID3D12CommandQueue> commandQueue,
-	uint32 width, uint32 height, uint32 bufferCount)
-{
-	ComPtr<IDXGISwapChain4> dxgiSwapChain4;
-	ComPtr<IDXGIFactory4> dxgiFactory4;
-	UINT createFactoryFlags = 0;
-#if defined(_DEBUG)
-	createFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
-#endif
-
-	checkResult(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(&dxgiFactory4)));
-
-	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-	swapChainDesc.Width = width;
-	swapChainDesc.Height = height;
-	swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swapChainDesc.Stereo = FALSE;
-	swapChainDesc.SampleDesc = { 1, 0 };
-	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapChainDesc.BufferCount = bufferCount;
-	swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
-	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-	// It is recommended to always allow tearing if tearing support is available.
-	swapChainDesc.Flags = tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
-
-	ComPtr<IDXGISwapChain1> swapChain1;
-	checkResult(dxgiFactory4->CreateSwapChainForHwnd(
-		commandQueue.Get(),
-		hWnd,
-		&swapChainDesc,
-		nullptr,
-		nullptr,
-		&swapChain1));
-
-	// Disable the Alt+Enter fullscreen toggle feature. Switching to fullscreen
-	// will be handled manually.
-	checkResult(dxgiFactory4->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER));
-
-	checkResult(swapChain1.As(&dxgiSwapChain4));
-
-	return dxgiSwapChain4;
-}
-
-static ComPtr<ID3D12DescriptorHeap> createDescriptorHeap(ComPtr<ID3D12Device2> device,
-	D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors)
-{
-	ComPtr<ID3D12DescriptorHeap> descriptorHeap;
-
-	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-	desc.NumDescriptors = numDescriptors;
-	desc.Type = type;
-
-	checkResult(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&descriptorHeap)));
-
-	return descriptorHeap;
-}
-
-static void updateRenderTargetViews(ComPtr<ID3D12Device2> device,
-	ComPtr<IDXGISwapChain4> swapChain, ComPtr<ID3D12DescriptorHeap> descriptorHeap)
-{
-	UINT rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(descriptorHeap->GetCPUDescriptorHandleForHeapStart());
-
-	for (int i = 0; i < numFrames; ++i)
-	{
-		ComPtr<ID3D12Resource> backBuffer;
-		checkResult(swapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)));
-
-		device->CreateRenderTargetView(backBuffer.Get(), nullptr, rtvHandle);
-
-		backBuffers[i] = backBuffer;
-
-		rtvHandle.Offset(rtvDescriptorSize);
-	}
-}
-
 static void update()
 {
 	static uint64 frameCounter = 0;
@@ -297,9 +147,9 @@ static void update()
 	}
 }
 
-void render()
+void render(dx_window* window)
 {
-	ComPtr<ID3D12Resource> backBuffer = backBuffers[currentBackBufferIndex];
+	ComPtr<ID3D12Resource> backBuffer = window->backBuffers[window->currentBackBufferIndex];
 
 	auto commandList = commandQueue.getAvailableCommandList();
 
@@ -312,8 +162,8 @@ void render()
 
 		commandList->ResourceBarrier(1, &barrier);
 
-		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-			currentBackBufferIndex, rtvDescriptorSize);
+		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(window->rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+			window->currentBackBufferIndex, window->rtvDescriptorSize);
 
 		commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 	}
@@ -328,152 +178,87 @@ void render()
 
 		uint64 fenceValue = commandQueue.executeCommandList(commandList);
 
-		UINT syncInterval = vSync ? 1 : 0;
-		UINT presentFlags = tearingSupported && !vSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
-		checkResult(swapChain->Present(syncInterval, presentFlags));
+		UINT syncInterval = window->vSync ? 1 : 0;
+		UINT presentFlags = window->tearingSupported && !window->vSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
+		checkResult(window->swapChain->Present(syncInterval, presentFlags));
 
-		currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
+		window->currentBackBufferIndex = window->swapChain->GetCurrentBackBufferIndex();
 
 		commandQueue.waitForFenceValue(fenceValue);
 	}
 }
 
-static void resize(uint32 width, uint32 height)
+void flushApplication()
 {
-	if (clientWidth != width || clientHeight != height)
-	{
-		clientWidth = max(1u, width);
-		clientHeight = max(1u, height);
-
-		// Flush the GPU queue to make sure the swap chain's back buffers
-		// are not being referenced by an in-flight command list.
-		commandQueue.flush();
-
-		for (uint32 i = 0; i < numFrames; ++i)
-		{
-			// Any references to the back buffers must be released
-			// before the swap chain can be resized.
-			backBuffers[i].Reset();
-		}
-
-		DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
-		checkResult(swapChain->GetDesc(&swapChainDesc));
-		checkResult(swapChain->ResizeBuffers(numFrames, clientWidth, clientHeight,
-			swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
-
-		currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
-
-		updateRenderTargetViews(device, swapChain, rtvDescriptorHeap);
-	}
+	commandQueue.flush();
 }
 
-static void setFullscreen(bool fullscreen)
+LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPARAM lParam)
 {
-	if (::fullscreen != fullscreen)
-	{
-		::fullscreen = fullscreen;
+	dx_window* window = (dx_window*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 
-		if (fullscreen) // Switching to fullscreen.
-		{
-			GetWindowRect(windowHandle, &windowRect);
-
-			UINT windowStyle = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
-			SetWindowLongW(windowHandle, GWL_STYLE, windowStyle);
-
-			HMONITOR hMonitor = MonitorFromWindow(windowHandle, MONITOR_DEFAULTTONEAREST);
-			MONITORINFOEX monitorInfo = {};
-			monitorInfo.cbSize = sizeof(MONITORINFOEX);
-			GetMonitorInfo(hMonitor, &monitorInfo);
-
-			SetWindowPos(windowHandle, HWND_TOP,
-				monitorInfo.rcMonitor.left,
-				monitorInfo.rcMonitor.top,
-				monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
-				monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-				SWP_FRAMECHANGED | SWP_NOACTIVATE);
-
-			ShowWindow(windowHandle, SW_MAXIMIZE);
-		}
-		else
-		{
-			SetWindowLong(windowHandle, GWL_STYLE, WS_OVERLAPPEDWINDOW);
-
-			SetWindowPos(windowHandle, HWND_NOTOPMOST,
-				windowRect.left,
-				windowRect.top,
-				windowRect.right - windowRect.left,
-				windowRect.bottom - windowRect.top,
-				SWP_FRAMECHANGED | SWP_NOACTIVATE);
-
-			ShowWindow(windowHandle, SW_NORMAL);
-		}
-	}
-}
-
-static LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPARAM lParam)
-{
-	if (initialized)
+	if (window && window->initialized)
 	{
 		switch (msg)
 		{
-			case WM_PAINT:
+		case WM_PAINT:
+		{
+			update();
+			render(window);
+		} break;
+
+		case WM_SYSKEYDOWN:
+		case WM_KEYDOWN:
+		{
+			bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+
+			switch (wParam)
 			{
-				update();
-				render();
-			} break;
-
-			case WM_SYSKEYDOWN:
-			case WM_KEYDOWN:
-			{
-				bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-
-				switch (wParam)
-				{
-				case 'V':
-					vSync = !vSync;
-					break;
-				case VK_ESCAPE:
-					PostQuitMessage(0);
-					break;
-				case VK_RETURN:
-					if (alt)
-					{
-				case VK_F11:
-					setFullscreen(!fullscreen);
-					}
-					break;
-				case VK_DOWN:
-					clearColor[0] -= 0.1f;
-					break;
-				case VK_UP:
-					clearColor[0] += 0.1f;
-					break;
-				}
-			} break;
-
-			// The default window procedure will play a system notification sound 
-			// when pressing the Alt+Enter keyboard combination if this message is 
-			// not handled.
-			case WM_SYSCHAR:
+			case 'V':
+				window->vSync = !window->vSync;
 				break;
-
-			case WM_SIZE:
-			{
-				RECT clientRect = {};
-				GetClientRect(windowHandle, &clientRect);
-
-				int width = clientRect.right - clientRect.left;
-				int height = clientRect.bottom - clientRect.top;
-
-				resize(width, height);
-			} break;
-
-			case WM_DESTROY:
+			case VK_ESCAPE:
 				PostQuitMessage(0);
 				break;
+			case VK_RETURN:
+				if (alt)
+				{
+			case VK_F11:
+				window->toggleFullscreen();
+				}
+				break;
+			case VK_UP:
+				clearColor[0] += 0.1f;
+				break;
+			case VK_DOWN:
+				clearColor[0] -= 0.1f;
+				break;
+			}
+		} break;
 
-			default:
-				return DefWindowProcW(hwnd, msg, wParam, lParam);
+		// The default window procedure will play a system notification sound 
+		// when pressing the Alt+Enter keyboard combination if this message is 
+		// not handled.
+		case WM_SYSCHAR:
+			break;
+
+		case WM_SIZE:
+		{
+			RECT clientRect = {};
+			GetClientRect(hwnd, &clientRect);
+
+			int width = clientRect.right - clientRect.left;
+			int height = clientRect.bottom - clientRect.top;
+
+			window->resize(width, height);
+		} break;
+
+		case WM_DESTROY:
+			PostQuitMessage(0);
+			break;
+
+		default:
+			return DefWindowProcW(hwnd, msg, wParam, lParam);
 		}
 
 		return 0;
@@ -494,10 +279,7 @@ int main()
 
 	enableDebugLayer();
 
-	tearingSupported = checkTearingSupport();
-
 	WNDCLASSEX windowClass = {};
-
 	windowClass.cbSize = sizeof(WNDCLASSEX);
 	windowClass.style = CS_HREDRAW | CS_VREDRAW;
 	windowClass.lpfnWndProc = &windowCallback;
@@ -517,44 +299,15 @@ int main()
 		return 1;
 	}
 
-	windowRect = { 0, 0, (LONG)clientWidth, (LONG)clientHeight };
-	AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
-
-	int windowWidth = windowRect.right - windowRect.left;
-	int windowHeight = windowRect.bottom - windowRect.top;
-
-	windowHandle = CreateWindowEx(0, windowClass.lpszClassName, TEXT("DX12"), WS_OVERLAPPEDWINDOW,
-#if 1
-		CW_USEDEFAULT, CW_USEDEFAULT,
-#else
-		0, 0
-#endif
-		windowWidth, windowHeight,
-		0, 0, 0, 0);
-
-	GetWindowRect(windowHandle, &windowRect);
-
 
 
 	ComPtr<IDXGIAdapter4> dxgiAdapter4 = getAdapter(useWarp);
-
 	device = createDevice(dxgiAdapter4);
 
 	commandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-	swapChain = createSwapChain(windowHandle, commandQueue.getD3D12CommandQueue(), clientWidth, clientHeight, numFrames);
+	window.initialize(windowClass.lpszClassName, device, 1280, 720, commandQueue);
 
-	currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
-
-	rtvDescriptorHeap = createDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, numFrames);
-	rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-	updateRenderTargetViews(device, swapChain, rtvDescriptorHeap);
-
-
-	initialized = true;
-
-	ShowWindow(windowHandle, SW_SHOW);
 
 	MSG msg = {};
 	while (msg.message != WM_QUIT)
