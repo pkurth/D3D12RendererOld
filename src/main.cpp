@@ -160,7 +160,7 @@ void render(dx_window* window)
 	dx_command_list* commandList = renderCommandQueue.getAvailableCommandList();
 
 	// Transition backbuffer from "Present" to "Render Target", so we can render to it.
-	commandList->transitionResource(backBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	commandList->transitionResource(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	uint32 currentBackBufferIndex = window->getCurrentBackBufferIndex();
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = window->getCurrentRenderTargetView();
@@ -168,7 +168,7 @@ void render(dx_window* window)
 	game.render(commandList, rtv);
 
 	// Transition back to "Present".
-	commandList->transitionResource(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	commandList->transitionResource(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
 
 	// Run command list and wait for next one to become free.
 	fenceValues[currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);

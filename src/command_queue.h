@@ -11,6 +11,7 @@ using namespace Microsoft::WRL;
 
 #include <mutex>
 #include <atomic>
+#include <vector>
 
 class dx_command_queue
 {
@@ -23,6 +24,7 @@ public:
 	// Execute a command list.
 	// Returns the fence value to wait for for this command list.
 	uint64 executeCommandList(dx_command_list* commandList);
+	uint64 executeCommandLists(const std::vector<dx_command_list*>& commandLists);
 
 	bool isFenceComplete(uint64 fenceValue);
 	void waitForFenceValue(uint64 fenceValue);

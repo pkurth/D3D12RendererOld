@@ -1,6 +1,7 @@
 #include "window.h"
 #include "error.h"
 #include "commands.h"
+#include "resource_state_tracker.h"
 
 #include <iostream>
 
@@ -142,6 +143,8 @@ void dx_window::updateRenderTargetViews()
 		ComPtr<ID3D12Resource> backBuffer;
 		checkResult(swapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)));
 
+		dx_resource_state_tracker::addGlobalResourceState(backBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, 1);
+
 		device->CreateRenderTargetView(backBuffer.Get(), nullptr, rtvHandle);
 
 		backBuffers[i] = backBuffer;
@@ -163,8 +166,7 @@ void dx_window::resize(uint32 width, uint32 height)
 
 		for (uint32 i = 0; i < numFrames; ++i)
 		{
-			// Any references to the back buffers must be released
-			// before the swap chain can be resized.
+			dx_resource_state_tracker::removeGlobalResourceState(backBuffers[i].Get());
 			backBuffers[i].Reset();
 		}
 

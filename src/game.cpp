@@ -37,10 +37,8 @@ scene_data loadScene(ComPtr<ID3D12Device2> device, dx_command_queue& copyCommand
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
 	scene_data result;
-
-	ComPtr<ID3D12Resource> intermediateVertexBuffer, intermediateIndexBuffer;
-	result.vertexBuffer = commandList->createVertexBuffer(cubeVertices, arraysize(cubeVertices), intermediateVertexBuffer);
-	result.indexBuffer = commandList->createIndexBuffer(cubeIndicies, arraysize(cubeIndicies), intermediateIndexBuffer);
+	result.vertexBuffer = commandList->createVertexBuffer(cubeVertices, arraysize(cubeVertices));
+	result.indexBuffer = commandList->createIndexBuffer(cubeIndicies, arraysize(cubeIndicies));
 
 	ComPtr<ID3DBlob> vertexShaderBlob;
 	checkResult(D3DReadFileToBlob(L"shaders/bin/VertexShader.cso", &vertexShaderBlob));

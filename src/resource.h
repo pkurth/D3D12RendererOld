@@ -4,17 +4,20 @@
 #include <wrl.h>
 using namespace Microsoft::WRL;
 
-#include <DirectXTex/DirectXTex/DirectXTex.h>
+#include <string>
 
-struct dx_vertex_buffer
+struct dx_resource
 {
-	ComPtr<ID3D12Resource> buffer;
+	ComPtr<ID3D12Resource> resource;
+};
+
+struct dx_vertex_buffer : dx_resource
+{
 	D3D12_VERTEX_BUFFER_VIEW view;
 };
 
-struct dx_index_buffer
+struct dx_index_buffer : dx_resource
 {
-	ComPtr<ID3D12Resource> buffer;
 	D3D12_INDEX_BUFFER_VIEW view;
 };
 
@@ -28,7 +31,8 @@ enum texture_usage
 	texture_usage_render_target, 
 };
 
-struct dx_texture
+struct dx_texture : dx_resource
 {
+	std::wstring name;
 	texture_usage usage;
 };

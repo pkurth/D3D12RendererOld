@@ -1,5 +1,6 @@
 #include "command_queue.h"
 #include "error.h"
+#include "resource_state_tracker.h"
 
 #include <cassert>
 
@@ -49,17 +50,46 @@ dx_command_list* dx_command_queue::getAvailableCommandList()
 
 uint64 dx_command_queue::executeCommandList(dx_command_list* commandList)
 {
-	commandList->close();
+	return executeCommandLists({ commandList });
+}
 
-	ID3D12CommandList* const commandLists[] = {
-		commandList->getD3D12CommandList().Get()
-	};
+uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>& commandLists)
+{
+	dx_resource_state_tracker::lock();
 
-	commandQueue->ExecuteCommandLists(1, commandLists);
+	std::vector<dx_command_list*> toBeQueued;
+	toBeQueued.reserve(commandLists.size() * 2);
+
+	std::vector<ID3D12CommandList*> d3d12CommandLists;
+	d3d12CommandLists.reserve(commandLists.size() * 2);
+
+	for (dx_command_list* list : commandLists)
+	{
+		dx_command_list* pendingCommandList = getAvailableCommandList();
+		bool hasPendingBarriers = list->close(pendingCommandList);
+		pendingCommandList->close();
+
+		if (hasPendingBarriers)
+		{
+			d3d12CommandLists.push_back(pendingCommandList->getD3D12CommandList().Get());
+		}
+		d3d12CommandLists.push_back(list->getD3D12CommandList().Get());
+
+		toBeQueued.push_back(pendingCommandList);
+		toBeQueued.push_back(list);
+	}
+
+	uint32 numCommandLists = (uint32)d3d12CommandLists.size();
+	commandQueue->ExecuteCommandLists(numCommandLists, d3d12CommandLists.data());
 	uint64 fenceValue = signal();
 
-	inFlightCommandLists.pushBack(command_list_entry{ fenceValue, commandList });
-	
+	dx_resource_state_tracker::unlock();
+
+	for (auto commandList : toBeQueued)
+	{
+		inFlightCommandLists.pushBack(command_list_entry{ fenceValue, commandList });
+	}
+
 	return fenceValue;
 }
 
