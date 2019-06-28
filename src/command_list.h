@@ -4,7 +4,7 @@
 #include "resource.h"
 #include "resource_state_tracker.h"
 
-#include <d3d12.h>
+#include <dx/d3dx12.h>
 #include <wrl.h> 
 using namespace Microsoft::WRL;
 
@@ -33,6 +33,7 @@ public:
 
 	void copyTextureSubresource(dx_texture& texture, uint32 firstSubresource, uint32 numSubresources, D3D12_SUBRESOURCE_DATA* subresourceData);
 	dx_texture loadTextureFromFile(const std::wstring& filename, texture_usage usage);
+	void generateMips(dx_texture& texture);
 
 	void setPipelineState(ComPtr<ID3D12PipelineState> pipelineState);
 	void setRootSignature(ComPtr<ID3D12RootSignature> rootSignature);
@@ -60,6 +61,7 @@ public:
 private:
 
 	void trackObject(ComPtr<ID3D12Object> object);
+	void flushResourceBarriers();
 
 
 	D3D12_COMMAND_LIST_TYPE				commandListType;

@@ -45,6 +45,8 @@ scene_data loadScene(ComPtr<ID3D12Device2> device, dx_command_queue& copyCommand
 	ComPtr<ID3DBlob> pixelShaderBlob;
 	checkResult(D3DReadFileToBlob(L"shaders/bin/PixelShader.cso", &pixelShaderBlob));
 
+	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
+
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -52,13 +54,6 @@ scene_data loadScene(ComPtr<ID3D12Device2> device, dx_command_queue& copyCommand
 
 
 	// Create a root signature.
-	D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-	featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-	if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-	{
-		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-	}
-
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
@@ -70,17 +65,12 @@ scene_data loadScene(ComPtr<ID3D12Device2> device, dx_command_queue& copyCommand
 	CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 	rootParameters[0].InitAsConstants(sizeof(mat4) / 16 * sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 
-	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-	rootSignatureDescription.Init_1_1(arraysize(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+	rootSignatureDesc.Flags = rootSignatureFlags;
+	rootSignatureDesc.pParameters = rootParameters;
+	rootSignatureDesc.NumParameters = arraysize(rootParameters);
+	result.rootSignature.initialize(device, rootSignatureDesc);
 
-	// Serialize the root signature.
-	ComPtr<ID3DBlob> rootSignatureBlob;
-	ComPtr<ID3DBlob> errorBlob;
-	checkResult(D3DX12SerializeVersionedRootSignature(&rootSignatureDescription,
-		featureData.HighestVersion, &rootSignatureBlob, &errorBlob));
-	// Create the root signature.
-	checkResult(device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
-		rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&result.rootSignature)));
 
 
 	struct pipeline_state_stream
@@ -98,7 +88,7 @@ scene_data loadScene(ComPtr<ID3D12Device2> device, dx_command_queue& copyCommand
 	rtvFormats.NumRenderTargets = 1;
 	rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-	pipelineStateStream.rootSignature = result.rootSignature.Get();
+	pipelineStateStream.rootSignature = result.rootSignature.getD3D12RootSignature().Get();
 	pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
 	pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
@@ -112,7 +102,6 @@ scene_data loadScene(ComPtr<ID3D12Device2> device, dx_command_queue& copyCommand
 	checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&pipelineState)));
 
 
-	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);
 
 	return result;
@@ -218,7 +207,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	// Prepare for rendering.
 	commandList->setPipelineState(pipelineState);
-	commandList->setRootSignature(scene.rootSignature);
+	commandList->setRootSignature(scene.rootSignature.getD3D12RootSignature());
 
 	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	commandList->setVertexBuffer(0, scene.vertexBuffer);

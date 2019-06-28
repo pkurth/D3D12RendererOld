@@ -3,6 +3,7 @@
 #include "common.h"
 #include "command_queue.h"
 #include "resource.h"
+#include "root_signature.h"
 #include "math.h"
 
 #include <dx/d3dx12.h>
@@ -14,7 +15,7 @@ struct scene_data
 	dx_vertex_buffer vertexBuffer;
 	dx_index_buffer indexBuffer;
 
-	ComPtr<ID3D12RootSignature> rootSignature;
+	dx_root_signature rootSignature;
 };
 
 class dx_game

@@ -35,4 +35,6 @@ struct dx_texture : dx_resource
 {
 	std::wstring name;
 	texture_usage usage;
+
+	void createViews();
 };

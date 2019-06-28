@@ -1,7 +1,6 @@
 #include "command_list.h"
 #include "error.h"
 
-#include <dx/d3dx12.h>
 #include <unordered_map>
 #include <string>
 #include <mutex>
@@ -102,130 +101,133 @@ void dx_command_list::updateBufferResource(ComPtr<ID3D12Resource>& destinationRe
 
 void dx_command_list::copyTextureSubresource(dx_texture& texture, uint32 firstSubresource, uint32 numSubresources, D3D12_SUBRESOURCE_DATA* subresourceData)
 {
-	//ComPtr<ID3D12Resource> destinationResource = texture.textureResource;
-	//if (destinationResource)
-	//{
-	//	// Resource must be in the copy-destination state.
-	//	TransitionBarrier(texture, D3D12_RESOURCE_STATE_COPY_DEST);
-	//	FlushResourceBarriers();
+	ComPtr<ID3D12Resource>& destinationResource = texture.resource;
+	if (destinationResource)
+	{
+		transitionResource(texture, D3D12_RESOURCE_STATE_COPY_DEST);
+		flushResourceBarriers();
 
-	//	UINT64 requiredSize = GetRequiredIntermediateSize(destinationResource.Get(), firstSubresource, numSubresources);
+		UINT64 requiredSize = GetRequiredIntermediateSize(destinationResource.Get(), firstSubresource, numSubresources);
 
-	//	// Create a temporary (intermediate) resource for uploading the subresources
-	//	ComPtr<ID3D12Resource> intermediateResource;
-	//	ThrowIfFailed(device->CreateCommittedResource(
-	//		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-	//		D3D12_HEAP_FLAG_NONE,
-	//		&CD3DX12_RESOURCE_DESC::Buffer(requiredSize),
-	//		D3D12_RESOURCE_STATE_GENERIC_READ,
-	//		nullptr,
-	//		IID_PPV_ARGS(&intermediateResource)
-	//	));
+		// Create a temporary (intermediate) resource for uploading the subresources
+		ComPtr<ID3D12Resource> intermediateResource;
+		checkResult(device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3DX12_RESOURCE_DESC::Buffer(requiredSize),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&intermediateResource)
+		));
 
-	//	UpdateSubresources(m_d3d12CommandList.Get(), destinationResource.Get(), intermediateResource.Get(), 0, firstSubresource, numSubresources, subresourceData);
+		UpdateSubresources(commandList.Get(), destinationResource.Get(), intermediateResource.Get(), 0, firstSubresource, numSubresources, subresourceData);
 
-	//	TrackObject(intermediateResource);
-	//	TrackObject(destinationResource);
-	//}
+		trackObject(intermediateResource);
+		trackObject(destinationResource);
+	}
 }
 
 dx_texture dx_command_list::loadTextureFromFile(const std::wstring& filename, texture_usage usage)
 {
 	dx_texture result;
-	//result.usage = usage;
-	//result.name = filename;
-	//result.createViews();
+	result.usage = usage;
+	result.name = filename;
+	result.createViews();
 
-	//std::filesystem::path path(filename);
-	//assert(std::filesystem::exists(path));
+	std::filesystem::path path(filename);
+	assert(std::filesystem::exists(path));
 
-	//auto it = textureCache.find(filename);
-	//if (it != textureCache.end())
-	//{
-	//	result.resource = it->second;
-	//}
-	//else
-	//{
-	//	DirectX::TexMetadata metadata;
-	//	DirectX::ScratchImage scratchImage;
+	auto it = textureCache.find(filename);
+	if (it != textureCache.end())
+	{
+		result.resource = it->second;
+	}
+	else
+	{
+		DirectX::TexMetadata metadata;
+		DirectX::ScratchImage scratchImage;
 
-	//	ComPtr<ID3D12Resource> textureResource;
+		ComPtr<ID3D12Resource> textureResource;
 
-	//	if (path.extension() == ".dds")
-	//	{
-	//		checkResult(DirectX::LoadFromDDSFile(filename.c_str(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage));
-	//	}
-	//	else if (path.extension() == ".hdr")
-	//	{
-	//		checkResult(DirectX::LoadFromHDRFile(filename.c_str(), &metadata, scratchImage));
-	//	}
-	//	else if (path.extension() == ".tga")
-	//	{
-	//		checkResult(DirectX::LoadFromTGAFile(filename.c_str(), &metadata, scratchImage));
-	//	}
-	//	else
-	//	{
-	//		checkResult(DirectX::LoadFromWICFile(filename.c_str(), DirectX::WIC_FLAGS_NONE, &metadata, scratchImage));
-	//	}
+		if (path.extension() == ".dds")
+		{
+			checkResult(DirectX::LoadFromDDSFile(filename.c_str(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage));
+		}
+		else if (path.extension() == ".hdr")
+		{
+			checkResult(DirectX::LoadFromHDRFile(filename.c_str(), &metadata, scratchImage));
+		}
+		else if (path.extension() == ".tga")
+		{
+			checkResult(DirectX::LoadFromTGAFile(filename.c_str(), &metadata, scratchImage));
+		}
+		else
+		{
+			checkResult(DirectX::LoadFromWICFile(filename.c_str(), DirectX::WIC_FLAGS_NONE, &metadata, scratchImage));
+		}
 
-	//	if (usage == texture_usage_albedo)
-	//	{
-	//		metadata.format = DirectX::MakeSRGB(metadata.format);
-	//	}
+		if (usage == texture_usage_albedo)
+		{
+			metadata.format = DirectX::MakeSRGB(metadata.format);
+		}
 
-	//	D3D12_RESOURCE_DESC textureDesc = {};
-	//	switch (metadata.dimension)
-	//	{
-	//	case DirectX::TEX_DIMENSION_TEXTURE1D:
-	//		textureDesc = CD3DX12_RESOURCE_DESC::Tex1D(metadata.format, metadata.width, metadata.arraySize);
-	//		break;
-	//	case DirectX::TEX_DIMENSION_TEXTURE2D:
-	//		textureDesc = CD3DX12_RESOURCE_DESC::Tex2D(metadata.format, metadata.width, metadata.height, metadata.arraySize);
-	//		break;
-	//	case DirectX::TEX_DIMENSION_TEXTURE3D:
-	//		textureDesc = CD3DX12_RESOURCE_DESC::Tex3D(metadata.format, metadata.width, metadata.height, metadata.depth);
-	//		break;
-	//	default:
-	//		assert(false);
-	//		break;
-	//	}
+		D3D12_RESOURCE_DESC textureDesc = {};
+		switch (metadata.dimension)
+		{
+		case DirectX::TEX_DIMENSION_TEXTURE1D:
+			textureDesc = CD3DX12_RESOURCE_DESC::Tex1D(metadata.format, metadata.width, (uint16)metadata.arraySize);
+			break;
+		case DirectX::TEX_DIMENSION_TEXTURE2D:
+			textureDesc = CD3DX12_RESOURCE_DESC::Tex2D(metadata.format, metadata.width, (uint32)metadata.height, (uint16)metadata.arraySize);
+			break;
+		case DirectX::TEX_DIMENSION_TEXTURE3D:
+			textureDesc = CD3DX12_RESOURCE_DESC::Tex3D(metadata.format, metadata.width, (uint32)metadata.height, (uint16)metadata.depth);
+			break;
+		default:
+			assert(false);
+			break;
+		}
 
-	//	checkResult(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-	//		D3D12_HEAP_FLAG_NONE,
-	//		&textureDesc,
-	//		D3D12_RESOURCE_STATE_COMMON,
-	//		nullptr,
-	//		IID_PPV_ARGS(&textureResource)));
+		checkResult(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&textureDesc,
+			D3D12_RESOURCE_STATE_COMMON,
+			nullptr,
+			IID_PPV_ARGS(&textureResource)));
 
-	//	uint32 numImages = scratchImage.GetImageCount();
+		uint32 numImages = (uint32)scratchImage.GetImageCount();
 
-	//	dx_resource_state_tracker::addGlobalResourceState(textureResource.Get(), D3D12_RESOURCE_STATE_COMMON, numImages);
+		dx_resource_state_tracker::addGlobalResourceState(textureResource.Get(), D3D12_RESOURCE_STATE_COMMON, numImages);
 
-	//	result.resource = textureResource;
+		result.resource = textureResource;
 
-	//	const DirectX::Image* pImages = scratchImage.GetImages();
-	//	std::vector<D3D12_SUBRESOURCE_DATA> subresources(numImages);
-	//	for (uint32 i = 0; i < numImages; ++i)
-	//	{
-	//		D3D12_SUBRESOURCE_DATA& subresource = subresources[i];
-	//		subresource.RowPitch = pImages[i].rowPitch;
-	//		subresource.SlicePitch = pImages[i].slicePitch;
-	//		subresource.pData = pImages[i].pixels;
-	//	}
+		const DirectX::Image* pImages = scratchImage.GetImages();
+		std::vector<D3D12_SUBRESOURCE_DATA> subresources(numImages);
+		for (uint32 i = 0; i < numImages; ++i)
+		{
+			D3D12_SUBRESOURCE_DATA& subresource = subresources[i];
+			subresource.RowPitch = pImages[i].rowPitch;
+			subresource.SlicePitch = pImages[i].slicePitch;
+			subresource.pData = pImages[i].pixels;
+		}
 
-	//	copyTextureSubresource(result, 0, numImages, subresources.data());
+		copyTextureSubresource(result, 0, numImages, subresources.data());
 
-	//	if (numImages < textureResource->GetDesc().MipLevels)
-	//	{
-	//		generateMips(result);
-	//	}
+		if (numImages < textureResource->GetDesc().MipLevels)
+		{
+			generateMips(result);
+		}
 
-	//	// Add the texture resource to the texture cache.
-	//	std::lock_guard<std::mutex> lock(textureCacheMutex);
-	//	textureCache[filename] = textureResource.Get();
-	//}
+		// Add the texture resource to the texture cache.
+		std::lock_guard<std::mutex> lock(textureCacheMutex);
+		textureCache[filename] = textureResource.Get();
+	}
 
 	return result;
+}
+
+void dx_command_list::generateMips(dx_texture& texture)
+{
 }
 
 void dx_command_list::setPipelineState(ComPtr<ID3D12PipelineState> pipelineState)
@@ -284,7 +286,7 @@ void dx_command_list::reset()
 
 bool dx_command_list::close(dx_command_list* pendingCommandList)
 {
-	resourceStateTracker.flushResourceBarriers(this);
+	flushResourceBarriers();
 
 	checkResult(commandList->Close());
 
@@ -296,7 +298,7 @@ bool dx_command_list::close(dx_command_list* pendingCommandList)
 
 void dx_command_list::close()
 {
-	resourceStateTracker.flushResourceBarriers(this);
+	flushResourceBarriers();
 
 	checkResult(commandList->Close());
 }
@@ -304,4 +306,10 @@ void dx_command_list::close()
 void dx_command_list::trackObject(ComPtr<ID3D12Object> object)
 {
 	trackedObjects.push_back(object);
+}
+
+void dx_command_list::flushResourceBarriers()
+{
+	resourceStateTracker.flushResourceBarriers(this);
+
 }

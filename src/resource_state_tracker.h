@@ -41,12 +41,15 @@ private:
 		void initialize(uint32 numSubResources, D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON)
 		{
 			this->state = state;
-			subresourceStates.reserve(numSubResources);
+			if (numSubResources > 1)
+			{
+				subresourceStates.reserve(numSubResources);
+			}
 		}
 
 		void setSubresourceState(uint32 subresource, D3D12_RESOURCE_STATES state)
 		{
-			if (subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+			if (subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES || subresourceStates.capacity() == 0)
 			{
 				this->state = state;
 				subresourceStates.clear();
