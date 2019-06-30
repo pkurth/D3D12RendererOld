@@ -4,6 +4,10 @@
 
 #include <cassert>
 
+dx_command_queue dx_command_queue::renderCommandQueue;
+dx_command_queue dx_command_queue::computeCommandQueue;
+dx_command_queue dx_command_queue::copyCommandQueue;
+
 void dx_command_queue::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type)
 {
 	fenceValue = 0;
@@ -63,6 +67,9 @@ uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>
 	std::vector<ID3D12CommandList*> d3d12CommandLists;
 	d3d12CommandLists.reserve(commandLists.size() * 2);
 
+	std::vector<dx_command_list*> extraComputeCommandLists;
+	extraComputeCommandLists.reserve(commandLists.size());
+
 	for (dx_command_list* list : commandLists)
 	{
 		dx_command_list* pendingCommandList = getAvailableCommandList();
@@ -77,6 +84,12 @@ uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>
 
 		toBeQueued.push_back(pendingCommandList);
 		toBeQueued.push_back(list);
+
+		dx_command_list* extraComputeCommandList = list->getComputeCommandList();
+		if (extraComputeCommandList)
+		{
+			extraComputeCommandLists.push_back(extraComputeCommandList);
+		}
 	}
 
 	uint32 numCommandLists = (uint32)d3d12CommandLists.size();
@@ -88,6 +101,12 @@ uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>
 	for (auto commandList : toBeQueued)
 	{
 		inFlightCommandLists.pushBack(command_list_entry{ fenceValue, commandList });
+	}
+
+	if (extraComputeCommandLists.size() > 0)
+	{
+		computeCommandQueue.wait(*this);
+		computeCommandQueue.executeCommandLists(extraComputeCommandLists);
 	}
 
 	return fenceValue;
@@ -168,4 +187,9 @@ void dx_command_queue::processInFlightCommandLists()
 
 		std::this_thread::yield();
 	}
+}
+
+void dx_command_queue::wait(dx_command_queue& other)
+{
+	commandQueue->Wait(other.fence.Get(), other.fenceValue);
 }

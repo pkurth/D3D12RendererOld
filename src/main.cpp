@@ -6,6 +6,7 @@
 #include "error.h"
 #include "command_queue.h"
 #include "game.h"
+#include "descriptor_allocator.h"
 
 // directx
 #include <dx/d3dx12.h>
@@ -19,14 +20,15 @@
 
 static bool useWarp = false;
 
-static dx_command_queue renderCommandQueue;
-static dx_command_queue copyCommandQueue;
 static dx_window window;
 static dx_game game;
 
 static ComPtr<ID3D12Device2> device;
 
 static uint64 fenceValues[dx_window::numFrames] = {};
+static uint64 frameValues[dx_window::numFrames] = {};
+
+static uint64 frameCount = 0;
 
 static void enableDebugLayer()
 {
@@ -156,10 +158,11 @@ void render(dx_window* window)
 {
 	ComPtr<ID3D12Resource> backBuffer = window->getCurrentBackBuffer();
 
+	dx_command_queue& renderCommandQueue = dx_command_queue::renderCommandQueue;
 	dx_command_list* commandList = renderCommandQueue.getAvailableCommandList();
 
 	// Transition backbuffer from "Present" to "Render Target", so we can render to it.
-	commandList->transitionResource(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	uint32 currentBackBufferIndex = window->getCurrentBackBufferIndex();
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = window->getCurrentRenderTargetView();
@@ -167,18 +170,24 @@ void render(dx_window* window)
 	game.render(commandList, rtv);
 
 	// Transition back to "Present".
-	commandList->transitionResource(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
+	commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
 
 	// Run command list and wait for next one to become free.
 	fenceValues[currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);
+	frameValues[currentBackBufferIndex] = frameCount;
 	uint32 newCurrentBackbufferIndex = window->present();
+
+	// Make sure, that command queue is finished.
 	renderCommandQueue.waitForFenceValue(fenceValues[newCurrentBackbufferIndex]);
+
+	dx_descriptor_allocator::releaseStaleDescriptors(frameValues[newCurrentBackbufferIndex]);
 }
 
 void flushApplication()
 {
-	renderCommandQueue.flush();
-	copyCommandQueue.flush();
+	dx_command_queue::renderCommandQueue.flush();
+	dx_command_queue::computeCommandQueue.flush();
+	dx_command_queue::copyCommandQueue.flush();
 }
 
 LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPARAM lParam)
@@ -191,6 +200,8 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 		{
 		case WM_PAINT:
 		{
+			++frameCount;
+
 			update();
 			render(window);
 		} break;
@@ -287,11 +298,13 @@ int main()
 	ComPtr<IDXGIAdapter4> dxgiAdapter4 = getAdapter(useWarp);
 	device = createDevice(dxgiAdapter4);
 
-	renderCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	copyCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COPY);
+	dx_descriptor_allocator::initialize(device);
+	dx_command_queue::renderCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	dx_command_queue::computeCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	dx_command_queue::copyCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COPY);
 
-	window.initialize(windowClass.lpszClassName, device, 1280, 720, renderCommandQueue);
-	game.initialize(device, copyCommandQueue, 1280, 720);
+	window.initialize(windowClass.lpszClassName, device, 1280, 720);
+	game.initialize(device, 1280, 720);
 
 
 	MSG msg = {};

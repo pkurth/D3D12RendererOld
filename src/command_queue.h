@@ -19,6 +19,13 @@ public:
 	void initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
 	virtual ~dx_command_queue();
 
+	dx_command_queue() = default;
+
+	dx_command_queue(const dx_command_queue&) = delete;
+	dx_command_queue(dx_command_queue&&) = delete;
+	dx_command_queue& operator=(const dx_command_queue&) = delete;
+	dx_command_queue& operator=(dx_command_queue&&) = delete;
+
 	dx_command_list* getAvailableCommandList();
 
 	// Execute a command list.
@@ -32,9 +39,17 @@ public:
 
 	ComPtr<ID3D12CommandQueue> getD3D12CommandQueue() const;
 
+
+
+	static dx_command_queue						renderCommandQueue;
+	static dx_command_queue						computeCommandQueue;
+	static dx_command_queue						copyCommandQueue;
+
 protected:
 	uint64 signal();
 	void processInFlightCommandLists();
+
+	void wait(dx_command_queue& other);
 
 private:
 
@@ -58,5 +73,6 @@ private:
 	std::mutex									inFlightCommandListsMutex;
 	std::condition_variable						processInFlightCommandListsCondition;
 	std::thread									processInFlightCommandListsThread;
+
 };
 

@@ -15,6 +15,8 @@ struct scene_data
 	dx_vertex_buffer vertexBuffer;
 	dx_index_buffer indexBuffer;
 
+	dx_texture texture;
+
 	dx_root_signature rootSignature;
 };
 
@@ -22,7 +24,7 @@ class dx_game
 {
 
 public:
-	void initialize(ComPtr<ID3D12Device2> device, dx_command_queue& copyCommandQueue, uint32 width, uint32 height);
+	void initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height);
 	void resize(uint32 width, uint32 height);
 
 	void update(float dt);

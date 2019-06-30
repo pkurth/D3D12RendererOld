@@ -58,11 +58,13 @@ void dx_resource_state_tracker::resourceBarrier(const D3D12_RESOURCE_BARRIER& ba
 
 			// Get subresource count from global list.
 			std::lock_guard<std::mutex> lock(globalMutex);
-			auto global = globalResourceState[transitionBarrier.pResource];
+			auto& global = globalResourceState[transitionBarrier.pResource];
 			resourceState->initialize((uint32)global.subresourceStates.capacity());
+
+			
 		}
 
-		resourceState->setSubresourceState(D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, transitionBarrier.StateAfter);
+		resourceState->setSubresourceState(transitionBarrier.Subresource, transitionBarrier.StateAfter);
 	}
 	else
 	{
@@ -164,7 +166,7 @@ void dx_resource_state_tracker::flushResourceBarriers(dx_command_list* commandLi
 	uint32 numBarriers = (uint32)resourceBarriers.size();
 	if (numBarriers > 0)
 	{
-		auto d3d12CommandList = commandList->getD3D12CommandList();
+		ComPtr<ID3D12GraphicsCommandList2> d3d12CommandList = commandList->getD3D12CommandList();
 		d3d12CommandList->ResourceBarrier(numBarriers, resourceBarriers.data());
 		resourceBarriers.clear();
 	}
@@ -207,7 +209,7 @@ void dx_resource_state_tracker::addGlobalResourceState(ID3D12Resource* resource,
 	{
 		std::lock_guard<std::mutex> lock(globalMutex);
 
-		auto it = globalResourceState[resource];
+		auto& it = globalResourceState[resource];
 		it.initialize(numSubResources, state);
 		it.setSubresourceState(D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, state);
 	}

@@ -3,6 +3,8 @@
 #include "common.h"
 #include "resource.h"
 #include "resource_state_tracker.h"
+#include "dynamic_descriptor_heap.h"
+#include "generate_mips.h"
 
 #include <dx/d3dx12.h>
 #include <wrl.h> 
@@ -16,27 +18,55 @@ class dx_command_list
 public:
 	void initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE commandListType);
 	
-	void transitionResource(ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES afterState, uint32 subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, bool flushBarriers = false);
-	void transitionResource(const dx_resource& resource, D3D12_RESOURCE_STATES afterState, uint32 subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, bool flushBarriers = false);
+	void transitionBarrier(ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES afterState, uint32 subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, bool flushBarriers = false);
+	void transitionBarrier(const dx_resource& resource, D3D12_RESOURCE_STATES afterState, uint32 subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, bool flushBarriers = false);
 
-	void clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, FLOAT* clearColor);
-	void clearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, FLOAT depth = 1.0f);
+	void uavBarrier(ComPtr<ID3D12Resource> resource, bool flushBarriers = false);
+	void uavBarrier(const dx_resource& resource, bool flushBarriers = false);
 
-	void updateBufferResource(ComPtr<ID3D12Resource>& destinationResource,
-		size_t numElements, size_t elementSize, const void* bufferData, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
+	void aliasingBarrier(ComPtr<ID3D12Resource> beforeResource, ComPtr<ID3D12Resource> afterResource, bool flushBarriers = false);
+	void aliasingBarrier(const dx_resource& beforeResource, const dx_resource& afterResource, bool flushBarriers = false);
 
-	template <typename vertex_t>
-	dx_vertex_buffer createVertexBuffer(vertex_t* vertices, uint32 count);
+	void copyResource(ComPtr<ID3D12Resource> dstRes, ComPtr<ID3D12Resource> srcRes);
+	void copyResource(dx_resource& dstRes, const dx_resource& srcRes);
 
-	template <typename index_t>
-	dx_index_buffer createIndexBuffer(index_t* indices, uint32 count);
 
-	void copyTextureSubresource(dx_texture& texture, uint32 firstSubresource, uint32 numSubresources, D3D12_SUBRESOURCE_DATA* subresourceData);
-	dx_texture loadTextureFromFile(const std::wstring& filename, texture_usage usage);
-	void generateMips(dx_texture& texture);
+	
 
+	// Buffer creation.
+	template <typename vertex_t> dx_vertex_buffer createVertexBuffer(vertex_t* vertices, uint32 count); 
+	template <typename index_t> dx_index_buffer createIndexBuffer(index_t* indices, uint32 count);
+
+	// Texture creation.
+	void loadTextureFromFile(dx_texture& texture,const std::wstring& filename, texture_usage usage);
+
+	// Pipeline.
 	void setPipelineState(ComPtr<ID3D12PipelineState> pipelineState);
-	void setRootSignature(ComPtr<ID3D12RootSignature> rootSignature);
+
+	// Root signature.
+	void setGraphicsRootSignature(const dx_root_signature& rootSignature);
+	void setComputeRootSignature(const dx_root_signature& rootSignature);
+	void setGraphics32BitConstants(uint32 rootParameterIndex, uint32 numConstants, const void* constants);
+	template<typename T> void setGraphics32BitConstants(uint32 rootParameterIndex, const T& constants);
+	void setCompute32BitConstants(uint32 rootParameterIndex, uint32 numConstants, const void* constants);
+	template<typename T> void setCompute32BitConstants(uint32 rootParameterIndex, const T& constants);
+	void setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ID3D12DescriptorHeap* heap);
+
+	void setShaderResourceView(uint32 rootParameterIndex,
+		uint32 descriptorOffset,
+		const dx_resource& resource,
+		D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+		uint32 firstSubresource = 0,
+		uint32 numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+		const D3D12_SHADER_RESOURCE_VIEW_DESC* srv = nullptr);
+
+	void setUnorderedAccessView(uint32 rootParameterIndex,
+		uint32 descrptorOffset,
+		const dx_resource& resource,
+		D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		uint32 firstSubresource = 0,
+		uint32 numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+		const D3D12_UNORDERED_ACCESS_VIEW_DESC* uav = nullptr);
 
 	// Input assembly.
 	void setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology);
@@ -47,21 +77,36 @@ public:
 	void setViewport(const D3D12_VIEWPORT& viewport);
 	void setScissor(const D3D12_RECT& scissor);
 
+	// Clear.
+	void clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, FLOAT* clearColor);
+	void clearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, FLOAT depth = 1.f);
+
 	// Draw.
 	void draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance);
 	void drawIndexed(uint32 indexCount, uint32 instanceCount, uint32 startIndex, int32 baseVertex, uint32 startInstance);
 
-	void reset();
+	// Dispatch.
+	void dispatch(uint32 numGroupsX, uint32 numGroupsY = 1, uint32 numGroupsZ = 1);
 
+
+	// End frame.
+	void reset();
 	bool close(dx_command_list* pendingCommandList);
 	void close();
 
 	inline ComPtr<ID3D12GraphicsCommandList2> getD3D12CommandList() const { return commandList; }
+	inline dx_command_list* getComputeCommandList() const { return computeCommandList; }
 
 private:
 
+	void updateBufferResource(ComPtr<ID3D12Resource>& destinationResource,
+		size_t numElements, size_t elementSize, const void* bufferData, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
+
 	void trackObject(ComPtr<ID3D12Object> object);
 	void flushResourceBarriers();
+
+	void copyTextureSubresource(dx_texture& texture, uint32 firstSubresource, uint32 numSubresources, D3D12_SUBRESOURCE_DATA* subresourceData);
+	void generateMips(dx_texture& texture);
 
 
 	D3D12_COMMAND_LIST_TYPE				commandListType;
@@ -72,6 +117,12 @@ private:
 	std::vector<ComPtr<ID3D12Object>>	trackedObjects;
 
 	dx_resource_state_tracker			resourceStateTracker;
+	dx_dynamic_descriptor_heap			dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
+	ID3D12DescriptorHeap*				descriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
+
+	dx_command_list*					computeCommandList;
+
+	dx_generate_mips_pso				generateMipsPSO;
 };
 
 template <typename vertex_t>
@@ -108,4 +159,18 @@ dx_index_buffer dx_command_list::createIndexBuffer(index_t* indices, uint32 coun
 	result.view.SizeInBytes = count * sizeof(index_t);
 
 	return result;
+}
+
+template<typename T>
+inline void dx_command_list::setGraphics32BitConstants(uint32 rootParameterIndex, const T& constants)
+{
+	static_assert(sizeof(T) % sizeof(uint32) == 0, "Size of type must be a multiple of 4 bytes");
+	setGraphics32BitConstants(rootParameterIndex, sizeof(T) / sizeof(uint32), &constants);
+}
+
+template<typename T>
+inline void dx_command_list::setCompute32BitConstants(uint32 rootParameterIndex, const T& constants)
+{
+	static_assert(sizeof(T) % sizeof(uint32) == 0, "Size of type must be a multiple of 4 bytes");
+	setCompute32BitConstants(rootParameterIndex, sizeof(T) / sizeof(uint32), &constants);
 }

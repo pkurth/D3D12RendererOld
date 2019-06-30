@@ -91,7 +91,10 @@
   <ItemGroup>
     <ClCompile Include="src\command_list.cpp" />
     <ClCompile Include="src\command_queue.cpp" />
+    <ClCompile Include="src\descriptor_allocator.cpp" />
+    <ClCompile Include="src\dynamic_descriptor_heap.cpp" />
     <ClCompile Include="src\game.cpp" />
+    <ClCompile Include="src\generate_mips.cpp" />
     <ClCompile Include="src\resource.cpp" />
     <ClCompile Include="src\resource_state_tracker.cpp" />
     <ClCompile Include="src\root_signature.cpp" />
@@ -100,6 +103,8 @@
     <ClCompile Include="src\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\descriptor_allocator.h" />
+    <ClInclude Include="src\dynamic_descriptor_heap.h" />
     <ClInclude Include="src\generate_mips.h" />
     <ClInclude Include="src\resource.h" />
     <ClInclude Include="src\commands.h" />

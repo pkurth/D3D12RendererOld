@@ -80,6 +80,7 @@ float3 linearToSRGB(float3 x)
 
 float4 packColor(float4 x)
 {
+	//return float4(1, 0, 1, 1);
 	if (isSRGB)
 	{
 		return float4(linearToSRGB(x.rgb), x.a);
@@ -142,63 +143,63 @@ void main(shader_input IN)
 			src1 += srcMip.SampleLevel(linearClampSampler, uv1 + float2(off.x, off.y), srcMipLevel);
 			src1 *= 0.25;
 		} break;
+	}
 
-		outMip1[IN.dispatchThreadID.xy] = packColor(src1);
+	outMip1[IN.dispatchThreadID.xy] = packColor(src1);
 
-		if (numMipLevelsToGenerate == 1)
-		{
-			return;
-		}
+	if (numMipLevelsToGenerate == 1)
+	{
+		return;
+	}
 
+	storeColorToSharedMemory(IN.groupIndex, src1);
+
+	GroupMemoryBarrierWithGroupSync();
+
+	if ((IN.groupIndex & 0x9) == 0)
+	{
+		float4 src2 = loadColorFromSharedMemory(IN.groupIndex + 0x01);
+		float4 src3 = loadColorFromSharedMemory(IN.groupIndex + 0x08);
+		float4 src4 = loadColorFromSharedMemory(IN.groupIndex + 0x09);
+		src1 = 0.25f * (src1 + src2 + src3 + src4);
+
+		outMip2[IN.dispatchThreadID.xy / 2] = packColor(src1);
 		storeColorToSharedMemory(IN.groupIndex, src1);
+	}
 
-		GroupMemoryBarrierWithGroupSync();
+	if (numMipLevelsToGenerate == 2)
+	{
+		return;
+	}
 
-		if ((IN.groupIndex & 0x9) == 0)
-		{
-			float4 src2 = loadColorFromSharedMemory(IN.groupIndex + 0x01);
-			float4 src3 = loadColorFromSharedMemory(IN.groupIndex + 0x08);
-			float4 src4 = loadColorFromSharedMemory(IN.groupIndex + 0x09);
-			src1 = 0.25f * (src1 + src2 + src3 + src4);
+	GroupMemoryBarrierWithGroupSync();
 
-			outMip2[IN.dispatchThreadID.xy / 2] = packColor(src1);
-			storeColorToSharedMemory(IN.groupIndex, src1);
-		}
+	if ((IN.groupIndex & 0x1B) == 0)
+	{
+		float4 src2 = loadColorFromSharedMemory(IN.groupIndex + 0x02);
+		float4 src3 = loadColorFromSharedMemory(IN.groupIndex + 0x10);
+		float4 src4 = loadColorFromSharedMemory(IN.groupIndex + 0x12);
+		src1 = 0.25f * (src1 + src2 + src3 + src4);
 
-		if (numMipLevelsToGenerate == 2)
-		{
-			return;
-		}
+		outMip3[IN.dispatchThreadID.xy / 4] = packColor(src1);
+		storeColorToSharedMemory(IN.groupIndex, src1);
+	}
 
-		GroupMemoryBarrierWithGroupSync();
+	if (numMipLevelsToGenerate == 3)
+	{
+		return;
+	}
 
-		if ((IN.groupIndex & 0x1B) == 0)
-		{
-			float4 src2 = loadColorFromSharedMemory(IN.groupIndex + 0x02);
-			float4 src3 = loadColorFromSharedMemory(IN.groupIndex + 0x10);
-			float4 src4 = loadColorFromSharedMemory(IN.groupIndex + 0x12);
-			src1 = 0.25f * (src1 + src2 + src3 + src4);
+	GroupMemoryBarrierWithGroupSync();
 
-			outMip3[IN.dispatchThreadID.xy / 4] = packColor(src1);
-			storeColorToSharedMemory(IN.groupIndex, src1);
-		}
+	if (IN.groupIndex == 0)
+	{
+		float4 src2 = loadColorFromSharedMemory(IN.groupIndex + 0x04);
+		float4 src3 = loadColorFromSharedMemory(IN.groupIndex + 0x20);
+		float4 src4 = loadColorFromSharedMemory(IN.groupIndex + 0x24);
+		src1 = 0.25f * (src1 + src2 + src3 + src4);
 
-		if (numMipLevelsToGenerate == 3)
-		{
-			return;
-		}
-
-		GroupMemoryBarrierWithGroupSync();
-
-		if (IN.groupIndex == 0)
-		{
-			float4 src2 = loadColorFromSharedMemory(IN.groupIndex + 0x04);
-			float4 src3 = loadColorFromSharedMemory(IN.groupIndex + 0x20);
-			float4 src4 = loadColorFromSharedMemory(IN.groupIndex + 0x24);
-			src1 = 0.25f * (src1 + src2 + src3 + src4);
-
-			outMip4[IN.dispatchThreadID.xy / 8] = packColor(src1);
-		}
+		outMip4[IN.dispatchThreadID.xy / 8] = packColor(src1);
 	}
 }
 

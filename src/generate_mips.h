@@ -2,6 +2,8 @@
 
 #include "common.h"
 #include "math.h"
+#include "root_signature.h"
+#include "descriptor_allocator.h"
 
 struct alignas(16) generate_mips_cb
 {
@@ -14,10 +16,21 @@ struct alignas(16) generate_mips_cb
 
 enum generate_mips_root_parameter
 {
-	generate_mips_constant_buffer,
-	generate_mips_src,
-	generate_mips_out,
+	generate_mips_param_constant_buffer,
+	generate_mips_param_src,
+	generate_mips_param_out,
 
 	generate_mips_num_params
 };
 
+struct dx_generate_mips_pso
+{
+	void initialize(ComPtr<ID3D12Device2> device);
+
+	inline D3D12_CPU_DESCRIPTOR_HANDLE getDefaultUAV() const { return defaultUAV.getDescriptorHandle(0); }
+
+	dx_root_signature rootSignature;
+	ComPtr<ID3D12PipelineState> pipelineState;
+
+	dx_descriptor_allocation defaultUAV;
+};

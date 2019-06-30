@@ -15,7 +15,7 @@ class dx_window
 {
 public:
 	void initialize(const TCHAR* windowClassName, ComPtr<ID3D12Device2> device,
-		uint32 clientWidth, uint32 clientHeight, const dx_command_queue& commandQueue);
+		uint32 clientWidth, uint32 clientHeight);
 
 public:
 	static const uint32 numFrames = 3;

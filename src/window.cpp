@@ -92,7 +92,7 @@ static ComPtr<ID3D12DescriptorHeap> createDescriptorHeap(ComPtr<ID3D12Device2> d
 }
 
 void dx_window::initialize(const TCHAR* windowClassName, ComPtr<ID3D12Device2> device,
-	uint32 clientWidth, uint32 clientHeight, const dx_command_queue& commandQueue)
+	uint32 clientWidth, uint32 clientHeight)
 {
 	this->device = device;
 	this->clientWidth = clientWidth;
@@ -119,6 +119,8 @@ void dx_window::initialize(const TCHAR* windowClassName, ComPtr<ID3D12Device2> d
 
 	GetWindowRect(windowHandle, &windowRect);
 
+
+	const dx_command_queue& commandQueue = dx_command_queue::renderCommandQueue;
 	swapChain = createSwapChain(windowHandle, commandQueue.getD3D12CommandQueue(), clientWidth, clientHeight, numFrames, tearingSupported);
 	currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
 

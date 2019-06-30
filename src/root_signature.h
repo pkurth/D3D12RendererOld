@@ -10,9 +10,19 @@ using namespace Microsoft::WRL;
 struct dx_root_signature
 {
 	void initialize(ComPtr<ID3D12Device2> device, const D3D12_ROOT_SIGNATURE_DESC1& desc);
+	void shutdown();
+
+	dx_root_signature() { desc = { }; }
+	~dx_root_signature() { shutdown(); }
+
+	uint32 getDescriptorTableBitMask(D3D12_DESCRIPTOR_HEAP_TYPE descriptorHeapType) const;
 	
-	inline ComPtr<ID3D12RootSignature> getD3D12RootSignature() const { return rootSignature; }
-private:
+	D3D12_ROOT_SIGNATURE_DESC1 desc;
 	ComPtr<ID3D12RootSignature> rootSignature;
+
+	uint32 descriptorTableBitMask;
+	uint32 samplerTableBitMask;
+
+	uint32 numDescriptorsPerTable[32];
 };
 
