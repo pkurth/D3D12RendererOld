@@ -400,7 +400,7 @@ void dx_command_list::generateMips(dx_texture& texture)
 	{
 		uint64 srcWidth = resourceDesc.Width >> srcMip;
 		uint32 srcHeight = resourceDesc.Height >> srcMip;
-		uint32 dstWidth = static_cast<uint32_t>(srcWidth >> 1);
+		uint32 dstWidth = (uint32)(srcWidth >> 1);
 		uint32 dstHeight = srcHeight >> 1;
 
 		// 0b00(0): Both width and height are even.

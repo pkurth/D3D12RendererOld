@@ -80,7 +80,6 @@ float3 linearToSRGB(float3 x)
 
 float4 packColor(float4 x)
 {
-	//return float4(1, 0, 1, 1);
 	if (isSRGB)
 	{
 		return float4(linearToSRGB(x.rgb), x.a);
