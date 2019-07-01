@@ -5,6 +5,7 @@
 #include "resource_state_tracker.h"
 #include "dynamic_descriptor_heap.h"
 #include "generate_mips.h"
+#include "model.h"
 
 #include <dx/d3dx12.h>
 #include <wrl.h> 
@@ -36,6 +37,7 @@ public:
 	// Buffer creation.
 	template <typename vertex_t> dx_vertex_buffer createVertexBuffer(vertex_t* vertices, uint32 count); 
 	template <typename index_t> dx_index_buffer createIndexBuffer(index_t* indices, uint32 count);
+	template <typename vertex_t> dx_mesh createMesh(const triangle_mesh<vertex_t>& model);
 
 	// Texture creation.
 	void loadTextureFromFile(dx_texture& texture,const std::wstring& filename, texture_usage usage);
@@ -61,7 +63,7 @@ public:
 		const D3D12_SHADER_RESOURCE_VIEW_DESC* srv = nullptr);
 
 	void setUnorderedAccessView(uint32 rootParameterIndex,
-		uint32 descrptorOffset,
+		uint32 descriptorOffset,
 		const dx_resource& resource,
 		D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
 		uint32 firstSubresource = 0,
@@ -77,7 +79,8 @@ public:
 	void setViewport(const D3D12_VIEWPORT& viewport);
 	void setScissor(const D3D12_RECT& scissor);
 
-	// Clear.
+	// Render targets.
+	void setRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv);
 	void clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, FLOAT* clearColor);
 	void clearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, FLOAT depth = 1.f);
 
@@ -157,7 +160,17 @@ dx_index_buffer dx_command_list::createIndexBuffer(index_t* indices, uint32 coun
 	result.view.BufferLocation = result.resource->GetGPUVirtualAddress();
 	result.view.Format = getFormat<index_t>();
 	result.view.SizeInBytes = count * sizeof(index_t);
+	result.numIndices = count;
 
+	return result;
+}
+
+template<typename vertex_t>
+inline dx_mesh dx_command_list::createMesh(const triangle_mesh<vertex_t>& model)
+{
+	dx_mesh result;
+	result.vertexBuffer = createVertexBuffer(model.vertices.data(), (uint32)model.vertices.size());
+	result.indexBuffer = createIndexBuffer((uint32*)model.triangles.data(), (uint32)model.triangles.size() * 3);
 	return result;
 }
 

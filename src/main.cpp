@@ -1,3 +1,5 @@
+#include "pch.h"
+
 // Most code in this file is from this awesome tutorial: https://www.3dgep.com/learning-directx12-1/
 
 

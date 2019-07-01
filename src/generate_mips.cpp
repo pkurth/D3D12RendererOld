@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "generate_mips.h"
 #include "error.h"
 #include "descriptor_allocator.h"

@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "resource_state_tracker.h"
 #include "command_list.h"
 #include "resource.h"

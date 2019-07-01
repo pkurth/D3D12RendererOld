@@ -1,60 +1,23 @@
+#include "pch.h"
 #include "game.h"
 #include "commands.h"
 #include "error.h"
+#include "model.h"
 
 #include <d3dcompiler.h>
 
 
-struct vertex_3PC
-{
-	vec3 position;
-	vec3 color;
-	vec2 uv;
-};
-
-#if 0
-static vertex_3PC cubeVertices[8] = {
-	{ vec3(-1.0f, -1.0f, -1.0f), vec3(0.0f, 0.0f, 0.0f), vec2() }, // 0
-	{ vec3(-1.0f,  1.0f, -1.0f), vec3(0.0f, 1.0f, 0.0f), vec2() }, // 1
-	{ vec3(1.0f,  1.0f, -1.0f), vec3(1.0f, 1.0f, 0.0f), vec2() }, // 2
-	{ vec3(1.0f, -1.0f, -1.0f), vec3(1.0f, 0.0f, 0.0f), vec2() }, // 3
-	{ vec3(-1.0f, -1.0f,  1.0f), vec3(0.0f, 0.0f, 1.0f), vec2() }, // 4
-	{ vec3(-1.0f,  1.0f,  1.0f), vec3(0.0f, 1.0f, 1.0f), vec2() }, // 5
-	{ vec3(1.0f,  1.0f,  1.0f), vec3(1.0f, 1.0f, 1.0f), vec2() }, // 6
-	{ vec3(1.0f, -1.0f,  1.0f), vec3(1.0f, 0.0f, 1.0f), vec2() }  // 7
-};
-
-static uint16 cubeIndices[36] =
-{
-	0, 1, 2, 0, 2, 3,
-	4, 6, 5, 4, 7, 6,
-	4, 5, 1, 4, 1, 0,
-	3, 2, 6, 3, 6, 7,
-	1, 5, 6, 1, 6, 2,
-	4, 0, 3, 4, 3, 7
-};
-#else
-static vertex_3PC cubeVertices[] = {
-	{ vec3(-1.f, -1.f, 0.f), vec3(1.f, 1.f, 1.f), vec2(0.f, 0.f) },
-	{ vec3(1.f, -1.f, 0.f), vec3(1.f, 1.f, 1.f), vec2(1.f, 0.f) },
-	{ vec3(1.f, 1.f, 0.f), vec3(1.f, 1.f, 1.f), vec2(1.f, 1.f) },
-	{ vec3(-1.f, 1.f, 0.f), vec3(1.f, 1.f, 1.f), vec2(0.f, 1.f) },
-};
-
-static uint16 cubeIndices[] =
-{
-	0, 2, 1,
-	0, 3, 2,
-};
-#endif
 
 void loadScene(ComPtr<ID3D12Device2> device, ComPtr<ID3D12PipelineState>& pipelineState, scene_data& result)
 {
+	triangle_mesh<vertex_3PUN> model;
+	model.loadFromFile("res/test_terrain.obj");
+
+
 	dx_command_queue& copyCommandQueue = dx_command_queue::copyCommandQueue;
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
-	result.vertexBuffer = commandList->createVertexBuffer(cubeVertices, arraysize(cubeVertices));
-	result.indexBuffer = commandList->createIndexBuffer(cubeIndices, arraysize(cubeIndices));
+	result.mesh = commandList->createMesh(model);
 	commandList->loadTextureFromFile(result.texture, L"res/bus.png", texture_usage_albedo);
 
 	ComPtr<ID3DBlob> vertexShaderBlob;
@@ -66,8 +29,8 @@ void loadScene(ComPtr<ID3D12Device2> device, ComPtr<ID3D12PipelineState>& pipeli
 
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 
 
@@ -82,7 +45,7 @@ void loadScene(ComPtr<ID3D12Device2> device, ComPtr<ID3D12PipelineState>& pipeli
 	CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-	rootParameters[0].InitAsConstants(16, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // 16 floats (mat4).
+	rootParameters[0].InitAsConstants(16 * 2, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // 2 * 16 floats (mat4).
 	rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	CD3DX12_STATIC_SAMPLER_DESC linearClampSampler(0, 
@@ -208,11 +171,11 @@ void dx_game::update(float dt)
 	static float totalTime = 0.f;
 	totalTime += dt;
 	float angle = totalTime * 90.f;
-	const vec4 rotationAxis = DirectX::XMVectorSet(0, 1, 1, 0);
+	const vec4 rotationAxis = DirectX::XMVectorSet(0, 1, 0, 0);
 
 	modelMatrix = DirectX::XMMatrixRotationAxis(rotationAxis, DirectX::XMConvertToRadians(angle));
 
-	const vec4 eyePosition = DirectX::XMVectorSet(0, 0, -10, 1);
+	const vec4 eyePosition = DirectX::XMVectorSet(0, 5, -50, 1);
 	const vec4 focusPoint = DirectX::XMVectorSet(0, 0, 0, 1);
 	const vec4 upDirection = DirectX::XMVectorSet(0, 1, 0, 0);
 	viewMatrix = DirectX::XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
@@ -223,9 +186,10 @@ void dx_game::update(float dt)
 
 void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv)
 {
-	auto dsv = dsvHeap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_CPU_DESCRIPTOR_HANDLE dsv = dsvHeap->GetCPUDescriptorHandleForHeapStart();
 
 	FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+
 
 	// Clear.
 	commandList->clearRTV(rtv, clearColor);
@@ -234,25 +198,31 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	// Prepare for rendering.
 	commandList->setPipelineState(pipelineState);
 	commandList->setGraphicsRootSignature(scene.rootSignature);
-
+	
 	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	commandList->setVertexBuffer(0, scene.vertexBuffer);
-	commandList->setIndexBuffer(scene.indexBuffer);
+	commandList->setVertexBuffer(0, scene.mesh.vertexBuffer);
+	commandList->setIndexBuffer(scene.mesh.indexBuffer);
 
+	commandList->setRenderTarget(&rtv, 1, &dsv);
 	commandList->setViewport(viewport);
 	commandList->setScissor(scissorRect);
 
 	mat4 mvpMatrix = XMMatrixMultiply(modelMatrix, viewMatrix);
 	mvpMatrix = XMMatrixMultiply(mvpMatrix, projectionMatrix);
-	commandList->setGraphics32BitConstants(0, mvpMatrix);
+
+	struct cb
+	{
+		mat4 modelMatrix;
+		mat4 mvpMatrix;
+	} c = {
+		modelMatrix, mvpMatrix
+	};
+
+	commandList->setGraphics32BitConstants(0, c);
 	commandList->setShaderResourceView(1, 0, scene.texture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	ComPtr<ID3D12GraphicsCommandList2> d3d12CommandList = commandList->getD3D12CommandList();
-	d3d12CommandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
-
-
 	// Render.
-	commandList->drawIndexed(arraysize(cubeIndices), 1, 0, 0, 0);
+	commandList->drawIndexed(scene.mesh.indexBuffer.numIndices, 1, 0, 0, 0);
 }
 
 

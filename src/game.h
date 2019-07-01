@@ -12,12 +12,11 @@ using namespace Microsoft::WRL;
 
 struct scene_data
 {
-	dx_vertex_buffer vertexBuffer;
-	dx_index_buffer indexBuffer;
-
 	dx_texture texture;
 
 	dx_root_signature rootSignature;
+
+	dx_mesh mesh;
 };
 
 class dx_game

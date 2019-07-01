@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "window.h"
 #include "error.h"
 #include "commands.h"

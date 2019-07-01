@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "dynamic_descriptor_heap.h"
 #include "command_list.h"
 #include "root_signature.h"

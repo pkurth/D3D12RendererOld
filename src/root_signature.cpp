@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "root_signature.h"
 #include "error.h"
 

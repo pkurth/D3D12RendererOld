@@ -40,9 +40,16 @@ struct dx_vertex_buffer : dx_resource
 struct dx_index_buffer : dx_resource
 {
 	D3D12_INDEX_BUFFER_VIEW view;
+	uint32 numIndices;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE getShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC* srvDesc = nullptr) const override;
 	D3D12_CPU_DESCRIPTOR_HANDLE getUnorderedAccessView(const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = nullptr) const override;
+};
+
+struct dx_mesh
+{
+	dx_vertex_buffer vertexBuffer;
+	dx_index_buffer indexBuffer;
 };
 
 enum texture_usage

@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "command_list.h"
 #include "error.h"
 #include "command_queue.h"
@@ -104,6 +105,11 @@ void dx_command_list::copyResource(ComPtr<ID3D12Resource> dstRes, ComPtr<ID3D12R
 void dx_command_list::copyResource(dx_resource& dstRes, const dx_resource& srcRes)
 {
 	copyResource(dstRes.resource, srcRes.resource);
+}
+
+void dx_command_list::setRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv)
+{
+	commandList->OMSetRenderTargets(numRTVs, rtvs, FALSE, dsv);
 }
 
 void dx_command_list::clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, FLOAT* clearColor)
@@ -249,15 +255,15 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 		uint32 numMips = texture.resource->GetDesc().MipLevels;
 		dx_resource_state_tracker::addGlobalResourceState(texture.resource.Get(), D3D12_RESOURCE_STATE_COMMON, numMips);
 
-		const DirectX::Image* pImages = scratchImage.GetImages();
+		const DirectX::Image* images = scratchImage.GetImages();
 		uint32 numImages = (uint32)scratchImage.GetImageCount();
 		std::vector<D3D12_SUBRESOURCE_DATA> subresources(numImages);
 		for (uint32 i = 0; i < numImages; ++i)
 		{
 			D3D12_SUBRESOURCE_DATA& subresource = subresources[i];
-			subresource.RowPitch = pImages[i].rowPitch;
-			subresource.SlicePitch = pImages[i].slicePitch;
-			subresource.pData = pImages[i].pixels;
+			subresource.RowPitch = images[i].rowPitch;
+			subresource.SlicePitch = images[i].slicePitch;
+			subresource.pData = images[i].pixels;
 		}
 
 		copyTextureSubresource(texture, 0, numImages, subresources.data());
@@ -523,7 +529,7 @@ void dx_command_list::setShaderResourceView(uint32 rootParameterIndex,
 }
 
 void dx_command_list::setUnorderedAccessView(uint32 rootParameterIndex,
-	uint32 descrptorOffset,
+	uint32 descriptorOffset,
 	const dx_resource& resource,
 	D3D12_RESOURCE_STATES stateAfter,
 	uint32 firstSubresource,
@@ -542,7 +548,7 @@ void dx_command_list::setUnorderedAccessView(uint32 rootParameterIndex,
 		transitionBarrier(resource, stateAfter);
 	}
 
-	dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].stageDescriptors(rootParameterIndex, descrptorOffset, 1, resource.getUnorderedAccessView(uav));
+	dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].stageDescriptors(rootParameterIndex, descriptorOffset, 1, resource.getUnorderedAccessView(uav));
 
 	trackObject(resource.resource);
 }
