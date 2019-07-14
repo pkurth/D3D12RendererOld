@@ -13,6 +13,10 @@
 #include <string>
 #include <filesystem>
 
+struct vertex_3P
+{
+	vec3 position;
+};
 
 struct vertex_3PUN
 {
@@ -32,6 +36,24 @@ struct cpu_render_material_desc
 	float r, g, b;
 };
 
+#define define_has_member(member_name)                                         \
+    template <typename T>                                                      \
+    class has_member_##member_name                                             \
+    {                                                                          \
+        typedef char yes_type;                                                 \
+        typedef long no_type;                                                  \
+        template <typename U> static yes_type test(decltype(&U::member_name)); \
+        template <typename U> static no_type  test(...);                       \
+    public:                                                                    \
+        static constexpr bool value = sizeof(test<T>(0)) == sizeof(yes_type);  \
+    }
+
+#define has_member(class_, member_name)  has_member_##member_name<class_>::value
+
+define_has_member(position);
+define_has_member(normal);
+define_has_member(uv);
+
 template <typename vertex_t>
 struct cpu_mesh
 {
@@ -43,7 +65,7 @@ struct cpu_mesh
 	void loadFromAssimp(const std::filesystem::path& parentPath, const aiScene* scene, uint32 meshIndex);
 	
 	static cpu_mesh quad(float radius = 1.f);
-	static cpu_mesh cube(float radius = 1.f);
+	static cpu_mesh cube(float radius = 1.f, bool invertWindingOrder = false);
 	static cpu_mesh sphere(uint32 slices, uint32 rows, float radius = 1.f);
 	static cpu_mesh capsule(uint32 slices, uint32 rows, float height, float radius = 1.f);
 
@@ -224,67 +246,135 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::quad(float radius)
 }
 
 template<typename vertex_t>
-inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::cube(float radius)
+inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::cube(float radius, bool invertWindingOrder)
 {
-	vertex_3PUN vertices[24];
-	indexed_triangle32 triangles[12];
-
-	vertices[0] = { vec3(-radius, -radius, radius), vec2(0.f, 0.f), vec3(0.f, 0.f, 1.f) };
-	vertices[1] = { vec3(radius, -radius, radius), vec2(1.f, 0.f), vec3(0.f, 0.f, 1.f) };
-	vertices[2] = { vec3(-radius, radius, radius), vec2(0.f, 1.f), vec3(0.f, 0.f, 1.f) };
-	vertices[3] = { vec3(radius, radius, radius), vec2(1.f, 1.f), vec3(0.f, 0.f, 1.f) };
-	triangles[0] = { 0, 1, 2 };
-	triangles[1] = { 1, 3, 2 };
-
-	vertices[4] = { vec3(radius, -radius, radius), vec2(0.f, 0.f), vec3(1.f, 0.f, 0.f) };
-	vertices[5] = { vec3(radius, -radius, -radius), vec2(1.f, 0.f), vec3(1.f, 0.f, 0.f) };
-	vertices[6] = { vec3(radius, radius, radius), vec2(0.f, 1.f), vec3(1.f, 0.f, 0.f) };
-	vertices[7] = { vec3(radius, radius, -radius), vec2(1.f, 1.f), vec3(1.f, 0.f, 0.f) };
-	triangles[2] = { 4, 5, 6 };
-	triangles[3] = { 5, 7, 6 };
-
-	vertices[8] = { vec3(radius, -radius, -radius), vec2(0.f, 0.f), vec3(0.f, 0.f, -1.f) };
-	vertices[9] = { vec3(-radius, -radius, -radius), vec2(1.f, 0.f), vec3(0.f, 0.f, -1.f) };
-	vertices[10] = { vec3(radius, radius, -radius), vec2(0.f, 1.f), vec3(0.f, 0.f, -1.f) };
-	vertices[11] = { vec3(-radius, radius, -radius), vec2(1.f, 1.f), vec3(0.f, 0.f, -1.f) };
-	triangles[4] = { 8, 9, 10 };
-	triangles[5] = { 9, 11, 10 };
-
-	vertices[12] = { vec3(-radius, -radius, -radius), vec2(0.f, 0.f), vec3(-1.f, 0.f, 0.f) };
-	vertices[13] = { vec3(-radius, -radius, radius), vec2(1.f, 0.f), vec3(-1.f, 0.f, 0.f) };
-	vertices[14] = { vec3(-radius, radius, -radius), vec2(0.f, 1.f), vec3(-1.f, 0.f, 0.f) };
-	vertices[15] = { vec3(-radius, radius, radius), vec2(1.f, 1.f), vec3(-1.f, 0.f, 0.f) };
-	triangles[6] = { 12, 13, 14 };
-	triangles[7] = { 13, 15, 14 };
-
-	vertices[16] = { vec3(-radius, radius, radius), vec2(0.f, 0.f), vec3(0.f, 1.f, 0.f) };
-	vertices[17] = { vec3(radius, radius, radius), vec2(1.f, 0.f), vec3(0.f, 1.f, 0.f) };
-	vertices[18] = { vec3(-radius, radius, -radius), vec2(0.f, 1.f), vec3(0.f, 1.f, 0.f) };
-	vertices[19] = { vec3(radius, radius, -radius), vec2(1.f, 1.f), vec3(0.f, 1.f, 0.f) };
-	triangles[8] = { 16, 17, 18 };
-	triangles[9] = { 17, 19, 18 };
-
-	vertices[20] = { vec3(-radius, -radius, -radius), vec2(0.f, 0.f), vec3(0.f, -1.f, 0.f) };
-	vertices[21] = { vec3(radius, -radius, -radius), vec2(1.f, 0.f), vec3(0.f, -1.f, 0.f) };
-	vertices[22] = { vec3(-radius, -radius, radius), vec2(0.f, 1.f), vec3(0.f, -1.f, 0.f) };
-	vertices[23] = { vec3(radius, -radius, radius), vec2(1.f, 1.f), vec3(0.f, -1.f, 0.f) };
-	triangles[10] = { 20, 21, 22 };
-	triangles[11] = { 21, 23, 22 };
-
-	cpu_mesh<vertex_t> result;
-	result.vertices.resize(arraysize(vertices));
-	result.triangles.resize(arraysize(triangles));
-
-	for (uint32 i = 0; i < arraysize(vertices); ++i)
+	if constexpr (has_member(vertex_t, position) && !has_member(vertex_t, uv) && !has_member(vertex_t, normal))
 	{
-		result.setPosition(result.vertices[i], vertices[i].position, special_());
-		result.setUV(result.vertices[i], vertices[i].uv, special_());
-		result.setNormal(result.vertices[i], vertices[i].normal, special_());
+		vertex_3P vertices[8];
+		indexed_triangle32 triangles[12];
+
+		vertices[0] = { vec3(-radius, -radius, radius) };  // 0
+		vertices[1] = { vec3(radius, -radius, radius) };   // x
+		vertices[2] = { vec3(-radius, radius, radius) };   // y
+		vertices[3] = { vec3(radius, radius, radius) };	   // xy
+		vertices[4] = { vec3(-radius, -radius, -radius) }; // z
+		vertices[5] = { vec3(radius, -radius, -radius) };  // xz
+		vertices[6] = { vec3(-radius, radius, -radius) };  // yz
+		vertices[7] = { vec3(radius, radius, -radius) };   // xyz
+
+		triangles[0] = { 0, 1, 2 };
+		triangles[1] = { 1, 3, 2 };
+
+		triangles[2] = { 1, 5, 3 };
+		triangles[3] = { 5, 7, 3 };
+
+		triangles[4] = { 5, 4, 7 };
+		triangles[5] = { 4, 6, 7 };
+
+		triangles[6] = { 4, 0, 6 };
+		triangles[7] = { 0, 2, 6 };
+
+		triangles[8] = { 2, 3, 6 };
+		triangles[9] = { 3, 7, 6 };
+
+		triangles[10] = { 4, 5, 0 };
+		triangles[11] = { 5, 1, 0 };
+
+		if (invertWindingOrder)
+		{
+			for (uint32 i = 0; i < arraysize(triangles); ++i)
+			{
+				uint32 tmp = triangles[i].b;
+				triangles[i].b = triangles[i].c;
+				triangles[i].c = tmp;
+			}
+		}
+
+		cpu_mesh<vertex_t> result;
+		result.vertices.resize(arraysize(vertices));
+		result.triangles.resize(arraysize(triangles));
+
+		for (uint32 i = 0; i < arraysize(vertices); ++i)
+		{
+			result.vertices[i].position = vertices[i].position;
+		}
+
+		memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * arraysize(triangles));
+
+		return result;
 	}
+	else
+	{
+		vertex_3PUN vertices[24];
+		indexed_triangle32 triangles[12];
 
-	memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * arraysize(triangles));
+		vertices[0] = { vec3(-radius, -radius, radius), vec2(0.f, 0.f), vec3(0.f, 0.f, 1.f) };
+		vertices[1] = { vec3(radius, -radius, radius), vec2(1.f, 0.f), vec3(0.f, 0.f, 1.f) };
+		vertices[2] = { vec3(-radius, radius, radius), vec2(0.f, 1.f), vec3(0.f, 0.f, 1.f) };
+		vertices[3] = { vec3(radius, radius, radius), vec2(1.f, 1.f), vec3(0.f, 0.f, 1.f) };
+		triangles[0] = { 0, 1, 2 };
+		triangles[1] = { 1, 3, 2 };
 
-	return result;
+		vertices[4] = { vec3(radius, -radius, radius), vec2(0.f, 0.f), vec3(1.f, 0.f, 0.f) };
+		vertices[5] = { vec3(radius, -radius, -radius), vec2(1.f, 0.f), vec3(1.f, 0.f, 0.f) };
+		vertices[6] = { vec3(radius, radius, radius), vec2(0.f, 1.f), vec3(1.f, 0.f, 0.f) };
+		vertices[7] = { vec3(radius, radius, -radius), vec2(1.f, 1.f), vec3(1.f, 0.f, 0.f) };
+		triangles[2] = { 4, 5, 6 };
+		triangles[3] = { 5, 7, 6 };
+
+		vertices[8] = { vec3(radius, -radius, -radius), vec2(0.f, 0.f), vec3(0.f, 0.f, -1.f) };
+		vertices[9] = { vec3(-radius, -radius, -radius), vec2(1.f, 0.f), vec3(0.f, 0.f, -1.f) };
+		vertices[10] = { vec3(radius, radius, -radius), vec2(0.f, 1.f), vec3(0.f, 0.f, -1.f) };
+		vertices[11] = { vec3(-radius, radius, -radius), vec2(1.f, 1.f), vec3(0.f, 0.f, -1.f) };
+		triangles[4] = { 8, 9, 10 };
+		triangles[5] = { 9, 11, 10 };
+
+		vertices[12] = { vec3(-radius, -radius, -radius), vec2(0.f, 0.f), vec3(-1.f, 0.f, 0.f) };
+		vertices[13] = { vec3(-radius, -radius, radius), vec2(1.f, 0.f), vec3(-1.f, 0.f, 0.f) };
+		vertices[14] = { vec3(-radius, radius, -radius), vec2(0.f, 1.f), vec3(-1.f, 0.f, 0.f) };
+		vertices[15] = { vec3(-radius, radius, radius), vec2(1.f, 1.f), vec3(-1.f, 0.f, 0.f) };
+		triangles[6] = { 12, 13, 14 };
+		triangles[7] = { 13, 15, 14 };
+
+		vertices[16] = { vec3(-radius, radius, radius), vec2(0.f, 0.f), vec3(0.f, 1.f, 0.f) };
+		vertices[17] = { vec3(radius, radius, radius), vec2(1.f, 0.f), vec3(0.f, 1.f, 0.f) };
+		vertices[18] = { vec3(-radius, radius, -radius), vec2(0.f, 1.f), vec3(0.f, 1.f, 0.f) };
+		vertices[19] = { vec3(radius, radius, -radius), vec2(1.f, 1.f), vec3(0.f, 1.f, 0.f) };
+		triangles[8] = { 16, 17, 18 };
+		triangles[9] = { 17, 19, 18 };
+
+		vertices[20] = { vec3(-radius, -radius, -radius), vec2(0.f, 0.f), vec3(0.f, -1.f, 0.f) };
+		vertices[21] = { vec3(radius, -radius, -radius), vec2(1.f, 0.f), vec3(0.f, -1.f, 0.f) };
+		vertices[22] = { vec3(-radius, -radius, radius), vec2(0.f, 1.f), vec3(0.f, -1.f, 0.f) };
+		vertices[23] = { vec3(radius, -radius, radius), vec2(1.f, 1.f), vec3(0.f, -1.f, 0.f) };
+		triangles[10] = { 20, 21, 22 };
+		triangles[11] = { 21, 23, 22 };
+
+		if (invertWindingOrder)
+		{
+			for (uint32 i = 0; i < arraysize(triangles); ++i)
+			{
+				uint32 tmp = triangles[i].b;
+				triangles[i].b = triangles[i].c;
+				triangles[i].c = tmp;
+			}
+		}
+
+		cpu_mesh<vertex_t> result;
+		result.vertices.resize(arraysize(vertices));
+		result.triangles.resize(arraysize(triangles));
+
+		for (uint32 i = 0; i < arraysize(vertices); ++i)
+		{
+			result.setPosition(result.vertices[i], vertices[i].position, special_());
+			result.setUV(result.vertices[i], vertices[i].uv, special_());
+			result.setNormal(result.vertices[i], vertices[i].normal, special_());
+		}
+
+		memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * arraysize(triangles));
+
+		return result;
+	}
 }
 
 template<typename vertex_t>

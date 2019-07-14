@@ -29,6 +29,7 @@ void dx_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIS
 	if (commandListType == D3D12_COMMAND_LIST_TYPE_COMPUTE)
 	{
 		generateMipsPSO.initialize(device);
+		equirectangularToCubemapPSO.initialize(device);
 	}
 
 	for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
@@ -327,7 +328,7 @@ void dx_command_list::generateMips(dx_texture& texture)
 		// Describe a UAV compatible resource that is used to perform
 		// mipmapping of the original texture.
 		D3D12_RESOURCE_DESC uavDesc = aliasDesc;   // The flags for the UAV description must match that of the alias description.
-		uavDesc.Format = dx_texture::getUAVCompatableFormat(resourceDesc.Format);
+		uavDesc.Format = dx_texture::getUAVCompatibleFormat(resourceDesc.Format);
 
 		D3D12_RESOURCE_DESC resourceDescs[] = {
 			aliasDesc,
@@ -455,7 +456,7 @@ void dx_command_list::generateMips(dx_texture& texture)
 
 		if (mipCount < 4)
 		{
-			dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].stageDescriptors(generate_mips_param_out, mipCount, 4 - mipCount, generateMipsPSO.getDefaultUAV());
+			dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].stageDescriptors(generate_mips_param_out, mipCount, 4 - mipCount, generateMipsPSO.defaultUAV);
 		}
 
 		dispatch(bucketize(dstWidth, 8), bucketize(dstHeight, 8));
@@ -470,6 +471,108 @@ void dx_command_list::generateMips(dx_texture& texture)
 		aliasingBarrier(uavResource, aliasResource);
 		// Copy the alias resource back to the original resource.
 		copyResource(resource, aliasResource);
+	}
+}
+
+void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips)
+{
+	if (commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
+	{
+		if (!computeCommandList)
+		{
+			computeCommandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
+		}
+		computeCommandList->convertEquirectangularToCubemap(equirectangular, cubemap, resolution, numMips);
+		return;
+	}
+
+	if (!equirectangular.resource)
+	{
+		return;
+	}
+
+	CD3DX12_RESOURCE_DESC cubemapDesc(equirectangular.resource->GetDesc());
+	cubemapDesc.Width = cubemapDesc.Height = resolution;
+	cubemapDesc.DepthOrArraySize = 6;
+	cubemapDesc.MipLevels = numMips;
+
+	cubemap.initialize(device, equirectangular.usage, cubemapDesc);
+
+	cubemapDesc = CD3DX12_RESOURCE_DESC(cubemap.resource->GetDesc());
+
+	ComPtr<ID3D12Resource> cubemapResource = cubemap.resource;
+	ComPtr<ID3D12Resource> stagingResource = cubemapResource;
+
+	dx_texture stagingTexture = cubemap;
+
+	if ((cubemapDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0)
+	{
+		CD3DX12_RESOURCE_DESC stagingDesc = cubemapDesc;
+		stagingDesc.Format = dx_texture::getUAVCompatibleFormat(cubemapDesc.Format);
+		stagingDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+		checkResult(device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&stagingDesc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(&stagingResource)
+		));
+
+		dx_resource_state_tracker::addGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, 6 * numMips);
+
+		stagingTexture.initialize(device, cubemap.usage, stagingResource);
+
+		copyResource(stagingTexture, cubemap);
+	}
+
+	transitionBarrier(stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	setPipelineState(equirectangularToCubemapPSO.pipelineState);
+	setComputeRootSignature(equirectangularToCubemapPSO.rootSignature);
+
+	equirectangular_to_cubemap_cb equirectangularToCubemapCB;
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = dx_texture::getUAVCompatibleFormat(cubemapDesc.Format);
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+	uavDesc.Texture2DArray.FirstArraySlice = 0;
+	uavDesc.Texture2DArray.ArraySize = 6;
+
+	for (uint32 mipSlice = 0; mipSlice < cubemapDesc.MipLevels; )
+	{
+		// Maximum number of mips to generate per pass is 5.
+		uint32 numMips = std::min<uint32>(5, cubemapDesc.MipLevels - mipSlice);
+
+		equirectangularToCubemapCB.firstMip = mipSlice;
+		equirectangularToCubemapCB.cubemapSize = std::max<uint32>((uint32)cubemapDesc.Width, cubemapDesc.Height) >> mipSlice;
+		equirectangularToCubemapCB.numMipLevelsToGenerate = numMips;
+
+		setCompute32BitConstants(equirectangular_to_cubemap_param_constant_buffer, equirectangularToCubemapCB);
+
+		setShaderResourceView(equirectangular_to_cubemap_param_src, 0, equirectangular, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+		for (uint32_t mip = 0; mip < numMips; ++mip)
+		{
+			uavDesc.Texture2DArray.MipSlice = mipSlice + mip;
+			setUnorderedAccessView(equirectangular_to_cubemap_param_out, mip, stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0, 0, &uavDesc);
+		}
+
+		if (numMips < 5)
+		{
+			// Pad unused mips. This keeps DX12 runtime happy.
+			dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].stageDescriptors(equirectangular_to_cubemap_param_out, equirectangularToCubemapCB.numMipLevelsToGenerate, 5 - numMips, equirectangularToCubemapPSO.defaultUAV);
+		}
+
+		dispatch(bucketize(equirectangularToCubemapCB.cubemapSize, 16), bucketize(equirectangularToCubemapCB.cubemapSize, 16), 6);
+
+		mipSlice += numMips;
+	}
+
+	if (stagingResource != cubemapResource)
+	{
+		copyResource(cubemap, stagingTexture);
 	}
 }
 

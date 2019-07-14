@@ -27,7 +27,7 @@ struct dx_texture : dx_resource
 	static bool isDepthFormat(DXGI_FORMAT format);
 	static DXGI_FORMAT getTypelessFormat(DXGI_FORMAT format);
 	static DXGI_FORMAT getSRGBFormat(DXGI_FORMAT format);
-	static DXGI_FORMAT getUAVCompatableFormat(DXGI_FORMAT format);
+	static DXGI_FORMAT getUAVCompatibleFormat(DXGI_FORMAT format);
 
 	bool checkRTVSupport()
 	{
