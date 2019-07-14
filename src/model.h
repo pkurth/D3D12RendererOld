@@ -36,23 +36,9 @@ struct cpu_render_material_desc
 	float r, g, b;
 };
 
-#define define_has_member(member_name)                                         \
-    template <typename T>                                                      \
-    class has_member_##member_name                                             \
-    {                                                                          \
-        typedef char yes_type;                                                 \
-        typedef long no_type;                                                  \
-        template <typename U> static yes_type test(decltype(&U::member_name)); \
-        template <typename U> static no_type  test(...);                       \
-    public:                                                                    \
-        static constexpr bool value = sizeof(test<T>(0)) == sizeof(yes_type);  \
-    }
-
-#define has_member(class_, member_name)  has_member_##member_name<class_>::value
-
-define_has_member(position);
-define_has_member(normal);
-define_has_member(uv);
+defineHasMember(position);
+defineHasMember(normal);
+defineHasMember(uv);
 
 template <typename vertex_t>
 struct cpu_mesh
@@ -70,38 +56,28 @@ struct cpu_mesh
 	static cpu_mesh capsule(uint32 slices, uint32 rows, float height, float radius = 1.f);
 
 private:
-	struct general_{};
-	struct special_ : general_ {};
-	template <typename> struct int_ { typedef int type; };
-
-	template <typename int_<decltype(vertex_t::position)>::type = 0>
-	void setPosition(vertex_t& v, vec3 p, special_)
+	void setPosition(vertex_t& v, vec3 p)
 	{
-		v.position = p;
+		if constexpr (hasMember(vertex_t, position))
+		{
+			v.position = p;
+		}
 	}
 
-	void setPosition(vertex_t& v, vec3 p, general_)
+	void setNormal(vertex_t& v, vec3 n)
 	{
+		if constexpr (hasMember(vertex_t, normal))
+		{
+			v.normal = n;
+		}
 	}
 
-	template <typename int_<decltype(vertex_t::normal)>::type = 0>
-	void setNormal(vertex_t& v, vec3 n, special_)
+	void setUV(vertex_t& v, vec2 uv)
 	{
-		v.normal = n;
-	}
-
-	void setNormal(vertex_t& v, vec3 n, general_)
-	{
-	}
-
-	template <typename int_<decltype(vertex_t::uv)>::type = 0>
-	void setUV(vertex_t& v, vec2 uv, special_)
-	{
-		v.uv = uv;
-	}
-
-	void setUV(vertex_t& v, vec2 uv, general_)
-	{
+		if constexpr (hasMember(vertex_t, uv))
+		{
+			v.uv = uv;
+		}
 	}
 };
 
@@ -187,9 +163,9 @@ inline void cpu_mesh<vertex_t>::loadFromAssimp(const std::filesystem::path& pare
 			uv = vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y);
 		}
 
-		setPosition(vertices[i], position, special_());
-		setNormal(vertices[i], normal, special_());
-		setUV(vertices[i], uv, special_());
+		setPosition(vertices[i], position);
+		setNormal(vertices[i], normal);
+		setUV(vertices[i], uv);
 	}
 
 
@@ -235,9 +211,9 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::quad(float radius)
 
 	for (uint32 i = 0; i < arraysize(vertices); ++i)
 	{
-		result.setPosition(result.vertices[i], vertices[i].position, special_());
-		result.setUV(result.vertices[i], vertices[i].uv, special_());
-		result.setNormal(result.vertices[i], vertices[i].normal, special_());
+		result.setPosition(result.vertices[i], vertices[i].position);
+		result.setUV(result.vertices[i], vertices[i].uv);
+		result.setNormal(result.vertices[i], vertices[i].normal);
 	}
 
 	memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * arraysize(triangles));
@@ -248,7 +224,7 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::quad(float radius)
 template<typename vertex_t>
 inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::cube(float radius, bool invertWindingOrder)
 {
-	if constexpr (has_member(vertex_t, position) && !has_member(vertex_t, uv) && !has_member(vertex_t, normal))
+	if constexpr (hasMember(vertex_t, position) && !hasMember(vertex_t, uv) && !hasMember(vertex_t, normal))
 	{
 		vertex_3P vertices[8];
 		indexed_triangle32 triangles[12];
@@ -366,9 +342,9 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::cube(float radius, bool invertWind
 
 		for (uint32 i = 0; i < arraysize(vertices); ++i)
 		{
-			result.setPosition(result.vertices[i], vertices[i].position, special_());
-			result.setUV(result.vertices[i], vertices[i].uv, special_());
-			result.setNormal(result.vertices[i], vertices[i].normal, special_());
+			result.setPosition(result.vertices[i], vertices[i].position);
+			result.setUV(result.vertices[i], vertices[i].uv);
+			result.setNormal(result.vertices[i], vertices[i].normal);
 		}
 
 		memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * arraysize(triangles));
@@ -458,9 +434,9 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::sphere(uint32 slices, uint32 rows,
 
 	for (uint32 i = 0; i < vertIndex; ++i)
 	{
-		result.setPosition(result.vertices[i], vertices[i].position, special_());
-		result.setUV(result.vertices[i], vertices[i].uv, special_());
-		result.setNormal(result.vertices[i], vertices[i].normal, special_());
+		result.setPosition(result.vertices[i], vertices[i].position);
+		result.setUV(result.vertices[i], vertices[i].uv);
+		result.setNormal(result.vertices[i], vertices[i].normal);
 	}
 
 	memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * triIndex);
@@ -571,9 +547,9 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::capsule(uint32 slices, uint32 rows
 
 	for (uint32 i = 0; i < vertIndex; ++i)
 	{
-		result.setPosition(result.vertices[i], vertices[i].position, special_());
-		result.setUV(result.vertices[i], vertices[i].uv, special_());
-		result.setNormal(result.vertices[i], vertices[i].normal, special_());
+		result.setPosition(result.vertices[i], vertices[i].position);
+		result.setUV(result.vertices[i], vertices[i].uv);
+		result.setNormal(result.vertices[i], vertices[i].normal);
 	}
 
 	memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * triIndex);

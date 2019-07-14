@@ -64,3 +64,17 @@ inline void* alignTo(void* currentAddress, uint64 alignment)
 {
 	return (void*)alignTo((uint64)currentAddress, alignment);
 }
+
+#define defineHasMember(member_name)                                         \
+    template <typename T>                                                      \
+    class has_member_##member_name                                             \
+    {                                                                          \
+        typedef char yes_type;                                                 \
+        typedef long no_type;                                                  \
+        template <typename U> static yes_type test(decltype(&U::member_name)); \
+        template <typename U> static no_type  test(...);                       \
+    public:                                                                    \
+        static constexpr bool value = sizeof(test<T>(0)) == sizeof(yes_type);  \
+    }
+
+#define hasMember(class_, member_name)  has_member_##member_name<class_>::value
