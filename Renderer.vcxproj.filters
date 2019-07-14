@@ -57,6 +57,9 @@
     <ClCompile Include="src\texture.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\equirectangular_to_cubemap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\common.h">
@@ -122,10 +125,16 @@
     <ClInclude Include="src\buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\equirectangular_to_cubemap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="shaders\VertexShader.hlsl" />
-    <FxCompile Include="shaders\PixelShader.hlsl" />
     <FxCompile Include="shaders\generate_mips.hlsl" />
+    <FxCompile Include="shaders\equirectangular_to_cubemap.hlsl" />
+    <FxCompile Include="shaders\sky_vs.hlsl" />
+    <FxCompile Include="shaders\sky_ps.hlsl" />
+    <FxCompile Include="shaders\geometry_vs.hlsl" />
+    <FxCompile Include="shaders\geometry_ps.hlsl" />
   </ItemGroup>
 </Project>

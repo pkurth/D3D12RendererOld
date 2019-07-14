@@ -287,7 +287,7 @@ DXGI_FORMAT dx_texture::getSRGBFormat(DXGI_FORMAT format)
 	return srgbFormat;
 }
 
-DXGI_FORMAT dx_texture::getUAVCompatableFormat(DXGI_FORMAT format)
+DXGI_FORMAT dx_texture::getUAVCompatibleFormat(DXGI_FORMAT format)
 {
 	DXGI_FORMAT uavFormat = format;
 

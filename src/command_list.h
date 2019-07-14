@@ -6,6 +6,7 @@
 #include "resource_state_tracker.h"
 #include "dynamic_descriptor_heap.h"
 #include "generate_mips.h"
+#include "equirectangular_to_cubemap.h"
 #include "model.h"
 
 #include <dx/d3dx12.h>
@@ -42,6 +43,7 @@ public:
 
 	// Texture creation.
 	void loadTextureFromFile(dx_texture& texture,const std::wstring& filename, texture_usage usage);
+	void convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips);
 
 	// Pipeline.
 	void setPipelineState(ComPtr<ID3D12PipelineState> pipelineState);
@@ -127,6 +129,7 @@ private:
 	dx_command_list*					computeCommandList;
 
 	dx_generate_mips_pso				generateMipsPSO;
+	dx_equirectangular_to_cubemap_pso	equirectangularToCubemapPSO;
 };
 
 template <typename vertex_t>

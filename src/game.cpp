@@ -8,7 +8,7 @@
 
 
 
-void loadScene(ComPtr<ID3D12Device2> device, ComPtr<ID3D12PipelineState>& pipelineState, scene_data& result)
+void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 {
 	cpu_mesh_group<vertex_3PUN> model;
 	model.loadFromFile("res/big_oak.obj");
@@ -25,8 +25,11 @@ void loadScene(ComPtr<ID3D12Device2> device, ComPtr<ID3D12PipelineState>& pipeli
 		commandList->loadTextureFromFile(result.textures[i], mesh.material.albedo, texture_usage_albedo);
 	}
 
-	auto mesh = cpu_mesh<vertex_3PUN>::capsule(20, 21, 3, 2);
-	result.quadMesh = commandList->createMesh(mesh);
+	cpu_mesh<vertex_3P> skybox = cpu_mesh<vertex_3P>::cube(1.f, true);
+	result.skyMesh = commandList->createMesh(skybox);
+
+	commandList->loadTextureFromFile(result.equirectangular, L"res/pano.hdr", texture_usage_albedo);
+	commandList->convertEquirectangularToCubemap(result.equirectangular, result.cubemap, 1024, 0);
 
 	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);
@@ -44,92 +47,173 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	checkResult(device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&dsvHeap)));
 
-	ComPtr<ID3DBlob> vertexShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/VertexShader.cso", &vertexShaderBlob));
-	ComPtr<ID3DBlob> pixelShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/PixelShader.cso", &pixelShaderBlob));
-
-	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	};
-
-	// Create a root signature.
-	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-
-	CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-
-	CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-	rootParameters[0].InitAsConstants(16 * 3, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // 4 * 16 floats (mat4).
-	rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
-
-	CD3DX12_STATIC_SAMPLER_DESC sampler(0,
-		D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP);
-
-	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
-	rootSignatureDesc.Flags = rootSignatureFlags;
-	rootSignatureDesc.pParameters = rootParameters;
-	rootSignatureDesc.NumParameters = arraysize(rootParameters);
-	rootSignatureDesc.pStaticSamplers = &sampler;
-	rootSignatureDesc.NumStaticSamplers = 1;
-	rootSignature.initialize(device, rootSignatureDesc);
-
-
-
-	struct pipeline_state_stream
-	{
-		CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
-		CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
-		CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
-		CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-		CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-		CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
-		CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
-		CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
-	} pipelineStateStream;
 
 	D3D12_RT_FORMAT_ARRAY rtvFormats = {};
 	rtvFormats.NumRenderTargets = 1;
 	rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-	pipelineStateStream.rootSignature = rootSignature.rootSignature.Get();
-	pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
-	pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-	pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
-	pipelineStateStream.dsvFormat = DXGI_FORMAT_D32_FLOAT;
-	pipelineStateStream.rtvFormats = rtvFormats;
-	pipelineStateStream.rasterizer = CD3DX12_RASTERIZER_DESC(
-		D3D12_FILL_MODE_SOLID,
-		D3D12_CULL_MODE_NONE, // Disable backface culling for the leaves.
-		TRUE, // Righthanded coordinate system.
-		D3D12_DEFAULT_DEPTH_BIAS,
-		D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
-		D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
-		TRUE,
-		FALSE, 
-		FALSE,
-		0,
-		D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
+	// Geometry.
+	{
+		ComPtr<ID3DBlob> vertexShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_vs.cso", &vertexShaderBlob));
+		ComPtr<ID3DBlob> pixelShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_ps.cso", &pixelShaderBlob));
+
+		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+
+		// Root signature.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		rootParameters[0].InitAsConstants(16 * 3, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // 4 * 16 floats (mat4).
+		rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
+			D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+			D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.pParameters = rootParameters;
+		rootSignatureDesc.NumParameters = arraysize(rootParameters);
+		rootSignatureDesc.pStaticSamplers = &sampler;
+		rootSignatureDesc.NumStaticSamplers = 1;
+		geometryRootSignature.initialize(device, rootSignatureDesc);
+
+
+
+		struct pipeline_state_stream
+		{
+			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
+			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
+			CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
+		} pipelineStateStream;
+
+		pipelineStateStream.rootSignature = geometryRootSignature.rootSignature.Get();
+		pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
+		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+		pipelineStateStream.dsvFormat = DXGI_FORMAT_D32_FLOAT;
+		pipelineStateStream.rtvFormats = rtvFormats;
+		pipelineStateStream.rasterizer = CD3DX12_RASTERIZER_DESC(
+			D3D12_FILL_MODE_SOLID,
+			D3D12_CULL_MODE_NONE, // Disable backface culling for the leaves.
+			TRUE, // Righthanded coordinate system.
+			D3D12_DEFAULT_DEPTH_BIAS,
+			D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
+			D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
+			TRUE,
+			FALSE,
+			FALSE,
+			0,
+			D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
 		);
 
-	D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
-		sizeof(pipeline_state_stream), &pipelineStateStream
-	};
-	checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&pipelineState)));
+		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+			sizeof(pipeline_state_stream), &pipelineStateStream
+		};
+		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&geometryPipelineState)));
+	}
+
+	// Sky.
+	{
+		ComPtr<ID3DBlob> vertexShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/sky_vs.cso", &vertexShaderBlob));
+		ComPtr<ID3DBlob> pixelShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/sky_ps.cso", &pixelShaderBlob));
+
+		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		// Root signature.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
-	loadScene(device, pipelineState, scene);
+		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		rootParameters[0].InitAsConstants(16, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // 1 matrix.
+		rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
+			D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+			D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.pParameters = rootParameters;
+		rootSignatureDesc.NumParameters = arraysize(rootParameters);
+		rootSignatureDesc.pStaticSamplers = &sampler;
+		rootSignatureDesc.NumStaticSamplers = 1;
+		skyRootSignature.initialize(device, rootSignatureDesc);
+
+		
+		struct pipeline_state_stream
+		{
+			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
+			CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
+		} pipelineStateStream;
+
+		pipelineStateStream.rootSignature = skyRootSignature.rootSignature.Get();
+		pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
+		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+		pipelineStateStream.rtvFormats = rtvFormats;
+		pipelineStateStream.rasterizer = CD3DX12_RASTERIZER_DESC(
+			D3D12_FILL_MODE_SOLID,
+			D3D12_CULL_MODE_BACK,
+			TRUE,
+			D3D12_DEFAULT_DEPTH_BIAS,
+			D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
+			D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
+			TRUE,
+			FALSE,
+			FALSE,
+			0,
+			D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
+		);
+
+		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+			sizeof(pipeline_state_stream), &pipelineStateStream
+		};
+		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&skyPipelineState)));
+	}
+
+
+	loadScene(device, scene);
 
 	contentLoaded = true;
 
@@ -215,41 +299,64 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	commandList->clearRTV(rtv, clearColor);
 	commandList->clearDepth(dsv);
 
-	// Prepare for rendering.
-	commandList->setPipelineState(pipelineState);
-	commandList->setGraphicsRootSignature(rootSignature);
-
 	commandList->setRenderTarget(&rtv, 1, &dsv);
 	commandList->setViewport(viewport);
 	commandList->setScissor(scissorRect);
-	
-	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	struct cb
+	// Sky.
 	{
-		mat4 modelMatrix;
-		mat4 viewMatrix;
-		mat4 projMatrix;
-	} c = {
-		modelMatrix, viewMatrix, projectionMatrix
-	};
+		commandList->setPipelineState(skyPipelineState);
+		commandList->setGraphicsRootSignature(skyRootSignature);
 
-	commandList->setGraphics32BitConstants(0, c);
+		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	for (uint32 i = 0; i < scene.meshes.size(); ++i)
-	{
-		commandList->setVertexBuffer(0, scene.meshes[i].vertexBuffer);
-		commandList->setIndexBuffer(scene.meshes[i].indexBuffer);
-		commandList->setShaderResourceView(1, 0, scene.textures[i], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		mat4 vp = projectionMatrix;
+		commandList->setGraphics32BitConstants(0, vp);
 
-		// Render.
-		commandList->drawIndexed(scene.meshes[i].indexBuffer.numIndices, 1, 0, 0, 0);
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format = scene.cubemap.resource->GetDesc().Format;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+		srvDesc.TextureCube.MipLevels = (UINT)-1; // Use all mips.
+
+		commandList->setVertexBuffer(0, scene.skyMesh.vertexBuffer);
+		commandList->setIndexBuffer(scene.skyMesh.indexBuffer);
+		commandList->setShaderResourceView(1, 0, scene.cubemap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
+
+		commandList->drawIndexed(scene.skyMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 	}
 
-	//commandList->setVertexBuffer(0, scene.quadMesh.vertexBuffer);
-	//commandList->setIndexBuffer(scene.quadMesh.indexBuffer);
-	//commandList->setShaderResourceView(1, 0, scene.textures[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	//commandList->drawIndexed(scene.quadMesh.indexBuffer.numIndices, 1, 0, 0, 0);
+	// Geometry.
+	{
+		commandList->setPipelineState(geometryPipelineState);
+		commandList->setGraphicsRootSignature(geometryRootSignature);
+
+		// This sets the adjacency information (list, strip, strip with adjacency, ...), 
+		// while the pipeline state stores the input assembly type (points, lines, triangles, patches).
+		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		struct cb
+		{
+			mat4 modelMatrix;
+			mat4 viewMatrix;
+			mat4 projMatrix;
+		} c = {
+			modelMatrix, viewMatrix, projectionMatrix
+		};
+
+		commandList->setGraphics32BitConstants(0, c);
+
+		for (uint32 i = 0; i < scene.meshes.size(); ++i)
+		{
+			commandList->setVertexBuffer(0, scene.meshes[i].vertexBuffer);
+			commandList->setIndexBuffer(scene.meshes[i].indexBuffer);
+			commandList->setShaderResourceView(1, 0, scene.textures[i], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+			// Render.
+			commandList->drawIndexed(scene.meshes[i].indexBuffer.numIndices, 1, 0, 0, 0);
+		}
+	}
+
 }
 
 

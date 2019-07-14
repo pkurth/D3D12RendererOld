@@ -97,6 +97,7 @@
     <ClCompile Include="src\command_queue.cpp" />
     <ClCompile Include="src\descriptor_allocator.cpp" />
     <ClCompile Include="src\dynamic_descriptor_heap.cpp" />
+    <ClCompile Include="src\equirectangular_to_cubemap.cpp" />
     <ClCompile Include="src\game.cpp" />
     <ClCompile Include="src\generate_mips.cpp" />
     <ClCompile Include="src\pch.cpp">
@@ -115,6 +116,7 @@
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\descriptor_allocator.h" />
     <ClInclude Include="src\dynamic_descriptor_heap.h" />
+    <ClInclude Include="src\equirectangular_to_cubemap.h" />
     <ClInclude Include="src\generate_mips.h" />
     <ClInclude Include="src\model.h" />
     <ClInclude Include="src\pch.h" />
@@ -141,11 +143,25 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
     </FxCompile>
-    <FxCompile Include="shaders\PixelShader.hlsl">
+    <FxCompile Include="shaders\equirectangular_to_cubemap.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="shaders\geometry_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
-    <FxCompile Include="shaders\VertexShader.hlsl">
+    <FxCompile Include="shaders\sky_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="shaders\sky_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="shaders\geometry_vs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
     </FxCompile>

@@ -14,7 +14,10 @@ struct scene_data
 {
 	std::vector<dx_texture> textures;
 	std::vector<dx_mesh> meshes;
-	dx_mesh quadMesh;
+	
+	dx_mesh skyMesh;
+	dx_texture equirectangular;
+	dx_texture cubemap;
 };
 
 class dx_game
@@ -38,8 +41,11 @@ private:
 	ComPtr<ID3D12Resource> depthBuffer;
 	ComPtr<ID3D12DescriptorHeap> dsvHeap;
 
-	ComPtr<ID3D12PipelineState> pipelineState;
-	dx_root_signature rootSignature;
+	ComPtr<ID3D12PipelineState> geometryPipelineState;
+	dx_root_signature geometryRootSignature;
+
+	ComPtr<ID3D12PipelineState> skyPipelineState;
+	dx_root_signature skyRootSignature;
 
 	scene_data scene;
 
