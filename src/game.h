@@ -12,11 +12,9 @@ using namespace Microsoft::WRL;
 
 struct scene_data
 {
-	dx_texture texture;
-
-	dx_root_signature rootSignature;
-
-	dx_mesh mesh;
+	std::vector<dx_texture> textures;
+	std::vector<dx_mesh> meshes;
+	dx_mesh quadMesh;
 };
 
 class dx_game
@@ -41,6 +39,7 @@ private:
 	ComPtr<ID3D12DescriptorHeap> dsvHeap;
 
 	ComPtr<ID3D12PipelineState> pipelineState;
+	dx_root_signature rootSignature;
 
 	scene_data scene;
 

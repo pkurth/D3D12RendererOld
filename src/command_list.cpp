@@ -204,7 +204,7 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 	auto it = textureCache.find(filename);
 	if (it != textureCache.end())
 	{
-		texture.initialize(device, it->second, usage, filename);
+		texture.initialize(device, usage, it->second);
 	}
 	else
 	{
@@ -250,7 +250,7 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 			break;
 		}
 
-		texture.initialize(device, textureDesc, usage, filename);
+		texture.initialize(device, usage, textureDesc);
 
 		uint32 numMips = texture.resource->GetDesc().MipLevels;
 		dx_resource_state_tracker::addGlobalResourceState(texture.resource.Get(), D3D12_RESOURCE_STATE_COMMON, numMips);
@@ -400,7 +400,7 @@ void dx_command_list::generateMips(dx_texture& texture)
 	srvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
 
 	dx_texture tmpTexture;
-	tmpTexture.initialize(device, uavResource, texture.getUsage(), texture.getName());
+	tmpTexture.initialize(device, texture.usage, uavResource);
 
 	for (uint32 srcMip = 0; srcMip < resourceDesc.MipLevels - 1u; )
 	{
@@ -505,7 +505,7 @@ void dx_command_list::setComputeRootSignature(const dx_root_signature& rootSigna
 
 void dx_command_list::setShaderResourceView(uint32 rootParameterIndex,
 	uint32 descriptorOffset,
-	const dx_resource& resource,
+	dx_resource& resource,
 	D3D12_RESOURCE_STATES stateAfter,
 	uint32 firstSubresource,
 	uint32 numSubresources,
@@ -530,7 +530,7 @@ void dx_command_list::setShaderResourceView(uint32 rootParameterIndex,
 
 void dx_command_list::setUnorderedAccessView(uint32 rootParameterIndex,
 	uint32 descriptorOffset,
-	const dx_resource& resource,
+	dx_resource& resource,
 	D3D12_RESOURCE_STATES stateAfter,
 	uint32 firstSubresource,
 	uint32 numSubresources,
@@ -570,14 +570,14 @@ void dx_command_list::setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology)
 
 void dx_command_list::setVertexBuffer(uint32 slot, dx_vertex_buffer& buffer)
 {
-	transitionBarrier(buffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+	transitionBarrier(buffer.resource, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 	commandList->IASetVertexBuffers(slot, 1, &buffer.view);
 	trackObject(buffer.resource);
 }
 
 void dx_command_list::setIndexBuffer(dx_index_buffer& buffer)
 {
-	transitionBarrier(buffer, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+	transitionBarrier(buffer.resource, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 	commandList->IASetIndexBuffer(&buffer.view);
 	trackObject(buffer.resource);
 }

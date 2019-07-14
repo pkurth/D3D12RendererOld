@@ -1,11 +1,12 @@
 #pragma once
 
-#include <DirectXMath.h>
+#include <dx/d3dx12.h>
+#include <dx/SimpleMath.h>
 
-typedef DirectX::XMFLOAT2 vec2;
-typedef DirectX::XMFLOAT3 vec3;
-typedef DirectX::XMVECTOR vec4;
-typedef DirectX::XMMATRIX mat4;
+using vec2 = DirectX::SimpleMath::Vector2;
+using vec3 = DirectX::SimpleMath::Vector3;
+using vec4 = DirectX::SimpleMath::Vector4;
+using mat4 = DirectX::SimpleMath::Matrix;
 
 
 template <typename T>
@@ -13,3 +14,6 @@ inline T bucketize(T value, size_t alignment)
 {
 	return (T)((value + alignment - 1) / alignment);
 }
+
+
+

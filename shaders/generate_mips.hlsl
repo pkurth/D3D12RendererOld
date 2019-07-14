@@ -7,7 +7,7 @@
 #define WIDTH_EVEN_HEIGHT_ODD	2 // The texture width is even and the height is odd.
 #define WIDTH_HEIGHT_ODD		3 // Both the width and height of the texture are odd.
 
-struct shader_input
+struct cs_input
 {
 	uint3 groupID           : SV_GroupID;           // 3D index of the thread group in the dispatch.
 	uint3 groupThreadID     : SV_GroupThreadID;     // 3D index of local thread ID in a thread group.
@@ -92,7 +92,7 @@ float4 packColor(float4 x)
 
 [RootSignature(generateMips_rootSignature)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void main(shader_input IN)
+void main(cs_input IN)
 {
 	float4 src1 = (float4)0;
 

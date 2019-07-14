@@ -1,7 +1,8 @@
 #pragma once
 
 #include "common.h"
-#include "resource.h"
+#include "buffer.h"
+#include "texture.h"
 #include "resource_state_tracker.h"
 #include "dynamic_descriptor_heap.h"
 #include "generate_mips.h"
@@ -37,7 +38,7 @@ public:
 	// Buffer creation.
 	template <typename vertex_t> dx_vertex_buffer createVertexBuffer(vertex_t* vertices, uint32 count); 
 	template <typename index_t> dx_index_buffer createIndexBuffer(index_t* indices, uint32 count);
-	template <typename vertex_t> dx_mesh createMesh(const triangle_mesh<vertex_t>& model);
+	template <typename vertex_t> dx_mesh createMesh(const cpu_mesh<vertex_t>& model);
 
 	// Texture creation.
 	void loadTextureFromFile(dx_texture& texture,const std::wstring& filename, texture_usage usage);
@@ -56,7 +57,7 @@ public:
 
 	void setShaderResourceView(uint32 rootParameterIndex,
 		uint32 descriptorOffset,
-		const dx_resource& resource,
+		dx_resource& resource,
 		D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
 		uint32 firstSubresource = 0,
 		uint32 numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -64,7 +65,7 @@ public:
 
 	void setUnorderedAccessView(uint32 rootParameterIndex,
 		uint32 descriptorOffset,
-		const dx_resource& resource,
+		dx_resource& resource,
 		D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
 		uint32 firstSubresource = 0,
 		uint32 numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -166,7 +167,7 @@ dx_index_buffer dx_command_list::createIndexBuffer(index_t* indices, uint32 coun
 }
 
 template<typename vertex_t>
-inline dx_mesh dx_command_list::createMesh(const triangle_mesh<vertex_t>& model)
+inline dx_mesh dx_command_list::createMesh(const cpu_mesh<vertex_t>& model)
 {
 	dx_mesh result;
 	result.vertexBuffer = createVertexBuffer(model.vertices.data(), (uint32)model.vertices.size());
