@@ -97,7 +97,7 @@
     <ClCompile Include="src\command_queue.cpp" />
     <ClCompile Include="src\descriptor_allocator.cpp" />
     <ClCompile Include="src\dynamic_descriptor_heap.cpp" />
-    <ClCompile Include="src\preprocess_environment.cpp" />
+    <ClCompile Include="src\brdf.cpp" />
     <ClCompile Include="src\game.cpp" />
     <ClCompile Include="src\generate_mips.cpp" />
     <ClCompile Include="src\math.cpp" />
@@ -114,11 +114,12 @@
     <ClCompile Include="src\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="shaders\pbr_common.h" />
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\camera.h" />
     <ClInclude Include="src\descriptor_allocator.h" />
     <ClInclude Include="src\dynamic_descriptor_heap.h" />
-    <ClInclude Include="src\preprocess_environment.h" />
+    <ClInclude Include="src\brdf.h" />
     <ClInclude Include="src\generate_mips.h" />
     <ClInclude Include="src\model.h" />
     <ClInclude Include="src\pch.h" />
@@ -140,6 +141,12 @@
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\cubemap_to_irradiance.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="shaders\integrate_brdf.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>

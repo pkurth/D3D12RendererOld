@@ -21,6 +21,9 @@ struct scene_data
 	dx_texture cubemap;
 	dx_texture irradiance;
 	dx_texture prefilteredEnvironment;
+	dx_texture brdf;
+
+	dx_mesh quad;
 };
 
 class dx_game

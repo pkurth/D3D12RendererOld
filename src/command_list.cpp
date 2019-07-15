@@ -32,6 +32,7 @@ void dx_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIS
 		equirectangularToCubemapPSO.initialize(device);
 		cubemapToIrradiancePSO.initialize(device);
 		prefilterEnvironmentPSO.initialize(device);
+		integrateBrdfPSO.initialize(device);
 	}
 
 	for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
@@ -774,6 +775,74 @@ void dx_command_list::prefilterEnvironmentMap(dx_texture& environment, dx_textur
 	if (stagingResource != prefilteredResource)
 	{
 		copyResource(prefiltered, stagingTexture);
+	}
+}
+
+void dx_command_list::integrateBRDF(dx_texture& brdf, uint32 resolution)
+{
+	if (commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
+	{
+		if (!computeCommandList)
+		{
+			computeCommandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
+		}
+		computeCommandList->integrateBRDF(brdf, resolution);
+		return;
+	}
+
+	CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		DXGI_FORMAT_R16G16_FLOAT,
+		resolution, resolution, 1, 1);
+
+	brdf.initialize(device, texture_usage_albedo, desc);
+
+	desc = CD3DX12_RESOURCE_DESC(brdf.resource->GetDesc());
+
+	ComPtr<ID3D12Resource> brdfResource = brdf.resource;
+	ComPtr<ID3D12Resource> stagingResource = brdfResource;
+
+	dx_texture stagingTexture = brdf;
+
+	if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0)
+	{
+		CD3DX12_RESOURCE_DESC stagingDesc = desc;
+		stagingDesc.Format = dx_texture::getUAVCompatibleFormat(desc.Format);
+		stagingDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+		checkResult(device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&stagingDesc,
+			D3D12_RESOURCE_STATE_COMMON,
+			nullptr,
+			IID_PPV_ARGS(&stagingResource)
+		));
+
+		dx_resource_state_tracker::addGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COMMON, 1);
+		stagingTexture.initialize(device, brdf.usage, stagingResource);
+	}
+
+	transitionBarrier(stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	setPipelineState(integrateBrdfPSO.pipelineState);
+	setComputeRootSignature(integrateBrdfPSO.rootSignature);
+
+	integrate_brdf_cb integrateBrdfCB;
+	integrateBrdfCB.textureDim = resolution;
+
+	setCompute32BitConstants(integrate_brdf_param_constant_buffer, integrateBrdfCB);
+	
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = dx_texture::getUAVCompatibleFormat(desc.Format);
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+
+	setUnorderedAccessView(integrate_brdf_param_out, 0, stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0, 0, &uavDesc);
+	
+	dispatch(bucketize(resolution, 16), bucketize(resolution, 16), 1);
+
+	if (stagingResource != brdfResource)
+	{
+		copyResource(brdf, stagingTexture);
 	}
 }
 

@@ -1,5 +1,7 @@
 #define BLOCK_SIZE 16
 
+#include "pbr_common.h"
+
 struct cs_input
 {
 	uint3 groupID           : SV_GroupID;           // 3D index of the thread group in the dispatch.
@@ -36,46 +38,6 @@ SamplerState linearRepeatSampler : register(s0);
         "addressV = TEXTURE_ADDRESS_WRAP," \
         "addressW = TEXTURE_ADDRESS_WRAP," \
         "filter = FILTER_MIN_MAG_LINEAR_MIP_POINT )"
-
-static const float pi = 3.141592653589793238462643383279f;
-
-static float radicalInverse_VdC(uint bits)
-{
-	bits = (bits << 16u) | (bits >> 16u);
-	bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-	bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-	bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-	bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-	return float(bits) * 2.3283064365386963e-10; // / 0x100000000
-}
-
-static float2 hammersley(uint i, uint N)
-{
-	return float2(float(i) / float(N), radicalInverse_VdC(i));
-}
-
-static float3 importanceSampleGGX(float2 Xi, float3 N, float roughness)
-{
-	float a = roughness * roughness;
-
-	float phi = 2.f * pi * Xi.x;
-	float cosTheta = sqrt((1.f - Xi.y) / (1.f + (a * a - 1.f) * Xi.y));
-	float sinTheta = sqrt(1.f - cosTheta * cosTheta);
-
-	// from spherical coordinates to cartesian coordinates
-	float3 H;
-	H.x = cos(phi) * sinTheta;
-	H.y = sin(phi) * sinTheta;
-	H.z = cosTheta;
-
-	// from tangent-space vector to world-space sample vector
-	float3 up = abs(N.z) < 0.999 ? float3(0.f, 0.f, 1.f) : float3(1.f, 0.f, 0.f);
-	float3 tangent = normalize(cross(up, N));
-	float3 bitangent = cross(N, tangent);
-
-	float3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
-	return normalize(sampleVec);
-}
 
 
 // Transform from dispatch ID to cubemap face direction

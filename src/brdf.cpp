@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "preprocess_environment.h"
+#include "brdf.h"
 #include "error.h"
 #include "descriptor_allocator.h"
 
@@ -11,7 +11,7 @@ void dx_equirectangular_to_cubemap_pso::initialize(ComPtr<ID3D12Device2> device)
 	CD3DX12_DESCRIPTOR_RANGE1 outMip(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 5, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[equirectangular_to_cubemap_num_params];
-	rootParameters[equirectangular_to_cubemap_param_constant_buffer].InitAsConstants(sizeof(equirectangular_to_cubemap_cb) / 3, 0);
+	rootParameters[equirectangular_to_cubemap_param_constant_buffer].InitAsConstants(3, 0);
 	rootParameters[equirectangular_to_cubemap_param_src].InitAsDescriptorTable(1, &srcMip);
 	rootParameters[equirectangular_to_cubemap_param_out].InitAsDescriptorTable(1, &outMip);
 
@@ -74,7 +74,7 @@ void dx_cubemap_to_irradiance_pso::initialize(ComPtr<ID3D12Device2> device)
 	CD3DX12_DESCRIPTOR_RANGE1 outMip(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[cubemap_to_irradiance_num_params];
-	rootParameters[cubemap_to_irradiance_param_constant_buffer].InitAsConstants(sizeof(cubemap_to_irradiance_cb), 0);
+	rootParameters[cubemap_to_irradiance_param_constant_buffer].InitAsConstants(1, 0);
 	rootParameters[cubemap_to_irradiance_param_src].InitAsDescriptorTable(1, &srcMip);
 	rootParameters[cubemap_to_irradiance_param_out].InitAsDescriptorTable(1, &outMip);
 
@@ -119,7 +119,7 @@ void dx_prefilter_environment_pso::initialize(ComPtr<ID3D12Device2> device)
 	CD3DX12_DESCRIPTOR_RANGE1 outMip(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 5, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[prefilter_environment_num_params];
-	rootParameters[prefilter_environment_param_constant_buffer].InitAsConstants(sizeof(prefilter_environment_cb) / 4, 0);
+	rootParameters[prefilter_environment_param_constant_buffer].InitAsConstants(4, 0);
 	rootParameters[prefilter_environment_param_src].InitAsDescriptorTable(1, &srcMip);
 	rootParameters[prefilter_environment_param_out].InitAsDescriptorTable(1, &outMip);
 
@@ -174,4 +174,37 @@ void dx_prefilter_environment_pso::initialize(ComPtr<ID3D12Device2> device)
 			allocation.getDescriptorHandle(i)
 		);
 	}
+}
+
+void dx_integrate_brdf_pso::initialize(ComPtr<ID3D12Device2> device)
+{
+	CD3DX12_DESCRIPTOR_RANGE1 outMip(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+
+	CD3DX12_ROOT_PARAMETER1 rootParameters[integrate_brdf_num_params];
+	rootParameters[integrate_brdf_param_constant_buffer].InitAsConstants(1, 0);
+	rootParameters[integrate_brdf_param_out].InitAsDescriptorTable(1, &outMip);
+
+	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+	rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+	rootSignatureDesc.pParameters = rootParameters;
+	rootSignatureDesc.NumParameters = arraysize(rootParameters);
+	rootSignature.initialize(device, rootSignatureDesc);
+
+
+	ComPtr<ID3DBlob> shaderBlob;
+	checkResult(D3DReadFileToBlob(L"shaders/bin/integrate_brdf.cso", &shaderBlob));
+
+	struct pipeline_state_stream
+	{
+		CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+		CD3DX12_PIPELINE_STATE_STREAM_CS cs;
+	} pipelineStateStream;
+
+	pipelineStateStream.rootSignature = rootSignature.rootSignature.Get();
+	pipelineStateStream.cs = CD3DX12_SHADER_BYTECODE(shaderBlob.Get());
+
+	D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+		sizeof(pipeline_state_stream), &pipelineStateStream
+	};
+	checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&pipelineState)));
 }

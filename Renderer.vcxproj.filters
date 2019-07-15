@@ -60,7 +60,7 @@
     <ClCompile Include="src\math.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\preprocess_environment.cpp">
+    <ClCompile Include="src\brdf.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -131,7 +131,10 @@
     <ClInclude Include="src\camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\preprocess_environment.h">
+    <ClInclude Include="shaders\pbr_common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\brdf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -144,5 +147,6 @@
     <FxCompile Include="shaders\geometry_ps.hlsl" />
     <FxCompile Include="shaders\cubemap_to_irradiance.hlsl" />
     <FxCompile Include="shaders\prefilter_environment.hlsl" />
+    <FxCompile Include="shaders\integrate_brdf.hlsl" />
   </ItemGroup>
 </Project>

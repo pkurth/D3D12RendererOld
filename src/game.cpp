@@ -28,10 +28,14 @@ void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 	cpu_mesh<vertex_3P> skybox = cpu_mesh<vertex_3P>::cube(1.f, true);
 	result.skyMesh = commandList->createMesh(skybox);
 
+	cpu_mesh<vertex_3PUN> quad = cpu_mesh<vertex_3PUN>::quad();
+	result.quad = commandList->createMesh(quad);
+
 	commandList->loadTextureFromFile(result.equirectangular, L"res/pano.hdr", texture_usage_albedo);
 	commandList->convertEquirectangularToCubemap(result.equirectangular, result.cubemap, 1024, 0);
 	commandList->createIrradianceMap(result.cubemap, result.irradiance);
 	commandList->prefilterEnvironmentMap(result.cubemap, result.prefilteredEnvironment);
+	commandList->integrateBRDF(result.brdf);
 
 	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);

@@ -6,7 +6,7 @@
 #include "resource_state_tracker.h"
 #include "dynamic_descriptor_heap.h"
 #include "generate_mips.h"
-#include "preprocess_environment.h"
+#include "brdf.h"
 #include "model.h"
 
 #include <dx/d3dx12.h>
@@ -46,6 +46,7 @@ public:
 	void convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips);
 	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32);
 	void prefilterEnvironmentMap(dx_texture& environment, dx_texture& prefiltered, uint32 resolution = 128);
+	void integrateBRDF(dx_texture& brdf, uint32 resolution = 256);
 
 	// Pipeline.
 	void setPipelineState(ComPtr<ID3D12PipelineState> pipelineState);
@@ -134,6 +135,7 @@ private:
 	dx_equirectangular_to_cubemap_pso	equirectangularToCubemapPSO;
 	dx_cubemap_to_irradiance_pso		cubemapToIrradiancePSO;
 	dx_prefilter_environment_pso		prefilterEnvironmentPSO;
+	dx_integrate_brdf_pso				integrateBrdfPSO;
 };
 
 template <typename vertex_t>
