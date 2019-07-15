@@ -57,7 +57,10 @@
     <ClCompile Include="src\texture.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\equirectangular_to_cubemap.cpp">
+    <ClCompile Include="src\math.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\preprocess_environment.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -125,7 +128,10 @@
     <ClInclude Include="src\buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\equirectangular_to_cubemap.h">
+    <ClInclude Include="src\camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\preprocess_environment.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -136,5 +142,6 @@
     <FxCompile Include="shaders\sky_ps.hlsl" />
     <FxCompile Include="shaders\geometry_vs.hlsl" />
     <FxCompile Include="shaders\geometry_ps.hlsl" />
+    <FxCompile Include="shaders\cubemap_to_irradiance.hlsl" />
   </ItemGroup>
 </Project>

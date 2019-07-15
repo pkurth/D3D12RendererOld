@@ -30,6 +30,7 @@ void dx_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIS
 	{
 		generateMipsPSO.initialize(device);
 		equirectangularToCubemapPSO.initialize(device);
+		cubemapToIrradiancePSO.initialize(device);
 	}
 
 	for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
@@ -573,6 +574,96 @@ void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangula
 	if (stagingResource != cubemapResource)
 	{
 		copyResource(cubemap, stagingTexture);
+	}
+}
+
+void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution)
+{
+	if (commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
+	{
+		if (!computeCommandList)
+		{
+			computeCommandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
+		}
+		computeCommandList->createIrradianceMap(environment, irradiance, resolution);
+		return;
+	}
+
+	if (!environment.resource)
+	{
+		return;
+	}
+
+	CD3DX12_RESOURCE_DESC irradianceDesc(environment.resource->GetDesc());
+	irradianceDesc.Width = irradianceDesc.Height = resolution;
+	irradianceDesc.DepthOrArraySize = 6;
+	irradianceDesc.MipLevels = 1;
+
+	irradiance.initialize(device, environment.usage, irradianceDesc);
+
+	irradianceDesc = CD3DX12_RESOURCE_DESC(irradiance.resource->GetDesc());
+
+	ComPtr<ID3D12Resource> irradianceResource = irradiance.resource;
+	ComPtr<ID3D12Resource> stagingResource = irradianceResource;
+
+	dx_texture stagingTexture = irradiance;
+
+	if ((irradianceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0)
+	{
+		CD3DX12_RESOURCE_DESC stagingDesc = irradianceDesc;
+		stagingDesc.Format = dx_texture::getUAVCompatibleFormat(irradianceDesc.Format);
+		stagingDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+		checkResult(device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&stagingDesc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(&stagingResource)
+		));
+
+		dx_resource_state_tracker::addGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, 6);
+
+		stagingTexture.initialize(device, irradiance.usage, stagingResource);
+
+		copyResource(stagingTexture, irradiance);
+	}
+
+	transitionBarrier(stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	setPipelineState(cubemapToIrradiancePSO.pipelineState);
+	setComputeRootSignature(cubemapToIrradiancePSO.rootSignature);
+
+	cubemap_to_irradiance_cb cubemapToIrradianceCB;
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = dx_texture::getUAVCompatibleFormat(irradianceDesc.Format);
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+	uavDesc.Texture2DArray.FirstArraySlice = 0;
+	uavDesc.Texture2DArray.ArraySize = 6;
+	uavDesc.Texture2DArray.MipSlice = 0;
+
+	cubemapToIrradianceCB.irradianceMapSize = irradianceDesc.Height;
+
+	setCompute32BitConstants(cubemap_to_irradiance_param_constant_buffer, cubemapToIrradianceCB);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = environment.resource->GetDesc().Format;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+	srvDesc.TextureCube.MipLevels = (UINT)-1; // Use all mips.
+
+	setShaderResourceView(cubemap_to_irradiance_param_src, 0, environment, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
+	setUnorderedAccessView(cubemap_to_irradiance_param_out, 0, stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0, 0, &uavDesc);
+
+
+	dispatch(bucketize(cubemapToIrradianceCB.irradianceMapSize, 16), bucketize(cubemapToIrradianceCB.irradianceMapSize, 16), 6);
+
+
+	if (stagingResource != irradianceResource)
+	{
+		copyResource(irradiance, stagingTexture);
 	}
 }
 

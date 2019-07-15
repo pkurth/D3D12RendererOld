@@ -7,6 +7,7 @@ using vec2 = DirectX::SimpleMath::Vector2;
 using vec3 = DirectX::SimpleMath::Vector3;
 using vec4 = DirectX::SimpleMath::Vector4;
 using mat4 = DirectX::SimpleMath::Matrix;
+using quat = DirectX::SimpleMath::Quaternion;
 
 
 template <typename T>

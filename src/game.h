@@ -5,6 +5,7 @@
 #include "resource.h"
 #include "root_signature.h"
 #include "math.h"
+#include "camera.h"
 
 #include <dx/d3dx12.h>
 #include <wrl.h>
@@ -18,6 +19,7 @@ struct scene_data
 	dx_mesh skyMesh;
 	dx_texture equirectangular;
 	dx_texture cubemap;
+	dx_texture irradiance;
 };
 
 class dx_game
@@ -56,7 +58,7 @@ private:
 	D3D12_RECT scissorRect;
 
 	mat4 modelMatrix;
-	mat4 viewMatrix;
-	mat4 projectionMatrix;
+	
+	render_camera camera;
 };
 

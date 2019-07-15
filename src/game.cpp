@@ -30,6 +30,7 @@ void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 
 	commandList->loadTextureFromFile(result.equirectangular, L"res/pano.hdr", texture_usage_albedo);
 	commandList->convertEquirectangularToCubemap(result.equirectangular, result.cubemap, 1024, 0);
+	commandList->createIrradianceMap(result.cubemap, result.irradiance, 32);
 
 	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);
@@ -220,6 +221,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	this->width = width;
 	this->height = height;
 	resizeDepthBuffer(width, height);
+
+	camera.fov = DirectX::XMConvertToRadians(70.f);
+	camera.position = vec3(0.f, 0.f, 5.f);
+	camera.rotation = quat::Identity;
+	camera.update(width, height, 0.f);
 }
 
 void dx_game::resize(uint32 width, uint32 height)
@@ -279,13 +285,7 @@ void dx_game::update(float dt)
 	vec3 rotationAxis(0, 1, 0);
 	modelMatrix = mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
 
-	vec3 eyePosition(0, 3, 6);
-	vec3 focusPoint(0, 2, 0);
-	vec3 upDirection(0, 1, 0);
-	viewMatrix = mat4::CreateLookAt(eyePosition, focusPoint, upDirection);
-
-	float aspectRatio = (float)width / (float)height;
-	projectionMatrix = mat4::CreatePerspectiveFieldOfView(DirectX::XMConvertToRadians(70.f), aspectRatio, 0.1f, 100.0f);
+	camera.update(width, height, dt);
 }
 
 void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv)
@@ -310,7 +310,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		mat4 vp = projectionMatrix;
+		mat4 vp = camera.projectionMatrix;
 		commandList->setGraphics32BitConstants(0, vp);
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -341,7 +341,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 			mat4 viewMatrix;
 			mat4 projMatrix;
 		} c = {
-			modelMatrix, viewMatrix, projectionMatrix
+			modelMatrix, camera.viewMatrix, camera.projectionMatrix
 		};
 
 		commandList->setGraphics32BitConstants(0, c);
