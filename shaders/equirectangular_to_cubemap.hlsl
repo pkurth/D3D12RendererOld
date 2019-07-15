@@ -8,7 +8,7 @@ struct cs_input
 	uint  groupIndex        : SV_GroupIndex;        // Flattened local index of the thread within a thread group.
 };
 
-cbuffer panorama_to_cubemap_cb : register(b0)
+cbuffer equirectangular_to_cubemap_cb : register(b0)
 {
 	uint cubemapSize;				// Size of the cubemap face in pixels at the current mipmap level.
 	uint firstMip;					// The first mip level to generate.
@@ -29,7 +29,7 @@ RWTexture2DArray<float4> outMip5 : register(u4);
 // Linear repeat sampler.
 SamplerState linearRepeatSampler : register(s0);
 
-#define panoramaToCubeMap_rootSignature \
+#define equirectangularToCubeMap_rootSignature \
     "RootFlags(0), " \
     "RootConstants(b0, num32BitConstants = 3), " \
     "DescriptorTable( SRV(t0, numDescriptors = 1) )," \
@@ -74,7 +74,7 @@ static const float3x3 rotateUV[6] = {
    			 0,   0, -1)
 };  
 
-[RootSignature(panoramaToCubeMap_rootSignature)]
+[RootSignature(equirectangularToCubeMap_rootSignature)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(cs_input IN)
 {

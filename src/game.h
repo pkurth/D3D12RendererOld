@@ -20,6 +20,7 @@ struct scene_data
 	dx_texture equirectangular;
 	dx_texture cubemap;
 	dx_texture irradiance;
+	dx_texture prefilteredEnvironment;
 };
 
 class dx_game

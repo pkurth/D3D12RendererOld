@@ -30,7 +30,8 @@ void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 
 	commandList->loadTextureFromFile(result.equirectangular, L"res/pano.hdr", texture_usage_albedo);
 	commandList->convertEquirectangularToCubemap(result.equirectangular, result.cubemap, 1024, 0);
-	commandList->createIrradianceMap(result.cubemap, result.irradiance, 32);
+	commandList->createIrradianceMap(result.cubemap, result.irradiance);
+	commandList->prefilterEnvironmentMap(result.cubemap, result.prefilteredEnvironment);
 
 	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);

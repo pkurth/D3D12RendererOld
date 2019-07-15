@@ -53,3 +53,30 @@ struct dx_cubemap_to_irradiance_pso
 	ComPtr<ID3D12PipelineState> pipelineState;
 };
 
+
+
+struct alignas(16) prefilter_environment_cb
+{
+	uint32 cubemapSize;				// Size of the cubemap face in pixels at the current mipmap level.
+	uint32 firstMip;				// The first mip level to generate.
+	uint32 numMipLevelsToGenerate;	// The number of mips to generate.
+	uint32 totalNumMipLevels;
+};
+
+enum prefilter_environment_root_parameter
+{
+	prefilter_environment_param_constant_buffer,
+	prefilter_environment_param_src,
+	prefilter_environment_param_out,
+
+	prefilter_environment_num_params
+};
+
+struct dx_prefilter_environment_pso
+{
+	void initialize(ComPtr<ID3D12Device2> device);
+
+	dx_root_signature rootSignature;
+	ComPtr<ID3D12PipelineState> pipelineState;
+	D3D12_CPU_DESCRIPTOR_HANDLE defaultUAV;
+};

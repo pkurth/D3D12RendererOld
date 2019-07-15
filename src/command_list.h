@@ -44,7 +44,8 @@ public:
 	// Texture creation.
 	void loadTextureFromFile(dx_texture& texture,const std::wstring& filename, texture_usage usage);
 	void convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips);
-	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution);
+	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32);
+	void prefilterEnvironmentMap(dx_texture& environment, dx_texture& prefiltered, uint32 resolution = 128);
 
 	// Pipeline.
 	void setPipelineState(ComPtr<ID3D12PipelineState> pipelineState);
@@ -132,6 +133,7 @@ private:
 	dx_generate_mips_pso				generateMipsPSO;
 	dx_equirectangular_to_cubemap_pso	equirectangularToCubemapPSO;
 	dx_cubemap_to_irradiance_pso		cubemapToIrradiancePSO;
+	dx_prefilter_environment_pso		prefilterEnvironmentPSO;
 };
 
 template <typename vertex_t>

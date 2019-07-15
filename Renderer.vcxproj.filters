@@ -143,5 +143,6 @@
     <FxCompile Include="shaders\geometry_vs.hlsl" />
     <FxCompile Include="shaders\geometry_ps.hlsl" />
     <FxCompile Include="shaders\cubemap_to_irradiance.hlsl" />
+    <FxCompile Include="shaders\prefilter_environment.hlsl" />
   </ItemGroup>
 </Project>

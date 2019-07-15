@@ -31,6 +31,7 @@ void dx_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIS
 		generateMipsPSO.initialize(device);
 		equirectangularToCubemapPSO.initialize(device);
 		cubemapToIrradiancePSO.initialize(device);
+		prefilterEnvironmentPSO.initialize(device);
 	}
 
 	for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
@@ -664,6 +665,115 @@ void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& i
 	if (stagingResource != irradianceResource)
 	{
 		copyResource(irradiance, stagingTexture);
+	}
+}
+
+void dx_command_list::prefilterEnvironmentMap(dx_texture& environment, dx_texture& prefiltered, uint32 resolution)
+{
+	if (commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
+	{
+		if (!computeCommandList)
+		{
+			computeCommandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
+		}
+		computeCommandList->prefilterEnvironmentMap(environment, prefiltered, resolution);
+		return;
+	}
+
+	if (!environment.resource)
+	{
+		return;
+	}
+
+	CD3DX12_RESOURCE_DESC prefilteredDesc(environment.resource->GetDesc());
+	prefilteredDesc.Width = prefilteredDesc.Height = resolution;
+	prefilteredDesc.DepthOrArraySize = 6;
+	prefilteredDesc.MipLevels = 0;
+
+	prefiltered.initialize(device, environment.usage, prefilteredDesc);
+
+	prefilteredDesc = CD3DX12_RESOURCE_DESC(prefiltered.resource->GetDesc());
+
+	ComPtr<ID3D12Resource> prefilteredResource = prefiltered.resource;
+	ComPtr<ID3D12Resource> stagingResource = prefilteredResource;
+
+	dx_texture stagingTexture = prefiltered;
+
+	if ((prefilteredDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0)
+	{
+		CD3DX12_RESOURCE_DESC stagingDesc = prefilteredDesc;
+		stagingDesc.Format = dx_texture::getUAVCompatibleFormat(prefilteredDesc.Format);
+		stagingDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+		checkResult(device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&stagingDesc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(&stagingResource)
+		));
+
+		dx_resource_state_tracker::addGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, 6 * prefilteredDesc.MipLevels);
+
+		stagingTexture.initialize(device, prefiltered.usage, stagingResource);
+
+		copyResource(stagingTexture, prefiltered);
+	}
+
+	transitionBarrier(stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	setPipelineState(prefilterEnvironmentPSO.pipelineState);
+	setComputeRootSignature(prefilterEnvironmentPSO.rootSignature);
+
+	prefilter_environment_cb prefilterEnvironmentCB;
+	prefilterEnvironmentCB.totalNumMipLevels = prefilteredDesc.MipLevels;
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = dx_texture::getUAVCompatibleFormat(prefilteredDesc.Format);
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+	uavDesc.Texture2DArray.FirstArraySlice = 0;
+	uavDesc.Texture2DArray.ArraySize = 6;
+
+	for (uint32 mipSlice = 0; mipSlice < prefilteredDesc.MipLevels; )
+	{
+		// Maximum number of mips to generate per pass is 5.
+		uint32 numMips = std::min<uint32>(5, prefilteredDesc.MipLevels - mipSlice);
+
+		prefilterEnvironmentCB.firstMip = mipSlice;
+		prefilterEnvironmentCB.cubemapSize = std::max<uint32>((uint32)prefilteredDesc.Width, prefilteredDesc.Height) >> mipSlice;
+		prefilterEnvironmentCB.numMipLevelsToGenerate = numMips;
+
+		setCompute32BitConstants(prefilter_environment_param_constant_buffer, prefilterEnvironmentCB);
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format = environment.resource->GetDesc().Format;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+		srvDesc.TextureCube.MipLevels = (UINT)-1; // Use all mips.
+
+		setShaderResourceView(prefilter_environment_param_src, 0, environment, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
+
+		for (uint32_t mip = 0; mip < numMips; ++mip)
+		{
+			uavDesc.Texture2DArray.MipSlice = mipSlice + mip;
+			setUnorderedAccessView(prefilter_environment_param_out, mip, stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0, 0, &uavDesc);
+		}
+
+		if (numMips < 5)
+		{
+			// Pad unused mips. This keeps DX12 runtime happy.
+			dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].stageDescriptors(prefilter_environment_param_out, prefilterEnvironmentCB.numMipLevelsToGenerate, 5 - numMips, equirectangularToCubemapPSO.defaultUAV);
+		}
+
+		dispatch(bucketize(prefilterEnvironmentCB.cubemapSize, 16), bucketize(prefilterEnvironmentCB.cubemapSize, 16), 6);
+
+		mipSlice += numMips;
+	}
+
+	if (stagingResource != prefilteredResource)
+	{
+		copyResource(prefiltered, stagingTexture);
 	}
 }
 
