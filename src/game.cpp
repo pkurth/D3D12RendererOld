@@ -7,7 +7,6 @@
 #include <d3dcompiler.h>
 
 
-
 void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 {
 	cpu_mesh_group<vertex_3PUN> model;
@@ -298,7 +297,6 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	D3D12_CPU_DESCRIPTOR_HANDLE dsv = dsvHeap->GetCPUDescriptorHandleForHeapStart();
 
 	FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
-
 
 	// Clear.
 	commandList->clearRTV(rtv, clearColor);

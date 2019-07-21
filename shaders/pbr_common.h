@@ -28,8 +28,10 @@ static float distributionGGX(float3 N, float3 H, float roughness)
 
 static float geometrySchlickGGX(float NdotV, float roughness)
 {
-	float r = (roughness + 1.f);
-	float k = (r * r) * 0.125;
+	//float r = (roughness + 1.f);
+	//float k = (r * r) * 0.125;
+	float a = roughness;
+	float k = (a * a) / 2.f;
 
 	float nom = NdotV;
 	float denom = NdotV * (1.f - k) + k;

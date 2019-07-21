@@ -11,6 +11,12 @@
 #include <wrl.h> 
 using namespace Microsoft::WRL;
 
+enum color_depth
+{
+	color_depth_8,
+	color_depth_10,
+};
+
 class dx_window
 {
 public:
@@ -22,6 +28,8 @@ public:
 
 	void resize(uint32 width, uint32 height);
 	void toggleFullscreen();
+	void onMove();
+	void onDisplayChange();
 
 	uint32 present();
 
@@ -40,6 +48,7 @@ public:
 private:
 	void updateRenderTargetViews();
 
+	ComPtr<IDXGIFactory4> factory;
 	ComPtr<ID3D12Device2> device;
 	ComPtr<IDXGISwapChain4> swapChain;
 	ComPtr<ID3D12Resource> backBuffers[numFrames];
@@ -51,12 +60,15 @@ private:
 	bool tearingSupported = false;
 	bool fullscreen = false;
 	bool initialized = false;
+	bool hdrSupport = false;
 
 	HWND windowHandle;
 	RECT windowRect;
 
 	uint32 clientWidth;
 	uint32 clientHeight;
+
+	color_depth colorDepth;
 
 	friend LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPARAM lParam);
 };

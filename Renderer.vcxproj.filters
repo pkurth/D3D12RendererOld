@@ -148,5 +148,6 @@
     <FxCompile Include="shaders\cubemap_to_irradiance.hlsl" />
     <FxCompile Include="shaders\prefilter_environment.hlsl" />
     <FxCompile Include="shaders\integrate_brdf.hlsl" />
+    <FxCompile Include="shaders\tonemap_ps.hlsl" />
   </ItemGroup>
 </Project>

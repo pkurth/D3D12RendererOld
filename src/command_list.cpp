@@ -200,7 +200,7 @@ void dx_command_list::copyTextureSubresource(dx_texture& texture, uint32 firstSu
 	}
 }
 
-void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_usage usage)
+void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_usage usage, bool genMips)
 {
 	std::filesystem::path path(filename);
 	assert(std::filesystem::exists(path));
@@ -254,13 +254,18 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 			break;
 		}
 
+		if (!genMips)
+		{
+			textureDesc.MipLevels = 1;
+		}
+
 		texture.initialize(device, usage, textureDesc);
 
 		uint32 numMips = texture.resource->GetDesc().MipLevels;
 		dx_resource_state_tracker::addGlobalResourceState(texture.resource.Get(), D3D12_RESOURCE_STATE_COMMON, numMips);
 
 		const DirectX::Image* images = scratchImage.GetImages();
-		uint32 numImages = (uint32)scratchImage.GetImageCount();
+		uint32 numImages = min((uint32)scratchImage.GetImageCount(), numMips);
 		std::vector<D3D12_SUBRESOURCE_DATA> subresources(numImages);
 		for (uint32 i = 0; i < numImages; ++i)
 		{
@@ -281,6 +286,23 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 		std::lock_guard<std::mutex> lock(textureCacheMutex);
 		textureCache[filename] = texture.resource.Get();
 	}
+}
+
+void dx_command_list::copyTextureForReadback(dx_texture& texture, ComPtr<ID3D12Resource>& readbackBuffer, uint32 numMips)
+{
+	UINT64 requiredSize = GetRequiredIntermediateSize(texture.resource.Get(), 0, (numMips == 0 ? texture.resource->GetDesc().MipLevels : numMips));
+
+	checkResult(device->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK),
+		D3D12_HEAP_FLAG_NONE,
+		&CD3DX12_RESOURCE_DESC::Buffer(requiredSize),
+		D3D12_RESOURCE_STATE_COPY_DEST,
+		nullptr,
+		IID_PPV_ARGS(&readbackBuffer)
+	));
+
+	transitionBarrier(texture, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	copyResource(readbackBuffer, texture.resource);
 }
 
 void dx_command_list::generateMips(dx_texture& texture)

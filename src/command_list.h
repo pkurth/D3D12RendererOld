@@ -42,11 +42,12 @@ public:
 	template <typename vertex_t> dx_mesh createMesh(const cpu_mesh<vertex_t>& model);
 
 	// Texture creation.
-	void loadTextureFromFile(dx_texture& texture,const std::wstring& filename, texture_usage usage);
+	void loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_usage usage, bool genMips = true);
+	void copyTextureForReadback(dx_texture& texture, ComPtr<ID3D12Resource>& readbackBuffer, uint32 numMips = 0);
 	void convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips);
 	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32);
 	void prefilterEnvironmentMap(dx_texture& environment, dx_texture& prefiltered, uint32 resolution = 128);
-	void integrateBRDF(dx_texture& brdf, uint32 resolution = 256);
+	void integrateBRDF(dx_texture& brdf, uint32 resolution = 512);
 
 	// Pipeline.
 	void setPipelineState(ComPtr<ID3D12PipelineState> pipelineState);
