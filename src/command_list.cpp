@@ -105,8 +105,36 @@ void dx_command_list::copyResource(dx_resource& dstRes, const dx_resource& srcRe
 	copyResource(dstRes.resource, srcRes.resource);
 }
 
-void dx_command_list::setRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv)
+void dx_command_list::setScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv)
 {
+	commandList->OMSetRenderTargets(numRTVs, rtvs, FALSE, dsv);
+}
+
+void dx_command_list::setRenderTarget(dx_render_target& renderTarget)
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvs[render_target_num_attachment_points];
+	uint32 numRTVs = 0;
+	for (uint32 i = 0; i <= render_target_attachment_point_color7; ++i)
+	{
+		dx_texture& tex = renderTarget.attachments[i];
+		if (tex.resource != nullptr)
+		{
+			transitionBarrier(tex, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			rtvs[numRTVs++] = tex.getRenderTargetView();
+			trackObject(tex.resource);
+		}
+	}
+	dx_texture& depth = renderTarget.attachments[render_target_attachment_point_depthstencil];
+	D3D12_CPU_DESCRIPTOR_HANDLE* dsv = nullptr;
+	D3D12_CPU_DESCRIPTOR_HANDLE dsv_;
+
+	if (depth.resource != nullptr)
+	{
+		transitionBarrier(depth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		dsv_ = depth.getDepthStencilView();
+		dsv = &dsv_;
+	}
+
 	commandList->OMSetRenderTargets(numRTVs, rtvs, FALSE, dsv);
 }
 

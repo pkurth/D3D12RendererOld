@@ -17,6 +17,8 @@ dx_texture::dx_texture(const dx_texture& other)
 
 dx_texture& dx_texture::operator=(const dx_texture& other)
 {
+	this->resource = other.resource;
+	this->device = other.device;
 	this->depthStencilView = other.depthStencilView;
 	this->renderTargetView = other.renderTargetView;
 	this->usage = other.usage;

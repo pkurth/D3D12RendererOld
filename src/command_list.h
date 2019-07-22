@@ -8,6 +8,7 @@
 #include "generate_mips.h"
 #include "brdf.h"
 #include "model.h"
+#include "render_target.h"
 
 
 
@@ -82,7 +83,8 @@ public:
 	void setScissor(const D3D12_RECT& scissor);
 
 	// Render targets.
-	void setRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv);
+	void setScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv); // Does not transition. Assumes that screen is always in write-state.
+	void setRenderTarget(dx_render_target& renderTarget); // Also transitions the targets to write-state.
 	void clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, FLOAT* clearColor);
 	void clearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, FLOAT depth = 1.f);
 

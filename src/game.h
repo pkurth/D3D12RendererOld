@@ -45,11 +45,14 @@ private:
 	ComPtr<ID3D12Resource> depthBuffer;
 	ComPtr<ID3D12DescriptorHeap> dsvHeap;
 
-	ComPtr<ID3D12PipelineState> geometryPipelineState;
-	dx_root_signature geometryRootSignature;
+	ComPtr<ID3D12PipelineState> opaqueGeometryPipelineState;
+	dx_root_signature opaqueGeometryRootSignature;
 
 	ComPtr<ID3D12PipelineState> skyPipelineState;
 	dx_root_signature skyRootSignature;
+
+	ComPtr<ID3D12PipelineState> presentPipelineState;
+	dx_root_signature presentRootSignature;
 
 	scene_data scene;
 

@@ -3,13 +3,13 @@ struct ps_input
 	float2 uv	: TEXCOORDS;
 };
 
-struct display_cb
+struct present_cb
 {
 	uint displayMode;
 	float standardNits;
 };
 
-ConstantBuffer<display_cb> displayCB : register(b0);
+ConstantBuffer<present_cb> presentCB : register(b0);
 
 #define SDR 0
 #define HDR 1
@@ -62,24 +62,24 @@ float3 linearToST2084(float3 color)
 	return pow((c1 + c2 * cp) / (1.f + c3 * cp), m2);
 }
 
-float3 main(ps_input IN) : SV_TARGET
+float4 main(ps_input IN) : SV_TARGET
 {
-	float3 scene = tex.Sample(texSampler, IN.uv).rgb;
+	float4 scene = tex.Sample(texSampler, IN.uv);
 
-	if (displayCB.displayMode == SDR)
+	if (presentCB.displayMode == SDR)
 	{
-		scene = linearToSRGB(scene);
+		scene.rgb = linearToSRGB(scene.rgb);
 	}
-	else if (displayCB.displayMode == HDR)
+	else if (presentCB.displayMode == HDR)
 	{
 		const float st2084max = 10000.f;
-		const float hdrScalar = displayCB.standardNits / st2084max;
+		const float hdrScalar = presentCB.standardNits / st2084max;
 
 		// The HDR scene is in Rec.709, but the display is Rec.2020.
-		scene = rec709ToRec2020(scene);
+		scene.rgb = rec709ToRec2020(scene.rgb);
 
 		// Apply the ST.2084 curve to the scene.
-		scene = linearToST2084(scene * hdrScalar);
+		scene.rgb = linearToST2084(scene.rgb * hdrScalar);
 	}
 
 	return scene;
