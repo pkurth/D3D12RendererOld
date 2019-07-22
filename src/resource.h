@@ -3,16 +3,11 @@
 #include "common.h"
 #include "descriptor_allocator.h"
 
-#include <dx/d3dx12.h>
-#include <wrl.h>
-using namespace Microsoft::WRL;
 
-#include <mutex>
-#include <unordered_map>
 
 struct dx_resource
 {
-	void initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc);
+	void initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue);
 	void initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource> resource);
 
 	dx_resource() {}

@@ -2,7 +2,6 @@
 #include "upload_buffer.h"
 #include "error.h"
 
-#include <cassert>
 
 void dx_upload_buffer::initialize(ComPtr<ID3D12Device2> device, uint64 pageSize)
 {

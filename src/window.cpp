@@ -4,8 +4,6 @@
 #include "commands.h"
 #include "resource_state_tracker.h"
 
-#include <iostream>
-
 
 static ComPtr<IDXGIFactory4> createFactory()
 {
@@ -44,7 +42,7 @@ static bool checkTearingSupport(ComPtr<IDXGIFactory4> factory4)
 
 static ComPtr<IDXGISwapChain4> createSwapChain(HWND hWnd,
 	ComPtr<IDXGIFactory4> factory4, ComPtr<ID3D12CommandQueue> commandQueue,
-	uint32 width, uint32 height, uint32 bufferCount, bool tearingSupported, color_depth colorDepth)
+	uint32 width, uint32 height, uint32 bufferCount, bool tearingSupported, color_depth colorDepth, bool exclusiveFullscreen)
 {
 	ComPtr<IDXGISwapChain4> dxgiSwapChain4;
 
@@ -79,9 +77,14 @@ static ComPtr<IDXGISwapChain4> createSwapChain(HWND hWnd,
 		nullptr,
 		&swapChain1));
 
-	// Disable the Alt+Enter fullscreen toggle feature. Switching to fullscreen
-	// will be handled manually.
-	checkResult(factory4->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER));
+	UINT flags = 0;
+	if (!exclusiveFullscreen)
+	{
+		// Disable the Alt+Enter fullscreen toggle feature. Switching to fullscreen
+		// will be handled manually.
+		flags = DXGI_MWA_NO_ALT_ENTER;
+	}
+	checkResult(factory4->MakeWindowAssociation(hWnd, flags));
 
 	checkResult(swapChain1.As(&dxgiSwapChain4));
 
@@ -222,18 +225,19 @@ static void setSwapChainColorSpace(ComPtr<IDXGISwapChain4> swapChain, color_dept
 }
 
 void dx_window::initialize(const TCHAR* windowClassName, ComPtr<ID3D12Device2> device,
-	uint32 clientWidth, uint32 clientHeight)
+	uint32 clientWidth, uint32 clientHeight, color_depth colorDepth, bool exclusiveFullscreen)
 {
 	this->device = device;
 	this->clientWidth = clientWidth;
 	this->clientHeight = clientHeight;
-	this->colorDepth = color_depth_8;
+	this->colorDepth = colorDepth;
+	this->exclusiveFullscreen = exclusiveFullscreen;
 
 	factory = createFactory();
 	tearingSupported = checkTearingSupport(factory);
 
 	
-	windowRect = { 0, 0, (LONG)clientWidth, (LONG)clientHeight };
+	RECT windowRect = { 0, 0, (LONG)clientWidth, (LONG)clientHeight };
 	AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
 	int windowWidth = windowRect.right - windowRect.left;
@@ -249,17 +253,15 @@ void dx_window::initialize(const TCHAR* windowClassName, ComPtr<ID3D12Device2> d
 		0, 0, 0, 0);
 
 	SetWindowLongPtr(windowHandle, GWLP_USERDATA, (LONG_PTR)this);
-
-	GetWindowRect(windowHandle, &windowRect);
-
-
+	
 	const dx_command_queue& commandQueue = dx_command_queue::renderCommandQueue;
-	swapChain = createSwapChain(windowHandle, factory, commandQueue.getD3D12CommandQueue(), clientWidth, clientHeight, numFrames, tearingSupported, colorDepth);
+	swapChain = createSwapChain(windowHandle, factory, commandQueue.getD3D12CommandQueue(), clientWidth, clientHeight, numFrames, tearingSupported, colorDepth, exclusiveFullscreen);
 	currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
 
 	rtvDescriptorHeap = createDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, numFrames);
 	rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
+	GetWindowRect(windowHandle, &windowRect);
 	hdrSupport = checkForHDRSupport(factory, windowRect, colorDepth);
 	setSwapChainColorSpace(swapChain, colorDepth, hdrSupport);
 
@@ -297,9 +299,7 @@ void dx_window::resize(uint32 width, uint32 height)
 	{
 		clientWidth = max(1u, width);
 		clientHeight = max(1u, height);
-
-		GetWindowRect(windowHandle, &windowRect);
-
+		
 		// Flush the GPU queue to make sure the swap chain's back buffers
 		// are not being referenced by an in-flight command list.
 		flushApplication();
@@ -315,6 +315,8 @@ void dx_window::resize(uint32 width, uint32 height)
 		checkResult(swapChain->ResizeBuffers(numFrames, clientWidth, clientHeight,
 			swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
 
+		RECT windowRect;
+		GetWindowRect(windowHandle, &windowRect);
 		hdrSupport = checkForHDRSupport(factory, windowRect, colorDepth);
 		setSwapChainColorSpace(swapChain, colorDepth, hdrSupport);
 
@@ -330,7 +332,7 @@ void dx_window::toggleFullscreen()
 
 	if (fullscreen) // Switching to fullscreen.
 	{
-		GetWindowRect(windowHandle, &windowRect);
+		GetWindowRect(windowHandle, &windowRectBeforeFullscreen);
 
 		uint32 windowStyle = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
 		SetWindowLongW(windowHandle, GWL_STYLE, windowStyle);
@@ -354,10 +356,10 @@ void dx_window::toggleFullscreen()
 		SetWindowLong(windowHandle, GWL_STYLE, WS_OVERLAPPEDWINDOW);
 
 		SetWindowPos(windowHandle, HWND_NOTOPMOST,
-			windowRect.left,
-			windowRect.top,
-			windowRect.right - windowRect.left,
-			windowRect.bottom - windowRect.top,
+			windowRectBeforeFullscreen.left,
+			windowRectBeforeFullscreen.top,
+			windowRectBeforeFullscreen.right - windowRectBeforeFullscreen.left,
+			windowRectBeforeFullscreen.bottom - windowRectBeforeFullscreen.top,
 			SWP_FRAMECHANGED | SWP_NOACTIVATE);
 
 		ShowWindow(windowHandle, SW_NORMAL);
@@ -366,6 +368,7 @@ void dx_window::toggleFullscreen()
 
 void dx_window::onMove()
 {
+	RECT windowRect;
 	GetWindowRect(windowHandle, &windowRect);
 	hdrSupport = checkForHDRSupport(factory, windowRect, colorDepth);
 	setSwapChainColorSpace(swapChain, colorDepth, hdrSupport);
@@ -373,6 +376,7 @@ void dx_window::onMove()
 
 void dx_window::onDisplayChange()
 {
+	RECT windowRect;
 	GetWindowRect(windowHandle, &windowRect);
 	hdrSupport = checkForHDRSupport(factory, windowRect, colorDepth);
 	setSwapChainColorSpace(swapChain, colorDepth, hdrSupport);

@@ -3,7 +3,6 @@
 #include "error.h"
 #include "descriptor_allocator.h"
 
-#include <d3dcompiler.h>
 
 void dx_equirectangular_to_cubemap_pso::initialize(ComPtr<ID3D12Device2> device)
 {

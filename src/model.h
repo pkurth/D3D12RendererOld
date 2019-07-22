@@ -8,11 +8,6 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-#include <iostream>
-#include <vector>
-#include <string>
-#include <filesystem>
-
 struct vertex_3P
 {
 	vec3 position;

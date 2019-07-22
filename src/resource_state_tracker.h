@@ -2,11 +2,6 @@
 
 #include "common.h"
 
-#include <d3d12.h>
-#include <unordered_map>
-#include <vector>
-#include <mutex>
-
 
 class dx_command_list;
 struct dx_resource;

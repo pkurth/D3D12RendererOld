@@ -2,15 +2,6 @@
 
 #include "common.h"
 
-#include <dx/d3dx12.h>
-#include <wrl.h> 
-using namespace Microsoft::WRL;
-
-#include <vector>
-#include <set>
-#include <map>
-#include <mutex>
-
 struct dx_descriptor_allocator_page;
 
 struct dx_descriptor_allocation

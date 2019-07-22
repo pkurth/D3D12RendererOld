@@ -3,7 +3,6 @@
 #include "error.h"
 #include "resource_state_tracker.h"
 
-#include <cassert>
 
 dx_command_queue dx_command_queue::renderCommandQueue;
 dx_command_queue dx_command_queue::computeCommandQueue;

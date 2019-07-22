@@ -2,8 +2,6 @@
 #include "resource.h"
 #include "error.h"
 
-#include <functional>
-
 namespace std
 {
 	// Source: https://stackoverflow.com/questions/2590677/how-do-i-combine-hash-values-in-c0x
@@ -151,7 +149,7 @@ dx_resource::dx_resource(const dx_resource& other)
 	this->unorderedAccessViews = other.unorderedAccessViews;
 }
 
-void dx_resource::initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc)
+void dx_resource::initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue)
 {
 	this->device = device;
 
@@ -159,7 +157,7 @@ void dx_resource::initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
 		D3D12_RESOURCE_STATE_COMMON,
-		nullptr,
+		clearValue,
 		IID_PPV_ARGS(&resource)));
 
 	formatSupport.Format = resourceDesc.Format;

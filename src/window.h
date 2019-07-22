@@ -1,27 +1,16 @@
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
 
 #include "common.h"
 #include "command_queue.h"
 
-#include <dx/d3dx12.h>
-#include <dxgi1_6.h>
-#include <wrl.h> 
-using namespace Microsoft::WRL;
 
-enum color_depth
-{
-	color_depth_8,
-	color_depth_10,
-};
 
 class dx_window
 {
 public:
 	void initialize(const TCHAR* windowClassName, ComPtr<ID3D12Device2> device,
-		uint32 clientWidth, uint32 clientHeight);
+		uint32 clientWidth, uint32 clientHeight, color_depth colorDepth = color_depth_8, bool exclusiveFullscreen = false);
 
 public:
 	static const uint32 numFrames = 3;
@@ -61,9 +50,10 @@ private:
 	bool fullscreen = false;
 	bool initialized = false;
 	bool hdrSupport = false;
+	bool exclusiveFullscreen;
 
 	HWND windowHandle;
-	RECT windowRect;
+	RECT windowRectBeforeFullscreen;
 
 	uint32 clientWidth;
 	uint32 clientHeight;

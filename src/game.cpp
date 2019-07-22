@@ -4,8 +4,6 @@
 #include "error.h"
 #include "model.h"
 
-#include <d3dcompiler.h>
-
 
 void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 {
@@ -31,16 +29,16 @@ void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 	result.quad = commandList->createMesh(quad);
 
 	commandList->loadTextureFromFile(result.equirectangular, L"res/pano.hdr", texture_usage_albedo);
-	commandList->convertEquirectangularToCubemap(result.equirectangular, result.cubemap, 1024, 0);
-	commandList->createIrradianceMap(result.cubemap, result.irradiance);
-	commandList->prefilterEnvironmentMap(result.cubemap, result.prefilteredEnvironment);
-	commandList->integrateBRDF(result.brdf);
+	commandList->convertEquirectangularToCubemap(result.equirectangular, result.cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
+	//commandList->createIrradianceMap(result.cubemap, result.irradiance);
+	//commandList->prefilterEnvironmentMap(result.cubemap, result.prefilteredEnvironment);
+	//commandList->integrateBRDF(result.brdf);
 
 	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);
 }
 
-void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height)
+void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
 {
 	this->device = device;
 	scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
@@ -52,10 +50,92 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	checkResult(device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&dsvHeap)));
 
-
 	D3D12_RT_FORMAT_ARRAY rtvFormats = {};
 	rtvFormats.NumRenderTargets = 1;
-	rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	if (colorDepth == color_depth_8)
+	{
+		rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	}
+	else
+	{
+		assert(colorDepth == color_depth_10);
+		rtvFormats.RTFormats[0] = DXGI_FORMAT_R10G10B10A2_UNORM;
+	}
+
+	// GBuffer.
+	{
+		// Albedo.
+		{
+			DXGI_FORMAT albedoFormat = DXGI_FORMAT_R8G8B8A8_UNORM; // Alpha is unused for now.
+			CD3DX12_RESOURCE_DESC albedoTextureDesc = CD3DX12_RESOURCE_DESC::Tex2D(albedoFormat, width, height);
+			albedoTextureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+			D3D12_CLEAR_VALUE albedoClearValue;
+			albedoClearValue.Format = albedoTextureDesc.Format;
+			albedoClearValue.Color[0] = 0.f;
+			albedoClearValue.Color[1] = 0.f;
+			albedoClearValue.Color[2] = 0.f;
+			albedoClearValue.Color[3] = 0.f;
+
+			dx_texture albedoTexture;
+			albedoTexture.initialize(device, texture_usage_render_target, albedoTextureDesc, &albedoClearValue);
+			gBufferRT.attachTexture(render_target_attachment_point_color0, albedoTexture);
+		}
+
+		// Emission.
+		{
+			DXGI_FORMAT hdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+			CD3DX12_RESOURCE_DESC hdrTextureDesc = CD3DX12_RESOURCE_DESC::Tex2D(hdrFormat, width, height);
+			hdrTextureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+			D3D12_CLEAR_VALUE hdrClearValue;
+			hdrClearValue.Format = hdrTextureDesc.Format;
+			hdrClearValue.Color[0] = 0.f;
+			hdrClearValue.Color[1] = 0.f;
+			hdrClearValue.Color[2] = 0.f;
+			hdrClearValue.Color[3] = 0.f;
+
+			dx_texture hdrTexture;
+			hdrTexture.initialize(device, texture_usage_render_target, hdrTextureDesc, &hdrClearValue);
+			gBufferRT.attachTexture(render_target_attachment_point_color1, hdrTexture);
+			lightingRT.attachTexture(render_target_attachment_point_color0, hdrTexture);
+		}
+
+		// Normals.
+		{
+			DXGI_FORMAT normalMetalnessRoughnessFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+			CD3DX12_RESOURCE_DESC normalMetalnessRoughnessTextureDesc = CD3DX12_RESOURCE_DESC::Tex2D(normalMetalnessRoughnessFormat, width, height);
+			normalMetalnessRoughnessTextureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+			D3D12_CLEAR_VALUE normalClearValue;
+			normalClearValue.Format = normalMetalnessRoughnessTextureDesc.Format;
+			normalClearValue.Color[0] = 0.f;
+			normalClearValue.Color[1] = 0.f;
+			normalClearValue.Color[2] = 0.f;
+			normalClearValue.Color[3] = 1.f;
+
+			dx_texture normalTexture;
+			normalTexture.initialize(device, texture_usage_render_target, normalMetalnessRoughnessTextureDesc, &normalClearValue);
+			gBufferRT.attachTexture(render_target_attachment_point_color2, normalTexture);
+		}
+
+		// Depth.
+		{
+			DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D24_UNORM_S8_UINT; // We need stencil for deferred lighting.
+			CD3DX12_RESOURCE_DESC depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, width, height);
+			depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL; // Allows creation of depth-stencil-view (so that we can write to it).
+
+			D3D12_CLEAR_VALUE depthClearValue;
+			depthClearValue.Format = depthDesc.Format;
+			depthClearValue.DepthStencil = { 1.f, 0 };
+
+			dx_texture depthTexture;
+			depthTexture.initialize(device, texture_usage_render_target, depthDesc, &depthClearValue);
+
+			gBufferRT.attachTexture(render_target_attachment_point_depthstencil, depthTexture);
+			lightingRT.attachTexture(render_target_attachment_point_depthstencil, depthTexture);
+		}
+	}
 
 	// Geometry.
 	{

@@ -6,10 +6,8 @@
 #include "root_signature.h"
 #include "math.h"
 #include "camera.h"
+#include "render_target.h"
 
-#include <dx/d3dx12.h>
-#include <wrl.h>
-using namespace Microsoft::WRL;
 
 struct scene_data
 {
@@ -30,7 +28,7 @@ class dx_game
 {
 
 public:
-	void initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height);
+	void initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth = color_depth_8);
 	void resize(uint32 width, uint32 height);
 
 	void update(float dt);
@@ -64,5 +62,8 @@ private:
 	mat4 modelMatrix;
 	
 	render_camera camera;
+
+	dx_render_target gBufferRT;
+	dx_render_target lightingRT;
 };
 

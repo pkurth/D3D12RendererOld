@@ -5,13 +5,6 @@
 #include "thread_safe_queue.h"
 #include "thread_safe_vector.h"
 
-#include <d3d12.h>
-#include <wrl.h> 
-using namespace Microsoft::WRL;
-
-#include <mutex>
-#include <atomic>
-#include <vector>
 
 class dx_command_queue
 {

@@ -2,13 +2,6 @@
 
 #include "common.h"
 
-#include <dx/d3dx12.h>
-#include <wrl.h> 
-using namespace Microsoft::WRL;
-
-#include <vector>
-#include <queue>
-#include <functional>
 
 class dx_command_list;
 struct dx_root_signature;

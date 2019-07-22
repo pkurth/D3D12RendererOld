@@ -2,10 +2,6 @@
 
 #include "common.h"
 
-#include <dx/d3dx12.h>
-#include <wrl.h> 
-using namespace Microsoft::WRL;
-
 
 struct dx_root_signature
 {

@@ -14,12 +14,13 @@ enum texture_usage
 
 struct dx_texture : dx_resource
 {
-	void initialize(ComPtr<ID3D12Device2> device, texture_usage usage, const D3D12_RESOURCE_DESC& resourceDesc);
+	void initialize(ComPtr<ID3D12Device2> device, texture_usage usage, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue = nullptr);
 	void initialize(ComPtr<ID3D12Device2> device, texture_usage usage, ComPtr<ID3D12Resource> resource);
 	void initialize(const dx_texture& other);
 
 	dx_texture() {}
 	dx_texture(const dx_texture& other);
+	dx_texture& operator=(const dx_texture& other);
 
 	static bool isUAVCompatibleFormat(DXGI_FORMAT format);
 	static bool isSRGBFormat(DXGI_FORMAT format);

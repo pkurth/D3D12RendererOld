@@ -3,8 +3,6 @@
 #include "error.h"
 #include "descriptor_allocator.h"
 
-#include <d3dcompiler.h>
-
 
 void dx_generate_mips_pso::initialize(ComPtr<ID3D12Device2> device)
 {

@@ -22,6 +22,12 @@ typedef uint64_t uint64;
 #define arraysize(arr) (sizeof(arr) / sizeof(arr[0]))
 
 
+enum color_depth
+{
+	color_depth_8,
+	color_depth_10,
+};
+
 #if defined(min)
 #undef min
 #endif

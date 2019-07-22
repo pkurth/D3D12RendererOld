@@ -1,6 +1,6 @@
 #pragma once
 
-#include <dx/d3dx12.h>
+
 #include <dx/SimpleMath.h>
 
 using vec2 = DirectX::SimpleMath::Vector2;

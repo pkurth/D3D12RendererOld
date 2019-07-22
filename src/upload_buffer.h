@@ -2,11 +2,7 @@
 
 #include "common.h"
 
-#include <dx/d3dx12.h>
-#include <wrl.h> 
-using namespace Microsoft::WRL;
 
-#include <vector>
 
 class dx_upload_buffer
 {

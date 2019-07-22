@@ -3,12 +3,6 @@
 #include "error.h"
 #include "command_queue.h"
 
-#include <unordered_map>
-#include <string>
-#include <mutex>
-#include <filesystem>
-#include <iostream>
-
 #include <DirectXTex/DirectXTex/DirectXTex.h>
 
 static std::unordered_map<std::wstring, ID3D12Resource*> textureCache;
@@ -499,7 +493,7 @@ void dx_command_list::generateMips(dx_texture& texture)
 	}
 }
 
-void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips)
+void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips, DXGI_FORMAT format)
 {
 	if (commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
 	{
@@ -507,7 +501,7 @@ void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangula
 		{
 			computeCommandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
 		}
-		computeCommandList->convertEquirectangularToCubemap(equirectangular, cubemap, resolution, numMips);
+		computeCommandList->convertEquirectangularToCubemap(equirectangular, cubemap, resolution, numMips, format);
 		return;
 	}
 
@@ -520,6 +514,10 @@ void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangula
 	cubemapDesc.Width = cubemapDesc.Height = resolution;
 	cubemapDesc.DepthOrArraySize = 6;
 	cubemapDesc.MipLevels = numMips;
+	if (format != DXGI_FORMAT_UNKNOWN)
+	{
+		cubemapDesc.Format = format;
+	}
 
 	cubemap.initialize(device, equirectangular.usage, cubemapDesc);
 

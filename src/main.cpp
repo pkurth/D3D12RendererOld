@@ -2,7 +2,6 @@
 
 // Most code in this file is from this awesome tutorial: https://www.3dgep.com/learning-directx12-1/
 
-
 #include "window.h"
 #include "common.h"
 #include "error.h"
@@ -10,16 +9,9 @@
 #include "game.h"
 #include "descriptor_allocator.h"
 
-// directx
-#include <dx/d3dx12.h>
-#include <dxgi1_6.h>
-#include <d3dcompiler.h>
-#include <DirectXMath.h>
 
-
-#include <iostream>
-#include <chrono>
-
+static bool exclusiveFullscreen = false;
+static color_depth colorDepth = color_depth_8;
 static bool useWarp = false;
 
 static dx_window window;
@@ -215,19 +207,27 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 
 			switch (wParam)
 			{
-			case 'V':
-				window->vSync = !window->vSync;
-				break;
-			case VK_ESCAPE:
-				PostQuitMessage(0);
-				break;
-			case VK_RETURN:
-				if (alt)
-				{
-			case VK_F11:
-				window->toggleFullscreen();
-				}
-				break;
+				case 'V':
+					window->vSync = !window->vSync;
+					break;
+				case VK_ESCAPE:
+					PostQuitMessage(0);
+					break;
+				
+				case VK_RETURN:
+					if (alt)
+					{
+						if (exclusiveFullscreen)
+						{
+							return DefWindowProc(hwnd, msg, wParam, lParam);
+						}
+						else
+						{
+							case VK_F11:
+								window->toggleFullscreen();
+						}
+					}
+					break;
 			}
 		} break;
 
@@ -254,7 +254,7 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 			break;
 
 		default:
-			return DefWindowProcW(hwnd, msg, wParam, lParam);
+			return DefWindowProc(hwnd, msg, wParam, lParam);
 		}
 
 		return 0;
@@ -305,8 +305,11 @@ int main()
 	dx_command_queue::computeCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 	dx_command_queue::copyCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COPY);
 
-	window.initialize(windowClass.lpszClassName, device, 1280, 720);
-	game.initialize(device, 1280, 720);
+	uint32 initialWidth = 1280;
+	uint32 initialHeight = 720;
+
+	window.initialize(windowClass.lpszClassName, device, initialWidth, initialHeight, colorDepth, exclusiveFullscreen);
+	game.initialize(device, initialWidth, initialHeight, colorDepth);
 
 
 	MSG msg = {};
