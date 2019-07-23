@@ -317,9 +317,84 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&skyPipelineState)));
 	}
 
-	// Directional Light
+	// Directional Light.
 	{
+		ComPtr<ID3DBlob> vertexShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/fullscreen_triangle_vs.cso", &vertexShaderBlob));
+		ComPtr<ID3DBlob> pixelShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/light_directional_ps.cso", &pixelShaderBlob));
 
+		// Root signature.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+		rootParameters[0].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
+			D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
+			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+			D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.pParameters = rootParameters;
+		rootSignatureDesc.NumParameters = arraysize(rootParameters);
+		rootSignatureDesc.pStaticSamplers = &sampler;
+		rootSignatureDesc.NumStaticSamplers = 1;
+		directionalLightRootSignature.initialize(device, rootSignatureDesc);
+
+		struct pipeline_state_stream
+		{
+			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
+			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
+			CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC blend;
+		} pipelineStateStream;
+
+		pipelineStateStream.rootSignature = directionalLightRootSignature.rootSignature.Get();
+		pipelineStateStream.inputLayout = { nullptr, 0 };
+		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+		pipelineStateStream.rtvFormats = lightingRT.renderTargetFormat;
+		pipelineStateStream.dsvFormat = lightingRT.depthStencilFormat;
+
+		CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc(D3D12_DEFAULT);
+		depthStencilDesc.DepthEnable = false; // Don't do depth-check.
+		depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Don't write to depth (or stencil) buffer.
+		depthStencilDesc.StencilEnable = true;
+		depthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL; // Write where geometry is.
+		depthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP; // Don't modify stencil.
+		pipelineStateStream.depthStencilDesc = depthStencilDesc;
+
+		// Additive blending.
+		CD3DX12_BLEND_DESC blendDesc(D3D12_DEFAULT);
+		blendDesc.AlphaToCoverageEnable = false;
+		blendDesc.IndependentBlendEnable = false;
+		blendDesc.RenderTarget[0].BlendEnable = true;
+		blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+		blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+		blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+		pipelineStateStream.blend = blendDesc;
+
+		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+			sizeof(pipeline_state_stream), &pipelineStateStream
+		};
+		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&directionalLightPipelineState)));
 	}
 
 	// Present.
@@ -533,6 +608,19 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->setShaderResourceView(1, 0, scene.cubemap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
 
 		commandList->drawIndexed(scene.skyMesh.indexBuffer.numIndices, 1, 0, 0, 0);
+	}
+
+	// Directional light.
+	{
+		commandList->setPipelineState(directionalLightPipelineState);
+		commandList->setGraphicsRootSignature(directionalLightRootSignature);
+
+		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		commandList->setShaderResourceView(0, 0, gBufferRT.attachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(0, 1, gBufferRT.attachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		commandList->drawIndexed(3, 1, 0, 0, 0);
 	}
 
 

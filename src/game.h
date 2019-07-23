@@ -51,6 +51,9 @@ private:
 	ComPtr<ID3D12PipelineState> skyPipelineState;
 	dx_root_signature skyRootSignature;
 
+	ComPtr<ID3D12PipelineState> directionalLightPipelineState;
+	dx_root_signature directionalLightRootSignature;
+
 	ComPtr<ID3D12PipelineState> presentPipelineState;
 	dx_root_signature presentRootSignature;
 
