@@ -138,14 +138,29 @@ void dx_command_list::setRenderTarget(dx_render_target& renderTarget)
 	commandList->OMSetRenderTargets(numRTVs, rtvs, FALSE, dsv);
 }
 
-void dx_command_list::clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, FLOAT* clearColor)
+void dx_command_list::clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, float* clearColor)
 {
 	commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 }
 
-void dx_command_list::clearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, FLOAT depth)
+void dx_command_list::clearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float depth)
 {
 	commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, depth, 0, 0, nullptr);
+}
+
+void dx_command_list::clearStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, uint32 stencil)
+{
+	commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_STENCIL, 0.f, stencil, 0, nullptr);
+}
+
+void dx_command_list::clearDepthAndStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float depth, uint32 stencil)
+{
+	commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, depth, stencil, 0, nullptr);
+}
+
+void dx_command_list::setStencilReference(uint32 stencilReference)
+{
+	commandList->OMSetStencilRef(stencilReference);
 }
 
 void dx_command_list::updateBufferResource(ComPtr<ID3D12Resource>& destinationResource, size_t numElements, size_t elementSize, const void* bufferData, D3D12_RESOURCE_FLAGS flags)

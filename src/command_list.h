@@ -85,8 +85,11 @@ public:
 	// Render targets.
 	void setScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv); // Does not transition. Assumes that screen is always in write-state.
 	void setRenderTarget(dx_render_target& renderTarget); // Also transitions the targets to write-state.
-	void clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, FLOAT* clearColor);
-	void clearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, FLOAT depth = 1.f);
+	void clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, float* clearColor);
+	void clearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float depth = 1.f);
+	void clearStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, uint32 stencil = 0);
+	void clearDepthAndStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float depth = 1.f, uint32 stencil = 0);
+	void setStencilReference(uint32 stencilReference);
 
 	// Draw.
 	void draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance);

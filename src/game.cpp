@@ -191,6 +191,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
 			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
 			CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
 		} pipelineStateStream;
 
 		pipelineStateStream.rootSignature = opaqueGeometryRootSignature.rootSignature.Get();
@@ -213,6 +214,16 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			0,
 			D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
 		);
+
+		CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc(D3D12_DEFAULT);
+		depthStencilDesc.StencilEnable = true;
+		depthStencilDesc.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+		depthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
+		depthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		depthStencilDesc.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+		depthStencilDesc.BackFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
+		depthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		pipelineStateStream.depthStencilDesc = depthStencilDesc;
 
 		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
 			sizeof(pipeline_state_stream), &pipelineStateStream
@@ -267,8 +278,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
 			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
 			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
 			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
 			CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
 		} pipelineStateStream;
 
 		pipelineStateStream.rootSignature = skyRootSignature.rootSignature.Get();
@@ -276,6 +289,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
 		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+		pipelineStateStream.dsvFormat = lightingRT.depthStencilFormat;
 		pipelineStateStream.rtvFormats = lightingRT.renderTargetFormat;
 		pipelineStateStream.rasterizer = CD3DX12_RASTERIZER_DESC(
 			D3D12_FILL_MODE_SOLID,
@@ -290,6 +304,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			0,
 			D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
 		);
+
+		CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc(D3D12_DEFAULT);
+		depthStencilDesc.StencilEnable = true;
+		depthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NOT_EQUAL;
+		pipelineStateStream.depthStencilDesc = depthStencilDesc;
 
 		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
 			sizeof(pipeline_state_stream), &pipelineStateStream
@@ -353,7 +372,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		pipelineStateStream.rtvFormats = screenRTVFormats;
 
 		CD3DX12_DEPTH_STENCIL_DESC1 depthDesc(D3D12_DEFAULT);
-		depthDesc.DepthEnable = FALSE; // Don't do depth-check.
+		depthDesc.DepthEnable = false; // Don't do depth-check.
 		depthDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Don't write to depth (or stencil) buffer.
 		pipelineStateStream.depthStencilDesc = depthDesc;
 
@@ -449,7 +468,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	// Render to GBuffer.
 	commandList->setRenderTarget(gBufferRT);
-	commandList->clearDepth(gBufferRT.attachments[render_target_attachment_point_depthstencil].getDepthStencilView());
+	commandList->clearDepthAndStencil(gBufferRT.attachments[render_target_attachment_point_depthstencil].getDepthStencilView());
+	commandList->setStencilReference(1);
 
 	// Geometry.
 	{
