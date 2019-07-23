@@ -155,6 +155,7 @@
     <FxCompile Include="shaders\prefilter_environment.hlsl" />
     <FxCompile Include="shaders\integrate_brdf.hlsl" />
     <FxCompile Include="shaders\present_ps.hlsl" />
-    <FxCompile Include="shaders\present_vs.hlsl" />
+    <FxCompile Include="shaders\light_directional_ps.hlsl" />
+    <FxCompile Include="shaders\fullscreen_triangle_vs.hlsl" />
   </ItemGroup>
 </Project>

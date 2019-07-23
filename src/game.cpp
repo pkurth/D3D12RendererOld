@@ -217,6 +217,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc(D3D12_DEFAULT);
 		depthStencilDesc.StencilEnable = true;
+		// Set front and back faces, since both are rendered (backface culling is disabled).
 		depthStencilDesc.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
 		depthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
 		depthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
@@ -316,10 +317,15 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&skyPipelineState)));
 	}
 
+	// Directional Light
+	{
+
+	}
+
 	// Present.
 	{
 		ComPtr<ID3DBlob> vertexShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/present_vs.cso", &vertexShaderBlob));
+		checkResult(D3DReadFileToBlob(L"shaders/bin/fullscreen_triangle_vs.cso", &vertexShaderBlob));
 		ComPtr<ID3DBlob> pixelShaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/present_ps.cso", &pixelShaderBlob));
 
@@ -468,6 +474,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	// Render to GBuffer.
 	commandList->setRenderTarget(gBufferRT);
+	// No need to clear color, since we mark valid pixels with the stencil.
 	commandList->clearDepthAndStencil(gBufferRT.attachments[render_target_attachment_point_depthstencil].getDepthStencilView());
 	commandList->setStencilReference(1);
 

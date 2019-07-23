@@ -15,9 +15,10 @@ vs_output main(vs_input IN)
 
 	float x = -1.f + float((IN.vertexID & 1) << 2);
 	float y = -1.f + float((IN.vertexID & 2) << 1);
+	float u = x * 0.5f + 0.5f;
+	float v = 1.f - (y * 0.5f + 0.5f);
 	OUT.position = float4(x, y, 0.f, 1.f);
-	OUT.uv.x = x * 0.5f + 0.5f;
-	OUT.uv.y = 1.f - (y * 0.5f + 0.5f);
+	OUT.uv = float2(u, v);
 
 	return OUT;
 }
