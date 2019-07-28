@@ -100,7 +100,7 @@ void dx_resource_state_tracker::aliasBarrier(const dx_resource* resourceBefore, 
 	resourceBarrier(CD3DX12_RESOURCE_BARRIER::Aliasing(d3d12ResourceBefore, d3d12ResourceAfter));
 }
 
-uint32 dx_resource_state_tracker::flushPendingResourceBarriers(dx_command_list* commandList)
+uint32 dx_resource_state_tracker::flushPendingResourceBarriers(ComPtr<ID3D12GraphicsCommandList2> commandList)
 {
 	assert(isLocked);
 
@@ -153,8 +153,7 @@ uint32 dx_resource_state_tracker::flushPendingResourceBarriers(dx_command_list* 
 	uint32 numBarriers = (uint32)resourceBarriers.size();
 	if (numBarriers > 0)
 	{
-		auto d3d12CommandList = commandList->getD3D12CommandList();
-		d3d12CommandList->ResourceBarrier(numBarriers, resourceBarriers.data());
+		commandList->ResourceBarrier(numBarriers, resourceBarriers.data());
 	}
 
 	pendingResourceBarriers.clear();
@@ -162,13 +161,12 @@ uint32 dx_resource_state_tracker::flushPendingResourceBarriers(dx_command_list* 
 	return numBarriers;
 }
 
-void dx_resource_state_tracker::flushResourceBarriers(dx_command_list* commandList)
+void dx_resource_state_tracker::flushResourceBarriers(ComPtr<ID3D12GraphicsCommandList2> commandList)
 {
 	uint32 numBarriers = (uint32)resourceBarriers.size();
 	if (numBarriers > 0)
 	{
-		ComPtr<ID3D12GraphicsCommandList2> d3d12CommandList = commandList->getD3D12CommandList();
-		d3d12CommandList->ResourceBarrier(numBarriers, resourceBarriers.data());
+		commandList->ResourceBarrier(numBarriers, resourceBarriers.data());
 		resourceBarriers.clear();
 	}
 }

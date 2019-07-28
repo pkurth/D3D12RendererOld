@@ -52,6 +52,20 @@ dx_command_list* dx_command_queue::getAvailableCommandList()
 	return result;
 }
 
+dx_command_queue::dx_transition_command_list* dx_command_queue::getAvailableTransitionCommandList()
+{
+	dx_transition_command_list* result;
+
+	if (!freeTransitionCommandLists.tryPop(result))
+	{
+		result = new dx_transition_command_list;
+		result->initialize(device, commandListType);
+		transitionCommandLists.pushBack(result);
+	}
+
+	return result;
+}
+
 uint64 dx_command_queue::executeCommandList(dx_command_list* commandList)
 {
 	return executeCommandLists({ commandList });
@@ -61,7 +75,7 @@ uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>
 {
 	dx_resource_state_tracker::lock();
 
-	std::vector<dx_command_list*> toBeQueued;
+	std::vector<command_list_entry> toBeQueued;
 	toBeQueued.reserve(commandLists.size() * 2);
 
 	std::vector<ID3D12CommandList*> d3d12CommandLists;
@@ -72,18 +86,18 @@ uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>
 
 	for (dx_command_list* list : commandLists)
 	{
-		dx_command_list* pendingCommandList = getAvailableCommandList();
-		bool hasPendingBarriers = list->close(pendingCommandList);
-		pendingCommandList->close();
+		dx_transition_command_list* pendingCommandList = getAvailableTransitionCommandList();
+		bool hasPendingBarriers = list->close(pendingCommandList->commandList);
+		checkResult(pendingCommandList->commandList->Close());
 
 		if (hasPendingBarriers)
 		{
-			d3d12CommandLists.push_back(pendingCommandList->getD3D12CommandList().Get());
+			d3d12CommandLists.push_back(pendingCommandList->commandList.Get());
 		}
 		d3d12CommandLists.push_back(list->getD3D12CommandList().Get());
 
-		toBeQueued.push_back(pendingCommandList);
-		toBeQueued.push_back(list);
+		toBeQueued.emplace_back(pendingCommandList);
+		toBeQueued.emplace_back(list);
 
 		dx_command_list* extraComputeCommandList = list->getComputeCommandList();
 		if (extraComputeCommandList)
@@ -98,9 +112,10 @@ uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>
 
 	dx_resource_state_tracker::unlock();
 
-	for (auto commandList : toBeQueued)
+	for (command_list_entry entry : toBeQueued)
 	{
-		inFlightCommandLists.pushBack(command_list_entry{ fenceValue, commandList });
+		entry.fenceValue = fenceValue;
+		inFlightCommandLists.pushBack(entry);
 	}
 
 	if (extraComputeCommandLists.size() > 0)
@@ -174,14 +189,24 @@ void dx_command_queue::processInFlightCommandLists()
 		while (inFlightCommandLists.tryPop(commandListEntry))
 		{
 			uint64 fenceValue = commandListEntry.fenceValue;
-			dx_command_list* commandList = commandListEntry.commandList;
 
 			waitForFenceValue(fenceValue);
 
-			commandList->reset();
-
-			freeCommandLists.pushBack(commandList);
+			if (commandListEntry.isTransition)
+			{
+				dx_transition_command_list* commandList = commandListEntry.transition;
+				checkResult(commandList->commandAllocator->Reset());
+				checkResult(commandList->commandList->Reset(commandList->commandAllocator.Get(), nullptr));
+				freeTransitionCommandLists.pushBack(commandList);
+			}
+			else
+			{
+				dx_command_list* commandList = commandListEntry.commandList;
+				commandList->reset();
+				freeCommandLists.pushBack(commandList);
+			}
 		}
+
 		lock.unlock();
 		processInFlightCommandListsCondition.notify_one();
 
@@ -192,4 +217,12 @@ void dx_command_queue::processInFlightCommandLists()
 void dx_command_queue::wait(dx_command_queue& other)
 {
 	commandQueue->Wait(other.fence.Get(), other.fenceValue);
+}
+
+void dx_command_queue::dx_transition_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE commandListType)
+{
+	checkResult(device->CreateCommandAllocator(commandListType, IID_PPV_ARGS(&commandAllocator)));
+	checkResult(device->CreateCommandList(0, commandListType, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList)));
+
+	checkResult(commandList->SetPrivateDataInterface(__uuidof(ID3D12CommandAllocator), commandAllocator.Get()));
 }

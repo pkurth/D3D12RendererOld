@@ -32,7 +32,7 @@ public:
 	void resize(uint32 width, uint32 height);
 
 	void update(float dt);
-	void render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv);
+	void render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV);
 
 private:
 	void resizeDepthBuffer(uint32 width, uint32 height);
@@ -54,6 +54,9 @@ private:
 	ComPtr<ID3D12PipelineState> directionalLightPipelineState;
 	dx_root_signature directionalLightRootSignature;
 
+	ComPtr<ID3D12PipelineState> ambientLightPipelineState;
+	dx_root_signature ambientLightRootSignature;
+
 	ComPtr<ID3D12PipelineState> presentPipelineState;
 	dx_root_signature presentRootSignature;
 
@@ -69,7 +72,7 @@ private:
 	
 	render_camera camera;
 
-	dx_render_target gBufferRT;
+	dx_render_target gbufferRT;
 	dx_render_target lightingRT;
 };
 

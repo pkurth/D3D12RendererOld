@@ -8,6 +8,7 @@
 #include "command_queue.h"
 #include "game.h"
 #include "descriptor_allocator.h"
+#include "graphics.h"
 
 
 static bool exclusiveFullscreen = false;
@@ -304,6 +305,8 @@ int main()
 	dx_command_queue::renderCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	dx_command_queue::computeCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 	dx_command_queue::copyCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COPY);
+
+	initializeCommonGraphicsItems();
 
 	uint32 initialWidth = 1280;
 	uint32 initialHeight = 720;

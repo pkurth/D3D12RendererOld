@@ -66,6 +66,9 @@
     <ClCompile Include="src\render_target.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\graphics.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\common.h">
@@ -143,6 +146,12 @@
     <ClInclude Include="src\render_target.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\graphics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\generate_mips.hlsl" />
@@ -157,5 +166,6 @@
     <FxCompile Include="shaders\present_ps.hlsl" />
     <FxCompile Include="shaders\light_directional_ps.hlsl" />
     <FxCompile Include="shaders\fullscreen_triangle_vs.hlsl" />
+    <FxCompile Include="shaders\light_ambient_ps.hlsl" />
   </ItemGroup>
 </Project>

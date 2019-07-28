@@ -1,6 +1,7 @@
 struct ps_input
 {
 	float2 uv	: TEXCOORDS;
+	float3 V	: VIEWDIR;
 };
 
 SamplerState texSampler		: register(s0);

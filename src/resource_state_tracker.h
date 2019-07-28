@@ -19,8 +19,8 @@ public:
 	void uavBarrier(const dx_resource* resource = nullptr);
 	void aliasBarrier(const dx_resource* resourceBefore = nullptr, const dx_resource* resourceAfter = nullptr);
 
-	uint32 flushPendingResourceBarriers(dx_command_list* commandList);
-	void flushResourceBarriers(dx_command_list* commandList);
+	uint32 flushPendingResourceBarriers(ComPtr<ID3D12GraphicsCommandList2> commandList);
+	void flushResourceBarriers(ComPtr<ID3D12GraphicsCommandList2> commandList);
 	void commitFinalResourceStates();
 	void reset();
 

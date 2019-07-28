@@ -19,6 +19,7 @@ void dx_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIS
 	checkResult(commandList->SetPrivateDataInterface(__uuidof(ID3D12CommandAllocator), commandAllocator.Get()));
 
 	resourceStateTracker.initialize();
+	uploadBuffer.initialize(device);
 
 	if (commandListType == D3D12_COMMAND_LIST_TYPE_COMPUTE)
 	{
@@ -112,11 +113,11 @@ void dx_command_list::setScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, u
 
 void dx_command_list::setRenderTarget(dx_render_target& renderTarget)
 {
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvs[render_target_num_attachment_points];
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvs[8];
 	uint32 numRTVs = 0;
-	for (uint32 i = 0; i <= render_target_attachment_point_color7; ++i)
+	for (uint32 i = 0; i < arraysize(rtvs); ++i)
 	{
-		dx_texture& tex = renderTarget.attachments[i];
+		dx_texture& tex = renderTarget.colorAttachments[i];
 		if (tex.resource != nullptr)
 		{
 			transitionBarrier(tex, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -124,7 +125,7 @@ void dx_command_list::setRenderTarget(dx_render_target& renderTarget)
 			trackObject(tex.resource);
 		}
 	}
-	dx_texture& depth = renderTarget.attachments[render_target_attachment_point_depthstencil];
+	dx_texture& depth = renderTarget.depthStencilAttachment;
 	D3D12_CPU_DESCRIPTOR_HANDLE* dsv = nullptr;
 	D3D12_CPU_DESCRIPTOR_HANDLE dsv_;
 
@@ -999,6 +1000,25 @@ void dx_command_list::setCompute32BitConstants(uint32 rootParameterIndex, uint32
 	commandList->SetComputeRoot32BitConstants(rootParameterIndex, numConstants, constants, 0);
 }
 
+D3D12_GPU_VIRTUAL_ADDRESS dx_command_list::uploadDynamicConstantBuffer(uint32 sizeInBytes, const void* data)
+{
+	dx_upload_buffer::allocation allocation = uploadBuffer.allocate(sizeInBytes, 256);
+	memcpy(allocation.cpu, data, sizeInBytes);
+	return allocation.gpu;
+}
+
+D3D12_GPU_VIRTUAL_ADDRESS dx_command_list::uploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, uint32 sizeInBytes, const void* data)
+{
+	D3D12_GPU_VIRTUAL_ADDRESS address = uploadDynamicConstantBuffer(sizeInBytes, data);
+	commandList->SetGraphicsRootConstantBufferView(rootParameterIndex, address);
+	return address;
+}
+
+void dx_command_list::setGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+	commandList->SetGraphicsRootConstantBufferView(rootParameterIndex, address);
+}
+
 void dx_command_list::setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology)
 {
 	commandList->IASetPrimitiveTopology(topology);
@@ -1071,6 +1091,7 @@ void dx_command_list::reset()
 
 	resourceStateTracker.reset();
 	trackedObjects.clear();
+	uploadBuffer.reset();
 
 	for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
 	{
@@ -1081,7 +1102,7 @@ void dx_command_list::reset()
 	computeCommandList = nullptr;
 }
 
-bool dx_command_list::close(dx_command_list* pendingCommandList)
+bool dx_command_list::close(ComPtr<ID3D12GraphicsCommandList2> pendingCommandList)
 {
 	flushResourceBarriers();
 
@@ -1107,7 +1128,7 @@ void dx_command_list::trackObject(ComPtr<ID3D12Object> object)
 
 void dx_command_list::flushResourceBarriers()
 {
-	resourceStateTracker.flushResourceBarriers(this);
+	resourceStateTracker.flushResourceBarriers(commandList);
 }
 
 void dx_command_list::setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ID3D12DescriptorHeap* heap)
@@ -1133,4 +1154,3 @@ void dx_command_list::setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ID3
 
 	}
 }
-

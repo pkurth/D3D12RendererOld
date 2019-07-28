@@ -100,6 +100,7 @@
     <ClCompile Include="src\brdf.cpp" />
     <ClCompile Include="src\game.cpp" />
     <ClCompile Include="src\generate_mips.cpp" />
+    <ClCompile Include="src\graphics.cpp" />
     <ClCompile Include="src\math.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -115,6 +116,7 @@
     <ClCompile Include="src\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="shaders\camera.h" />
     <ClInclude Include="shaders\pbr_common.h" />
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\camera.h" />
@@ -122,6 +124,7 @@
     <ClInclude Include="src\dynamic_descriptor_heap.h" />
     <ClInclude Include="src\brdf.h" />
     <ClInclude Include="src\generate_mips.h" />
+    <ClInclude Include="src\graphics.h" />
     <ClInclude Include="src\model.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\render_target.h" />
@@ -153,6 +156,10 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="shaders\light_ambient_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="shaders\light_directional_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>

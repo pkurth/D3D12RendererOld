@@ -3,6 +3,7 @@
 #include "commands.h"
 #include "error.h"
 #include "model.h"
+#include "graphics.h"
 
 
 void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
@@ -79,7 +80,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 			dx_texture albedoTexture;
 			albedoTexture.initialize(device, texture_usage_render_target, albedoTextureDesc, &albedoClearValue);
-			gBufferRT.attachTexture(render_target_attachment_point_color0, albedoTexture);
+			gbufferRT.attachColorTexture(0, albedoTexture);
 		}
 
 		// Emission.
@@ -97,8 +98,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 			dx_texture hdrTexture;
 			hdrTexture.initialize(device, texture_usage_render_target, hdrTextureDesc, &hdrClearValue);
-			gBufferRT.attachTexture(render_target_attachment_point_color1, hdrTexture);
-			lightingRT.attachTexture(render_target_attachment_point_color0, hdrTexture);
+			gbufferRT.attachColorTexture(1, hdrTexture);
+			lightingRT.attachColorTexture(0, hdrTexture);
 		}
 
 		// Normals.
@@ -116,7 +117,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 			dx_texture normalTexture;
 			normalTexture.initialize(device, texture_usage_render_target, normalMetalnessRoughnessTextureDesc, &normalClearValue);
-			gBufferRT.attachTexture(render_target_attachment_point_color2, normalTexture);
+			gbufferRT.attachColorTexture(2, normalTexture);
 		}
 
 		// Depth.
@@ -132,8 +133,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			dx_texture depthTexture;
 			depthTexture.initialize(device, texture_usage_render_target, depthDesc, &depthClearValue);
 
-			gBufferRT.attachTexture(render_target_attachment_point_depthstencil, depthTexture);
-			lightingRT.attachTexture(render_target_attachment_point_depthstencil, depthTexture);
+			gbufferRT.attachDepthStencilTexture(depthTexture);
+			lightingRT.attachDepthStencilTexture(depthTexture);
 		}
 	}
 
@@ -199,32 +200,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
 		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
-		pipelineStateStream.dsvFormat = gBufferRT.depthStencilFormat;
-		pipelineStateStream.rtvFormats = gBufferRT.renderTargetFormat;
-		pipelineStateStream.rasterizer = CD3DX12_RASTERIZER_DESC(
-			D3D12_FILL_MODE_SOLID,
-			D3D12_CULL_MODE_NONE, // Disable backface culling for the leaves.
-			TRUE, // Righthanded coordinate system.
-			D3D12_DEFAULT_DEPTH_BIAS,
-			D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
-			D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
-			TRUE,
-			FALSE,
-			FALSE,
-			0,
-			D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
-		);
-
-		CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc(D3D12_DEFAULT);
-		depthStencilDesc.StencilEnable = true;
-		// Set front and back faces, since both are rendered (backface culling is disabled).
-		depthStencilDesc.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-		depthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
-		depthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		depthStencilDesc.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-		depthStencilDesc.BackFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
-		depthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		pipelineStateStream.depthStencilDesc = depthStencilDesc;
+		pipelineStateStream.dsvFormat = gbufferRT.depthStencilFormat;
+		pipelineStateStream.rtvFormats = gbufferRT.renderTargetFormat;
+		pipelineStateStream.rasterizer = noBackfaceCullRasterizerDesc;
+		pipelineStateStream.depthStencilDesc = alwaysReplaceStencilDesc;
 
 		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
 			sizeof(pipeline_state_stream), &pipelineStateStream
@@ -292,24 +271,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
 		pipelineStateStream.dsvFormat = lightingRT.depthStencilFormat;
 		pipelineStateStream.rtvFormats = lightingRT.renderTargetFormat;
-		pipelineStateStream.rasterizer = CD3DX12_RASTERIZER_DESC(
-			D3D12_FILL_MODE_SOLID,
-			D3D12_CULL_MODE_BACK,
-			TRUE,
-			D3D12_DEFAULT_DEPTH_BIAS,
-			D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
-			D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
-			TRUE,
-			FALSE,
-			FALSE,
-			0,
-			D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
-		);
-
-		CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc(D3D12_DEFAULT);
-		depthStencilDesc.StencilEnable = true;
-		depthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NOT_EQUAL;
-		pipelineStateStream.depthStencilDesc = depthStencilDesc;
+		pipelineStateStream.rasterizer = defaultRasterizerDesc;
+		pipelineStateStream.depthStencilDesc = notEqualStencilDesc;
 
 		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
 			sizeof(pipeline_state_stream), &pipelineStateStream
@@ -381,20 +344,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		depthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP; // Don't modify stencil.
 		pipelineStateStream.depthStencilDesc = depthStencilDesc;
 
-		// Additive blending.
-		CD3DX12_BLEND_DESC blendDesc(D3D12_DEFAULT);
-		blendDesc.AlphaToCoverageEnable = false;
-		blendDesc.IndependentBlendEnable = false;
-		blendDesc.RenderTarget[0].BlendEnable = true;
-		blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-		blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-		blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
-		pipelineStateStream.blend = blendDesc;
+		pipelineStateStream.blend = additiveBlendDesc;
 
 		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
 			sizeof(pipeline_state_stream), &pipelineStateStream
 		};
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&directionalLightPipelineState)));
+	}
+
+	// Ambient light.
+	{
+
 	}
 
 	// Present.
@@ -416,7 +376,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-		rootParameters[0].InitAsConstants(2, 0);
+		rootParameters[0].InitAsConstants(2, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
@@ -473,7 +433,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	resizeDepthBuffer(width, height);
 
 	camera.fov = DirectX::XMConvertToRadians(70.f);
-	camera.position = vec3(0.f, 0.f, 5.f);
+	camera.position = vec3(0.f, 2.f, 5.f);
 	camera.rotation = quat::Identity;
 	camera.update(width, height, 0.f);
 }
@@ -533,24 +493,29 @@ void dx_game::update(float dt)
 	totalTime += dt;
 	float angle = totalTime * 45.f;
 	vec3 rotationAxis(0, 1, 0);
-	modelMatrix = mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
+	modelMatrix = mat4::Identity;// mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
 
 	camera.update(width, height, dt);
 }
 
-void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv)
+void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
 {
-	D3D12_CPU_DESCRIPTOR_HANDLE dsv = dsvHeap->GetCPUDescriptorHandleForHeapStart();
+	// Currently not needed, since we don't use a depth buffer for the screen.
+	//D3D12_CPU_DESCRIPTOR_HANDLE dsv = dsvHeap->GetCPUDescriptorHandleForHeapStart();
 
+	camera_cb cameraCB;
+	camera.fillConstantBuffer(cameraCB);
+
+	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress = commandList->uploadDynamicConstantBuffer(cameraCB);
 
 	commandList->setViewport(viewport);
 	commandList->setScissor(scissorRect);
 
 
 	// Render to GBuffer.
-	commandList->setRenderTarget(gBufferRT);
+	commandList->setRenderTarget(gbufferRT);
 	// No need to clear color, since we mark valid pixels with the stencil.
-	commandList->clearDepthAndStencil(gBufferRT.attachments[render_target_attachment_point_depthstencil].getDepthStencilView());
+	commandList->clearDepthAndStencil(gbufferRT.depthStencilAttachment.getDepthStencilView());
 	commandList->setStencilReference(1);
 
 	// Geometry.
@@ -594,14 +559,18 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		mat4 vp = camera.projectionMatrix;
-		commandList->setGraphics32BitConstants(0, vp);
+
+		mat4 view = camera.viewMatrix;
+		view(3, 0) = 0.f; view(3, 1) = 0.f; view(3, 2) = 0.f;
+		mat4 skyVP = view * camera.projectionMatrix;
+
+		commandList->setGraphics32BitConstants(0, skyVP);
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 		srvDesc.Format = scene.cubemap.resource->GetDesc().Format;
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-		srvDesc.TextureCube.MipLevels = (UINT)-1; // Use all mips.
+		srvDesc.TextureCube.MipLevels = (uint32)-1; // Use all mips.
 
 		commandList->setVertexBuffer(0, scene.skyMesh.vertexBuffer);
 		commandList->setIndexBuffer(scene.skyMesh.indexBuffer);
@@ -617,16 +586,16 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		commandList->setShaderResourceView(0, 0, gBufferRT.attachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(0, 1, gBufferRT.attachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(0, 0, gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(0, 1, gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->drawIndexed(3, 1, 0, 0, 0);
 	}
 
 
 	// Resolve to screen.
-	// No need to clear RTV, since we are blitting the whole lighting buffer.
-	commandList->setScreenRenderTarget(&rtv, 1, &dsv);
+	// No need to clear RTV (or for a depth buffer), since we are blitting the whole lighting buffer.
+	commandList->setScreenRenderTarget(&screenRTV, 1, nullptr);
 
 	// Present.
 	{
@@ -645,7 +614,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		};
 
 		commandList->setGraphics32BitConstants(0, presentCB);
-		commandList->setShaderResourceView(1, 0, lightingRT.attachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(1, 0, lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->drawIndexed(3, 1, 0, 0, 0);
 	}

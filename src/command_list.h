@@ -5,12 +5,11 @@
 #include "texture.h"
 #include "resource_state_tracker.h"
 #include "dynamic_descriptor_heap.h"
+#include "upload_buffer.h"
 #include "generate_mips.h"
 #include "brdf.h"
 #include "model.h"
 #include "render_target.h"
-
-
 
 class dx_command_list
 {
@@ -55,6 +54,15 @@ public:
 	template<typename T> void setGraphics32BitConstants(uint32 rootParameterIndex, const T& constants);
 	void setCompute32BitConstants(uint32 rootParameterIndex, uint32 numConstants, const void* constants);
 	template<typename T> void setCompute32BitConstants(uint32 rootParameterIndex, const T& constants);
+
+	D3D12_GPU_VIRTUAL_ADDRESS uploadDynamicConstantBuffer(uint32 sizeInBytes, const void* data);
+	template <typename T> D3D12_GPU_VIRTUAL_ADDRESS uploadDynamicConstantBuffer(const T& data);
+
+	D3D12_GPU_VIRTUAL_ADDRESS uploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, uint32 sizeInBytes, const void* data);
+	template <typename T> D3D12_GPU_VIRTUAL_ADDRESS uploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, const T& data);
+
+	void setGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+
 	void setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ID3D12DescriptorHeap* heap);
 
 	void setShaderResourceView(uint32 rootParameterIndex,
@@ -101,7 +109,7 @@ public:
 
 	// End frame.
 	void reset();
-	bool close(dx_command_list* pendingCommandList);
+	bool close(ComPtr<ID3D12GraphicsCommandList2> pendingCommandList);
 	void close();
 
 	inline ComPtr<ID3D12GraphicsCommandList2> getD3D12CommandList() const { return commandList; }
@@ -126,6 +134,7 @@ private:
 
 	std::vector<ComPtr<ID3D12Object>>	trackedObjects;
 
+	dx_upload_buffer					uploadBuffer;
 	dx_resource_state_tracker			resourceStateTracker;
 	dx_dynamic_descriptor_heap			dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
 	ID3D12DescriptorHeap*				descriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
@@ -188,13 +197,25 @@ inline dx_mesh dx_command_list::createMesh(const cpu_mesh<vertex_t>& model)
 template<typename T>
 inline void dx_command_list::setGraphics32BitConstants(uint32 rootParameterIndex, const T& constants)
 {
-	static_assert(sizeof(T) % sizeof(uint32) == 0, "Size of type must be a multiple of 4 bytes");
+	static_assert(sizeof(T) % sizeof(uint32) == 0, "Size of type must be a multiple of 4 bytes.");
 	setGraphics32BitConstants(rootParameterIndex, sizeof(T) / sizeof(uint32), &constants);
 }
 
 template<typename T>
 inline void dx_command_list::setCompute32BitConstants(uint32 rootParameterIndex, const T& constants)
 {
-	static_assert(sizeof(T) % sizeof(uint32) == 0, "Size of type must be a multiple of 4 bytes");
+	static_assert(sizeof(T) % sizeof(uint32) == 0, "Size of type must be a multiple of 4 bytes.");
 	setCompute32BitConstants(rootParameterIndex, sizeof(T) / sizeof(uint32), &constants);
+}
+
+template<typename T>
+inline D3D12_GPU_VIRTUAL_ADDRESS dx_command_list::uploadDynamicConstantBuffer(const T& data)
+{
+	return uploadDynamicConstantBuffer(sizeof(T), &data);
+}
+
+template<typename T>
+inline D3D12_GPU_VIRTUAL_ADDRESS dx_command_list::uploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, const T& data)
+{
+	return uploadAndSetGraphicsDynamicConstantBuffer(rootParameterIndex, sizeof(T), &data);
 }

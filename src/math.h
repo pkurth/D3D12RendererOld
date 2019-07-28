@@ -16,5 +16,7 @@ inline T bucketize(T value, size_t alignment)
 	return (T)((value + alignment - 1) / alignment);
 }
 
+#define padded_sizeof(str, paddedTo) ((sizeof(str) + (paddedTo - 1)) & ~(paddedTo - 1))
+
 
 

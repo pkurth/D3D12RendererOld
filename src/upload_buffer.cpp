@@ -45,7 +45,7 @@ dx_upload_buffer::memory_page* dx_upload_buffer::requestPage()
 	}
 	else
 	{
-		pages.push_back(memory_page(device, pageSize));
+		pages.emplace_back(device, pageSize);
 		page = &pages.back();
 	}
 
@@ -73,9 +73,10 @@ dx_upload_buffer::memory_page::memory_page(ComPtr<ID3D12Device2> device, uint64 
 
 dx_upload_buffer::memory_page::~memory_page()
 {
-	resource->Unmap(0, nullptr);
-	cpuBasePtr = nullptr;
-	gpuBasePtr = D3D12_GPU_VIRTUAL_ADDRESS(0);
+	if (cpuBasePtr)
+	{
+		resource->Unmap(0, nullptr);
+	}
 }
 
 bool dx_upload_buffer::memory_page::hasSpace(uint64 sizeInBytes, uint64 alignment) const
@@ -94,7 +95,7 @@ dx_upload_buffer::allocation dx_upload_buffer::memory_page::allocate(uint64 size
 	currentOffset = alignTo(currentOffset, alignment);
 
 	allocation result;
-	result.cpu = (uint8_t*)cpuBasePtr + currentOffset;
+	result.cpu = (uint8*)cpuBasePtr + currentOffset;
 	result.gpu = gpuBasePtr + currentOffset;
 
 	currentOffset += alignedSize;

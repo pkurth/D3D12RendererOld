@@ -1,6 +1,7 @@
 
 static const float pi = 3.141592653589793238462643383279f;
 
+
 static float3 fresnelSchlick(float cosTheta, float3 F0)
 {
 	return F0 + (float3(1.f, 1.f, 1.f) - F0) * pow(1.f - cosTheta, 5.f);
