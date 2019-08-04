@@ -81,6 +81,18 @@ public:
 		uint32 numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
 		const D3D12_UNORDERED_ACCESS_VIEW_DESC* uav = nullptr);
 
+	void bindCubemap(uint32 rootParameterIndex, uint32 descriptorOffset, dx_texture& cubemap,
+		D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format = cubemap.resource->GetDesc().Format;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+		srvDesc.TextureCube.MipLevels = (uint32)-1; // Use all mips.
+
+		setShaderResourceView(rootParameterIndex, descriptorOffset, cubemap, stateAfter, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
+	}
+
 	// Input assembly.
 	void setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology);
 	void setVertexBuffer(uint32 slot, dx_vertex_buffer& buffer);

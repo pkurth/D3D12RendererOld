@@ -1,14 +1,14 @@
 #include "pbr_common.h"
+#include "normals.h"
 
 struct ps_input
 {
 	float2 uv : TEXCOORDS;
+	float3 V  : VIEWDIR;
 };
 
 
-SamplerState cubemapSampler				: register(s0);
-SamplerState brdfSampler				: register(s1);
-SamplerState gbufferSampler				: register(s2);
+SamplerState linearClampSampler			: register(s0);	
 
 // PBR.
 TextureCube<float4> irradianceTexture	: register(t0);
@@ -17,17 +17,18 @@ Texture2D<float4> brdf					: register(t2);
 
 // GBuffer.
 Texture2D<float4> albedos				: register(t3);
-Texture2D<float4> normals				: register(t4);
+Texture2D<float4> normalsRoughMetal		: register(t4);
 
 
 float4 main(ps_input IN) : SV_TARGET
 {
-	float3 N = normals.Sample(gbufferSampler, IN.uv).xyz;
-	float3 V = float3(1,0,0);
-	float3 albedo = albedos.Sample(gbufferSampler, IN.uv).rgb;
+	float4 NRM = normalsRoughMetal.Sample(linearClampSampler, IN.uv);
+	float3 N = decodeNormal(NRM.xy);
+	float3 V = normalize(-IN.V);
+	float3 albedo = albedos.Sample(linearClampSampler, IN.uv).rgb;
 	float3 ao = float3(1.f, 1.f, 1.f);
-	float metalness = 0.f;
-	float roughness = 0.8f;
+	float roughness = clamp(NRM.z, 0.01f, 0.99f);
+	float metalness = NRM.w;
 
 	// Common.
 	float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metalness);
@@ -37,7 +38,7 @@ float4 main(ps_input IN) : SV_TARGET
 	kD *= 1.f - metalness;
 
 	// Diffuse.
-	float3 irradiance = irradianceTexture.Sample(cubemapSampler, N).rgb;
+	float3 irradiance = irradianceTexture.Sample(linearClampSampler, N).rgb;
 	float3 diffuse = irradiance * albedo;
 
 	// Specular.
@@ -46,8 +47,8 @@ float4 main(ps_input IN) : SV_TARGET
 	environmentTexture.GetDimensions(0, width, height, numMipLevels);
 	float lod = roughness * float(numMipLevels - 1);
 
-	float3 prefilteredColor = environmentTexture.SampleLevel(cubemapSampler, R, lod).rgb;
-	float2 envBRDF = brdf.Sample(brdfSampler, float2(roughness, max(dot(N, V), 0.f))).rg;
+	float3 prefilteredColor = environmentTexture.SampleLevel(linearClampSampler, R, lod).rgb;
+	float2 envBRDF = brdf.Sample(linearClampSampler, float2(roughness, max(dot(N, V), 0.f))).rg;
 	float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
 
 	float3 ambient = (kD * diffuse + specular) * ao;

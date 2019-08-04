@@ -1,7 +1,6 @@
 struct ps_input
 {
 	float2 uv	: TEXCOORDS;
-	//float3 V		: VIEWDIR;
 };
 
 struct present_cb
@@ -10,7 +9,7 @@ struct present_cb
 	float standardNits;
 };
 
-ConstantBuffer<present_cb> presentCB : register(b0);
+ConstantBuffer<present_cb> present : register(b1);
 
 #define SDR 0
 #define HDR 1
@@ -67,14 +66,14 @@ float4 main(ps_input IN) : SV_TARGET
 {
 	float4 scene = tex.Sample(texSampler, IN.uv);
 
-	if (presentCB.displayMode == SDR)
+	if (present.displayMode == SDR)
 	{
 		scene.rgb = linearToSRGB(scene.rgb);
 	}
-	else if (presentCB.displayMode == HDR)
+	else if (present.displayMode == HDR)
 	{
 		const float st2084max = 10000.f;
-		const float hdrScalar = presentCB.standardNits / st2084max;
+		const float hdrScalar = present.standardNits / st2084max;
 
 		// The HDR scene is in Rec.709, but the display is Rec.2020.
 		scene.rgb = rec709ToRec2020(scene.rgb);

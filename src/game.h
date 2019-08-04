@@ -7,15 +7,24 @@
 #include "math.h"
 #include "camera.h"
 #include "render_target.h"
+#include "material.h"
 
+#define GEOMETRY_ROOTPARAM_CAMERA	0
+#define GEOMETRY_ROOTPARAM_MODEL	1
+#define GEOMETRY_ROOTPARAM_TEXTURES	2
+
+#define SKY_ROOTPARAM_VP			0
+#define SKY_ROOTPARAM_TEXTURE		1
+
+#define AMBIENT_ROOTPARAM_CAMERA	0
+#define AMBIENT_ROOTPARAM_TEXTURES	1
 
 struct scene_data
 {
-	std::vector<dx_texture> textures;
+	std::vector<dx_material> materials;
 	std::vector<dx_mesh> meshes;
 	
 	dx_mesh skyMesh;
-	dx_texture equirectangular;
 	dx_texture cubemap;
 	dx_texture irradiance;
 	dx_texture prefilteredEnvironment;

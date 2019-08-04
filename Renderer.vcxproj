@@ -117,6 +117,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="shaders\camera.h" />
+    <ClInclude Include="shaders\normals.h" />
     <ClInclude Include="shaders\pbr_common.h" />
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\camera.h" />
@@ -125,6 +126,7 @@
     <ClInclude Include="src\brdf.h" />
     <ClInclude Include="src\generate_mips.h" />
     <ClInclude Include="src\graphics.h" />
+    <ClInclude Include="src\material.h" />
     <ClInclude Include="src\model.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\render_target.h" />

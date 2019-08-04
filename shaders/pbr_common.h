@@ -1,6 +1,17 @@
 
 static const float pi = 3.141592653589793238462643383279f;
 
+static const float3 ironAlbedo =		float3(0.560f, 0.570f, 0.580f);
+static const float3 silverAlbedo =		float3(0.972f, 0.960f, 0.915f);
+static const float3 aluminumAlbedo =	float3(0.913f, 0.921f, 0.925f);
+static const float3 goldAlbedo =		float3(1.000f, 0.766f, 0.336f);
+static const float3 copperAlbedo =		float3(0.955f, 0.637f, 0.538f);
+static const float3 chromiumAlbedo =	float3(0.550f, 0.556f, 0.554f);
+static const float3 nickelAlbedo =		float3(0.660f, 0.609f, 0.526f);
+static const float3 titaniumAlbedo =	float3(0.542f, 0.497f, 0.449f);
+static const float3 cobaltAlbedo =		float3(0.662f, 0.655f, 0.634f);
+static const float3 platinumAlbedo =	float3(0.672f, 0.637f, 0.585f);
+
 
 static float3 fresnelSchlick(float cosTheta, float3 F0)
 {

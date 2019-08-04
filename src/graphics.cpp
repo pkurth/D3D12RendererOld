@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "common.h"
 #include "graphics.h"
 
 CD3DX12_BLEND_DESC alphaBlendDesc;
@@ -47,3 +48,21 @@ void initializeCommonGraphicsItems()
 	notEqualStencilDesc.StencilEnable = true;
 	notEqualStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NOT_EQUAL;
 }
+
+CD3DX12_STATIC_SAMPLER_DESC staticLinearClampSampler(uint32 shaderRegister)
+{
+	return CD3DX12_STATIC_SAMPLER_DESC(shaderRegister,
+		D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+};
+
+CD3DX12_STATIC_SAMPLER_DESC staticLinearWrapSampler(uint32 shaderRegister)
+{
+	return CD3DX12_STATIC_SAMPLER_DESC(shaderRegister,
+		D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+};

@@ -1,6 +1,6 @@
 #include "camera.h"
 
-ConstantBuffer<camera_cb> cameraCB : register(b0);
+ConstantBuffer<camera_cb> camera : register(b0);
 
 struct vs_input
 {
@@ -24,7 +24,7 @@ vs_output main(vs_input IN)
 	float v = 1.f - (y * 0.5f + 0.5f);
 	OUT.position = float4(x, y, 0.f, 1.f);
 	OUT.uv = float2(u, v);
-	OUT.V = float3(1, 1, 1);// restoreWorldDirection(cameraCB.invVP, OUT.uv);
+	OUT.V = restoreWorldDirection(camera.invVP, OUT.uv, camera.position.xyz);
 
 	return OUT;
 }

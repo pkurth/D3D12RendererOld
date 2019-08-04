@@ -1,11 +1,12 @@
-struct model_view_projection_cb
+#include "camera.h"
+
+struct model_cb
 {
-	matrix m;
-	matrix v;
-	matrix p;
+	float4x4 m;
 };
 
-ConstantBuffer<model_view_projection_cb> modelViewProjectionCB : register(b0);
+ConstantBuffer<camera_cb> camera : register(b0);
+ConstantBuffer<model_cb> model : register(b1);
 
 
 struct vs_input
@@ -26,9 +27,9 @@ vs_output main(vs_input IN)
 {
 	vs_output OUT;
 
-	matrix mvp = mul(mul(modelViewProjectionCB.p, modelViewProjectionCB.v), modelViewProjectionCB.m);
+	matrix mvp = mul(camera.vp, model.m);
 	OUT.position = mul(mvp, float4(IN.position, 1.f));
-	OUT.normal = mul(modelViewProjectionCB.m, float4(IN.normal, 0.f)).xyz;
+	OUT.normal = mul(model.m, float4(IN.normal, 0.f)).xyz;
 	OUT.uv = IN.uv;
 
 	return OUT;

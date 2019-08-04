@@ -8,20 +8,26 @@
 
 void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 {
-	cpu_mesh_group<vertex_3PUN> model;
-	model.loadFromFile("res/big_oak.obj");
-
 	dx_command_queue& copyCommandQueue = dx_command_queue::copyCommandQueue;
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
 
-	result.textures.resize(model.meshes.size());
+	//cpu_mesh_group<vertex_3PUN> model;
+	//model.loadFromFile("res/big_oak.obj");
+
+	/*result.textures.resize(model.meshes.size());
 	for (uint32 i = 0; i < model.meshes.size(); ++i)
 	{
 		cpu_mesh<vertex_3PUN>& mesh = model.meshes[i];
 		result.meshes.push_back(commandList->createMesh(mesh));
 		commandList->loadTextureFromFile(result.textures[i], mesh.material.albedo, texture_usage_albedo);
-	}
+	}*/
+
+	result.materials.resize(1);
+	result.meshes.push_back(commandList->createMesh(cpu_mesh<vertex_3PUN>::sphere(41, 41, 2.f)));
+	commandList->loadTextureFromFile(result.materials[0].albedo, L"res/rusted_iron/albedo.png", texture_usage_albedo);
+	commandList->loadTextureFromFile(result.materials[0].roughMetal, L"res/rusted_iron/roughMetal.png", texture_usage_roughness);
+	
 
 	cpu_mesh<vertex_3P> skybox = cpu_mesh<vertex_3P>::cube(1.f, true);
 	result.skyMesh = commandList->createMesh(skybox);
@@ -29,11 +35,12 @@ void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 	cpu_mesh<vertex_3PUN> quad = cpu_mesh<vertex_3PUN>::quad();
 	result.quad = commandList->createMesh(quad);
 
-	commandList->loadTextureFromFile(result.equirectangular, L"res/pano.hdr", texture_usage_albedo);
-	commandList->convertEquirectangularToCubemap(result.equirectangular, result.cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
-	//commandList->createIrradianceMap(result.cubemap, result.irradiance);
-	//commandList->prefilterEnvironmentMap(result.cubemap, result.prefilteredEnvironment);
-	//commandList->integrateBRDF(result.brdf);
+	dx_texture equirectangular;
+	commandList->loadTextureFromFile(equirectangular, L"res/leadenhall_market_4k.hdr", texture_usage_albedo);
+	commandList->convertEquirectangularToCubemap(equirectangular, result.cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
+	commandList->createIrradianceMap(result.cubemap, result.irradiance);
+	commandList->prefilterEnvironmentMap(result.cubemap, result.prefilteredEnvironment, 256);
+	commandList->integrateBRDF(result.brdf);
 
 	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);
@@ -160,17 +167,14 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 
-		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-		rootParameters[0].InitAsConstants(16 * 3, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // 4 * 16 floats (mat4).
-		rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
+		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
+		rootParameters[GEOMETRY_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
+		rootParameters[GEOMETRY_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
+		rootParameters[GEOMETRY_ROOTPARAM_TEXTURES].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Material textures.
 
-		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
-			D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
-			D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-			D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-			D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearWrapSampler(0);
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.Flags = rootSignatureFlags;
@@ -233,14 +237,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-		rootParameters[0].InitAsConstants(16, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // 1 matrix.
-		rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[SKY_ROOTPARAM_VP].InitAsConstants(16, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // 1 matrix.
+		rootParameters[SKY_ROOTPARAM_TEXTURE].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
 
-		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
-			D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
-			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-			D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.Flags = rootSignatureFlags;
@@ -280,17 +280,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&skyPipelineState)));
 	}
 
+	ComPtr<ID3DBlob> fullscreenTriangleVertexShaderBlob;
+	checkResult(D3DReadFileToBlob(L"shaders/bin/fullscreen_triangle_vs.cso", &fullscreenTriangleVertexShaderBlob));
+
 	// Directional Light.
 	{
-		ComPtr<ID3DBlob> vertexShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/fullscreen_triangle_vs.cso", &vertexShaderBlob));
 		ComPtr<ID3DBlob> pixelShaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/light_directional_ps.cso", &pixelShaderBlob));
 
 		// Root signature.
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
@@ -298,14 +298,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[1];
-		rootParameters[0].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
+		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
+		rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
 
-		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
-			D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
-			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-			D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.Flags = rootSignatureFlags;
@@ -331,7 +328,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		pipelineStateStream.rootSignature = directionalLightRootSignature.rootSignature.Get();
 		pipelineStateStream.inputLayout = { nullptr, 0 };
 		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(fullscreenTriangleVertexShaderBlob.Get());
 		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
 		pipelineStateStream.rtvFormats = lightingRT.renderTargetFormat;
 		pipelineStateStream.dsvFormat = lightingRT.depthStencilFormat;
@@ -354,7 +351,68 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	// Ambient light.
 	{
+		ComPtr<ID3DBlob> pixelShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/light_ambient_ps.cso", &pixelShaderBlob));
 
+		// Root signature.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 5, 0);
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		rootParameters[AMBIENT_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
+		rootParameters[AMBIENT_ROOTPARAM_TEXTURES].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.pParameters = rootParameters;
+		rootSignatureDesc.NumParameters = arraysize(rootParameters);
+		rootSignatureDesc.pStaticSamplers = &sampler;
+		rootSignatureDesc.NumStaticSamplers = 1;
+		ambientLightRootSignature.initialize(device, rootSignatureDesc);
+
+		struct pipeline_state_stream
+		{
+			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
+			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
+			CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC blend;
+		} pipelineStateStream;
+
+		pipelineStateStream.rootSignature = ambientLightRootSignature.rootSignature.Get();
+		pipelineStateStream.inputLayout = { nullptr, 0 };
+		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(fullscreenTriangleVertexShaderBlob.Get());
+		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+		pipelineStateStream.rtvFormats = lightingRT.renderTargetFormat;
+		pipelineStateStream.dsvFormat = lightingRT.depthStencilFormat;
+
+		CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc(D3D12_DEFAULT);
+		depthStencilDesc.DepthEnable = false; // Don't do depth-check.
+		depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Don't write to depth (or stencil) buffer.
+		depthStencilDesc.StencilEnable = true;
+		depthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL; // Write where geometry is.
+		depthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP; // Don't modify stencil.
+		pipelineStateStream.depthStencilDesc = depthStencilDesc;
+
+		pipelineStateStream.blend = additiveBlendDesc;
+
+		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+			sizeof(pipeline_state_stream), &pipelineStateStream
+		};
+		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&ambientLightPipelineState)));
 	}
 
 	// Present.
@@ -367,7 +425,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		// Root signature.
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
@@ -375,9 +432,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-		rootParameters[0].InitAsConstants(2, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
-		rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
+		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
+		rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
+		rootParameters[1].InitAsConstants(2, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Present params.
+		rootParameters[2].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Texture.
 
 		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
 			D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
@@ -527,22 +585,15 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		// while the pipeline state stores the input assembly type (points, lines, triangles, patches).
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		struct cb
-		{
-			mat4 modelMatrix;
-			mat4 viewMatrix;
-			mat4 projMatrix;
-		} c = {
-			modelMatrix, camera.viewMatrix, camera.projectionMatrix
-		};
-
-		commandList->setGraphics32BitConstants(0, c);
+		commandList->setGraphicsDynamicConstantBuffer(GEOMETRY_ROOTPARAM_CAMERA, cameraCBAddress);
+		commandList->setGraphics32BitConstants(GEOMETRY_ROOTPARAM_MODEL, modelMatrix);
 
 		for (uint32 i = 0; i < scene.meshes.size(); ++i)
 		{
 			commandList->setVertexBuffer(0, scene.meshes[i].vertexBuffer);
 			commandList->setIndexBuffer(scene.meshes[i].indexBuffer);
-			commandList->setShaderResourceView(1, 0, scene.textures[i], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 0, scene.materials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 1, scene.materials[i].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			commandList->drawIndexed(scene.meshes[i].indexBuffer.numIndices, 1, 0, 0, 0);
 		}
@@ -564,21 +615,35 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		view(3, 0) = 0.f; view(3, 1) = 0.f; view(3, 2) = 0.f;
 		mat4 skyVP = view * camera.projectionMatrix;
 
-		commandList->setGraphics32BitConstants(0, skyVP);
-
-		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-		srvDesc.Format = scene.cubemap.resource->GetDesc().Format;
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-		srvDesc.TextureCube.MipLevels = (uint32)-1; // Use all mips.
+		commandList->setGraphics32BitConstants(SKY_ROOTPARAM_VP, skyVP);
 
 		commandList->setVertexBuffer(0, scene.skyMesh.vertexBuffer);
 		commandList->setIndexBuffer(scene.skyMesh.indexBuffer);
-		commandList->setShaderResourceView(1, 0, scene.cubemap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
+		commandList->bindCubemap(SKY_ROOTPARAM_TEXTURE, 0, scene.cubemap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->drawIndexed(scene.skyMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 	}
 
+
+	// Ambient light.
+	{
+		commandList->setPipelineState(ambientLightPipelineState);
+		commandList->setGraphicsRootSignature(ambientLightRootSignature);
+
+		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		commandList->setGraphicsDynamicConstantBuffer(AMBIENT_ROOTPARAM_CAMERA, cameraCBAddress);
+
+		commandList->bindCubemap(AMBIENT_ROOTPARAM_TEXTURES, 0, scene.irradiance, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->bindCubemap(AMBIENT_ROOTPARAM_TEXTURES, 1, scene.prefilteredEnvironment, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 2, scene.brdf, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 3, gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 4, gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		commandList->drawIndexed(3, 1, 0, 0, 0);
+	}
+
+#if 0
 	// Directional light.
 	{
 		commandList->setPipelineState(directionalLightPipelineState);
@@ -591,6 +656,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->drawIndexed(3, 1, 0, 0, 0);
 	}
+#endif
 
 
 	// Resolve to screen.
@@ -613,8 +679,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 			0, 0.f
 		};
 
-		commandList->setGraphics32BitConstants(0, presentCB);
-		commandList->setShaderResourceView(1, 0, lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setGraphics32BitConstants(1, presentCB);
+		commandList->setShaderResourceView(2, 0, lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->drawIndexed(3, 1, 0, 0, 0);
 	}

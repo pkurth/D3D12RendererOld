@@ -12,3 +12,5 @@ extern CD3DX12_DEPTH_STENCIL_DESC1 notEqualStencilDesc;
 
 
 void initializeCommonGraphicsItems();
+CD3DX12_STATIC_SAMPLER_DESC staticLinearClampSampler(uint32 shaderRegister);
+CD3DX12_STATIC_SAMPLER_DESC staticLinearWrapSampler(uint32 shaderRegister);

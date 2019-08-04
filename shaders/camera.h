@@ -2,7 +2,13 @@
 
 struct camera_cb
 {
-	matrix invVP;
+	float4x4 vp;
+	float4x4 v;
+	float4x4 p;
+	float4x4 invVP;
+	float4x4 invV;
+	float4x4 invP;
+	float4 position;
 };
 
 static float3 restoreViewSpacePosition(float4x4 invProj, float2 uv, float depth)
@@ -24,4 +30,9 @@ static float3 restoreWorldSpacePosition(float4x4 invViewProj, float2 uv, float d
 static float3 restoreViewDirection(float4x4 invProj, float2 uv)
 {
 	return restoreViewSpacePosition(invProj, uv, 1.f);
+}
+
+static float3 restoreWorldDirection(float4x4 invViewProj, float2 uv, float3 cameraPos)
+{
+	return restoreWorldSpacePosition(invViewProj, uv, 1.f) - cameraPos;
 }
