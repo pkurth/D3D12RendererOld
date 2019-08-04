@@ -12,21 +12,22 @@ void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
 
-	//cpu_mesh_group<vertex_3PUN> model;
-	//model.loadFromFile("res/big_oak.obj");
+	cpu_mesh_group<vertex_3PUN> model;
+	model.loadFromFile("res/cerberus/Cerberus_LP.FBX");
 
-	/*result.textures.resize(model.meshes.size());
+	result.materials.resize(model.meshes.size());
 	for (uint32 i = 0; i < model.meshes.size(); ++i)
 	{
 		cpu_mesh<vertex_3PUN>& mesh = model.meshes[i];
 		result.meshes.push_back(commandList->createMesh(mesh));
-		commandList->loadTextureFromFile(result.textures[i], mesh.material.albedo, texture_usage_albedo);
-	}*/
+		commandList->loadTextureFromFile(result.materials[i].albedo, L"res/cerberus/Cerberus_A.tga", texture_usage_albedo);
+		commandList->loadTextureFromFile(result.materials[i].roughMetal, L"res/cerberus/Cerberus_RM.tga", texture_usage_roughness);
+	}
 
-	result.materials.resize(1);
+	/*result.materials.resize(1);
 	result.meshes.push_back(commandList->createMesh(cpu_mesh<vertex_3PUN>::sphere(41, 41, 2.f)));
 	commandList->loadTextureFromFile(result.materials[0].albedo, L"res/rusted_iron/albedo.png", texture_usage_albedo);
-	commandList->loadTextureFromFile(result.materials[0].roughMetal, L"res/rusted_iron/roughMetal.png", texture_usage_roughness);
+	commandList->loadTextureFromFile(result.materials[0].roughMetal, L"res/rusted_iron/roughMetal.png", texture_usage_roughness);*/
 	
 
 	cpu_mesh<vertex_3P> skybox = cpu_mesh<vertex_3P>::cube(1.f, true);
@@ -551,7 +552,7 @@ void dx_game::update(float dt)
 	totalTime += dt;
 	float angle = totalTime * 45.f;
 	vec3 rotationAxis(0, 1, 0);
-	modelMatrix = mat4::Identity;// mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
+	modelMatrix = mat4::CreateScale(0.05f) * mat4::CreateRotationX(DirectX::XMConvertToRadians(-90.f)) * mat4::CreateTranslation(0.f, 0.f, -4.f);// mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
 
 	camera.update(width, height, dt);
 }

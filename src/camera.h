@@ -47,7 +47,7 @@ struct render_camera
 		//rotation = quat::CreateFromAxisAngle(vec3(0.f, 1.f, 0.f), time);
 
 
-		viewMatrix = mat4::CreateLookAt(position, vec3(0.f, 1.f, 0.f), vec3(0.f, 1.f, 0.f));// (mat4::CreateFromQuaternion(rotation) * mat4::CreateTranslation(position)).Invert();
+		viewMatrix = mat4::CreateLookAt(position, vec3(0.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f));// (mat4::CreateFromQuaternion(rotation) * mat4::CreateTranslation(position)).Invert();
 	}
 
 	void fillConstantBuffer(camera_cb& cb)
