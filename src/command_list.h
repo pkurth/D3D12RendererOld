@@ -37,7 +37,7 @@ public:
 	template <typename vertex_t> dx_mesh createMesh(const cpu_mesh<vertex_t>& model);
 
 	// Texture creation.
-	void loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_usage usage, bool genMips = true);
+	void loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips = true);
 	void copyTextureForReadback(dx_texture& texture, ComPtr<ID3D12Resource>& readbackBuffer, uint32 numMips = 0);
 	void convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
 	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32);

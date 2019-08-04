@@ -33,7 +33,7 @@ void initializeCommonGraphicsItems()
 	defaultRasterizerDesc.FrontCounterClockwise = TRUE; // Righthanded coordinate system.
 
 	noBackfaceCullRasterizerDesc = defaultRasterizerDesc;
-	noBackfaceCullRasterizerDesc.CullMode = D3D12_CULL_MODE_NONE; // Disable backface culling for the leaves.
+	noBackfaceCullRasterizerDesc.CullMode = D3D12_CULL_MODE_NONE; // Disable backface culling.
 
 	alwaysReplaceStencilDesc = CD3DX12_DEPTH_STENCIL_DESC1(D3D12_DEFAULT);
 	alwaysReplaceStencilDesc.StencilEnable = true;

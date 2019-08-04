@@ -7,5 +7,6 @@
 struct dx_material
 {
 	dx_texture albedo;
+	dx_texture normal;
 	dx_texture roughMetal;
 };

@@ -238,7 +238,7 @@ void dx_command_list::copyTextureSubresource(dx_texture& texture, uint32 firstSu
 	}
 }
 
-void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_usage usage, bool genMips)
+void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips)
 {
 	std::filesystem::path path(filename);
 	assert(std::filesystem::exists(path));
@@ -246,7 +246,7 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 	auto it = textureCache.find(filename);
 	if (it != textureCache.end())
 	{
-		texture.initialize(device, usage, it->second);
+		texture.initialize(device, it->second);
 	}
 	else
 	{
@@ -270,7 +270,7 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 			checkResult(DirectX::LoadFromWICFile(filename.c_str(), DirectX::WIC_FLAGS_NONE, &metadata, scratchImage));
 		}
 
-		if (usage == texture_usage_albedo)
+		if (type == texture_type_color)
 		{
 			metadata.format = DirectX::MakeSRGB(metadata.format);
 		}
@@ -297,7 +297,7 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 			textureDesc.MipLevels = 1;
 		}
 
-		texture.initialize(device, usage, textureDesc);
+		texture.initialize(device, textureDesc);
 
 		uint32 numMips = texture.resource->GetDesc().MipLevels;
 		dx_resource_state_tracker::addGlobalResourceState(texture.resource.Get(), D3D12_RESOURCE_STATE_COMMON, numMips);
@@ -464,7 +464,7 @@ void dx_command_list::generateMips(dx_texture& texture)
 	srvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
 
 	dx_texture tmpTexture;
-	tmpTexture.initialize(device, texture.usage, uavResource);
+	tmpTexture.initialize(device, uavResource);
 
 	for (uint32 srcMip = 0; srcMip < resourceDesc.MipLevels - 1u; )
 	{
@@ -563,7 +563,7 @@ void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangula
 		cubemapDesc.Format = format;
 	}
 
-	cubemap.initialize(device, equirectangular.usage, cubemapDesc);
+	cubemap.initialize(device, cubemapDesc);
 
 	cubemapDesc = CD3DX12_RESOURCE_DESC(cubemap.resource->GetDesc());
 
@@ -589,7 +589,7 @@ void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangula
 
 		dx_resource_state_tracker::addGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, 6 * numMips);
 
-		stagingTexture.initialize(device, cubemap.usage, stagingResource);
+		stagingTexture.initialize(device, stagingResource);
 
 		copyResource(stagingTexture, cubemap);
 	}
@@ -665,7 +665,7 @@ void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& i
 	irradianceDesc.DepthOrArraySize = 6;
 	irradianceDesc.MipLevels = 1;
 
-	irradiance.initialize(device, environment.usage, irradianceDesc);
+	irradiance.initialize(device, irradianceDesc);
 
 	irradianceDesc = CD3DX12_RESOURCE_DESC(irradiance.resource->GetDesc());
 
@@ -691,7 +691,7 @@ void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& i
 
 		dx_resource_state_tracker::addGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, 6);
 
-		stagingTexture.initialize(device, irradiance.usage, stagingResource);
+		stagingTexture.initialize(device, stagingResource);
 
 		copyResource(stagingTexture, irradiance);
 	}
@@ -755,7 +755,7 @@ void dx_command_list::prefilterEnvironmentMap(dx_texture& environment, dx_textur
 	prefilteredDesc.DepthOrArraySize = 6;
 	prefilteredDesc.MipLevels = 0;
 
-	prefiltered.initialize(device, environment.usage, prefilteredDesc);
+	prefiltered.initialize(device, prefilteredDesc);
 
 	prefilteredDesc = CD3DX12_RESOURCE_DESC(prefiltered.resource->GetDesc());
 
@@ -781,7 +781,7 @@ void dx_command_list::prefilterEnvironmentMap(dx_texture& environment, dx_textur
 
 		dx_resource_state_tracker::addGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, 6 * prefilteredDesc.MipLevels);
 
-		stagingTexture.initialize(device, prefiltered.usage, stagingResource);
+		stagingTexture.initialize(device, stagingResource);
 
 		copyResource(stagingTexture, prefiltered);
 	}
@@ -858,7 +858,7 @@ void dx_command_list::integrateBRDF(dx_texture& brdf, uint32 resolution)
 		DXGI_FORMAT_R16G16_FLOAT,
 		resolution, resolution, 1, 1);
 
-	brdf.initialize(device, texture_usage_albedo, desc);
+	brdf.initialize(device, desc);
 
 	desc = CD3DX12_RESOURCE_DESC(brdf.resource->GetDesc());
 
@@ -883,7 +883,7 @@ void dx_command_list::integrateBRDF(dx_texture& brdf, uint32 resolution)
 		));
 
 		dx_resource_state_tracker::addGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COMMON, 1);
-		stagingTexture.initialize(device, brdf.usage, stagingResource);
+		stagingTexture.initialize(device, stagingResource);
 	}
 
 	transitionBarrier(stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

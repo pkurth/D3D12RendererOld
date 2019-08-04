@@ -20,6 +20,14 @@ struct vertex_3PUN
 	vec3 normal;
 };
 
+struct vertex_3PUNT
+{
+	vec3 position;
+	vec2 uv;
+	vec3 normal;
+	vec3 tangent;
+};
+
 struct indexed_triangle32
 {
 	uint32 a, b, c;
@@ -33,6 +41,7 @@ struct cpu_render_material_desc
 
 defineHasMember(position);
 defineHasMember(normal);
+defineHasMember(tangent);
 defineHasMember(uv);
 
 template <typename vertex_t>
@@ -43,14 +52,16 @@ struct cpu_mesh
 
 	cpu_render_material_desc material;
 
-	void loadFromAssimp(const std::filesystem::path& parentPath, const aiScene* scene, uint32 meshIndex);
-	
 	static cpu_mesh quad(float radius = 1.f);
 	static cpu_mesh cube(float radius = 1.f, bool invertWindingOrder = false);
 	static cpu_mesh sphere(uint32 slices, uint32 rows, float radius = 1.f);
 	static cpu_mesh capsule(uint32 slices, uint32 rows, float height, float radius = 1.f);
 
 private:
+	template <typename vertex_t> friend struct cpu_mesh_group;
+
+	void loadFromAssimp(const std::filesystem::path& parentPath, const aiScene* scene, uint32 meshIndex);
+
 	void setPosition(vertex_t& v, vec3 p)
 	{
 		if constexpr (hasMember(vertex_t, position))
@@ -64,6 +75,14 @@ private:
 		if constexpr (hasMember(vertex_t, normal))
 		{
 			v.normal = n;
+		}
+	}
+
+	void setTangent(vertex_t& v, vec3 n)
+	{
+		if constexpr (hasMember(vertex_t, tangent))
+		{
+			v.tangent = n;
 		}
 	}
 
@@ -109,7 +128,7 @@ inline void cpu_mesh_group<vertex_t>::loadFromFile(const std::string& filename)
 		importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 80.0f);
 		importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, aiPrimitiveType_POINT | aiPrimitiveType_LINE);
 
-		uint32 preprocessFlags = aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_OptimizeGraph | aiProcess_ConvertToLeftHanded;
+		uint32 preprocessFlags = aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_OptimizeGraph | aiProcess_CalcTangentSpace;
 		scene = importer.ReadFile(path.string(), preprocessFlags);
 
 		if (scene)
@@ -141,6 +160,7 @@ inline void cpu_mesh<vertex_t>::loadFromAssimp(const std::filesystem::path& pare
 
 	vec3 position(0.f, 0.f, 0.f);
 	vec3 normal(0.f, 0.f, 0.f);
+	vec3 tangent(0.f, 0.f, 0.f);
 	vec2 uv(0.f, 0.f);
 
 	for (uint32 i = 0; i < mesh->mNumVertices; ++i)
@@ -153,6 +173,10 @@ inline void cpu_mesh<vertex_t>::loadFromAssimp(const std::filesystem::path& pare
 		{
 			normal = vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
 		}
+		if (mesh->HasTangentsAndBitangents())
+		{
+			tangent = vec3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
+		}
 		if (mesh->HasTextureCoords(0))
 		{
 			uv = vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y);
@@ -160,6 +184,7 @@ inline void cpu_mesh<vertex_t>::loadFromAssimp(const std::filesystem::path& pare
 
 		setPosition(vertices[i], position);
 		setNormal(vertices[i], normal);
+		setTangent(vertices[i], tangent);
 		setUV(vertices[i], uv);
 	}
 

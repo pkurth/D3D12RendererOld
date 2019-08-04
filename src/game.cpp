@@ -12,16 +12,17 @@ void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
 
-	cpu_mesh_group<vertex_3PUN> model;
+	cpu_mesh_group<vertex_3PUNT> model;
 	model.loadFromFile("res/cerberus/Cerberus_LP.FBX");
 
 	result.materials.resize(model.meshes.size());
 	for (uint32 i = 0; i < model.meshes.size(); ++i)
 	{
-		cpu_mesh<vertex_3PUN>& mesh = model.meshes[i];
+		cpu_mesh<vertex_3PUNT>& mesh = model.meshes[i];
 		result.meshes.push_back(commandList->createMesh(mesh));
-		commandList->loadTextureFromFile(result.materials[i].albedo, L"res/cerberus/Cerberus_A.tga", texture_usage_albedo);
-		commandList->loadTextureFromFile(result.materials[i].roughMetal, L"res/cerberus/Cerberus_RM.tga", texture_usage_roughness);
+		commandList->loadTextureFromFile(result.materials[i].albedo, L"res/cerberus/Cerberus_A.tga", texture_type_color);
+		commandList->loadTextureFromFile(result.materials[i].normal, L"res/cerberus/Cerberus_N.tga", texture_type_noncolor);
+		commandList->loadTextureFromFile(result.materials[i].roughMetal, L"res/cerberus/Cerberus_RM.tga", texture_type_noncolor);
 	}
 
 	/*result.materials.resize(1);
@@ -37,7 +38,7 @@ void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 	result.quad = commandList->createMesh(quad);
 
 	dx_texture equirectangular;
-	commandList->loadTextureFromFile(equirectangular, L"res/leadenhall_market_4k.hdr", texture_usage_albedo);
+	commandList->loadTextureFromFile(equirectangular, L"res/leadenhall_market_4k.hdr", texture_type_color);
 	commandList->convertEquirectangularToCubemap(equirectangular, result.cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
 	commandList->createIrradianceMap(result.cubemap, result.irradiance);
 	commandList->prefilterEnvironmentMap(result.cubemap, result.prefilteredEnvironment, 256);
@@ -87,7 +88,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			albedoClearValue.Color[3] = 0.f;
 
 			dx_texture albedoTexture;
-			albedoTexture.initialize(device, texture_usage_render_target, albedoTextureDesc, &albedoClearValue);
+			albedoTexture.initialize(device, albedoTextureDesc, &albedoClearValue);
 			gbufferRT.attachColorTexture(0, albedoTexture);
 		}
 
@@ -105,7 +106,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			hdrClearValue.Color[3] = 0.f;
 
 			dx_texture hdrTexture;
-			hdrTexture.initialize(device, texture_usage_render_target, hdrTextureDesc, &hdrClearValue);
+			hdrTexture.initialize(device, hdrTextureDesc, &hdrClearValue);
 			gbufferRT.attachColorTexture(1, hdrTexture);
 			lightingRT.attachColorTexture(0, hdrTexture);
 		}
@@ -121,10 +122,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			normalClearValue.Color[0] = 0.f;
 			normalClearValue.Color[1] = 0.f;
 			normalClearValue.Color[2] = 0.f;
-			normalClearValue.Color[3] = 1.f;
+			normalClearValue.Color[3] = 0.f;
 
 			dx_texture normalTexture;
-			normalTexture.initialize(device, texture_usage_render_target, normalMetalnessRoughnessTextureDesc, &normalClearValue);
+			normalTexture.initialize(device, normalMetalnessRoughnessTextureDesc, &normalClearValue);
 			gbufferRT.attachColorTexture(2, normalTexture);
 		}
 
@@ -139,7 +140,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			depthClearValue.DepthStencil = { 1.f, 0 };
 
 			dx_texture depthTexture;
-			depthTexture.initialize(device, texture_usage_render_target, depthDesc, &depthClearValue);
+			depthTexture.initialize(device, depthDesc, &depthClearValue);
 
 			gbufferRT.attachDepthStencilTexture(depthTexture);
 			lightingRT.attachDepthStencilTexture(depthTexture);
@@ -157,6 +158,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
 
@@ -168,7 +170,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 
-		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 		rootParameters[GEOMETRY_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
@@ -207,7 +209,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
 		pipelineStateStream.dsvFormat = gbufferRT.depthStencilFormat;
 		pipelineStateStream.rtvFormats = gbufferRT.renderTargetFormat;
-		pipelineStateStream.rasterizer = noBackfaceCullRasterizerDesc;
+		pipelineStateStream.rasterizer = defaultRasterizerDesc;
 		pipelineStateStream.depthStencilDesc = alwaysReplaceStencilDesc;
 
 		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
@@ -594,7 +596,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 			commandList->setVertexBuffer(0, scene.meshes[i].vertexBuffer);
 			commandList->setIndexBuffer(scene.meshes[i].indexBuffer);
 			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 0, scene.materials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 1, scene.materials[i].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 1, scene.materials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 2, scene.materials[i].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			commandList->drawIndexed(scene.meshes[i].indexBuffer.numIndices, 1, 0, 0, 0);
 		}

@@ -2,20 +2,16 @@
 
 #include "resource.h"
 
-enum texture_usage
+enum texture_type
 {
-	texture_usage_albedo,
-	texture_usage_normal,
-	texture_usage_metallic,
-	texture_usage_roughness,
-	texture_usage_height,
-	texture_usage_render_target,
+	texture_type_color,
+	texture_type_noncolor,
 };
 
 struct dx_texture : dx_resource
 {
-	void initialize(ComPtr<ID3D12Device2> device, texture_usage usage, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue = nullptr);
-	void initialize(ComPtr<ID3D12Device2> device, texture_usage usage, ComPtr<ID3D12Resource> resource);
+	void initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue = nullptr);
+	void initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource> resource);
 	void initialize(const dx_texture& other);
 
 	dx_texture() {}
@@ -39,8 +35,6 @@ struct dx_texture : dx_resource
 	{
 		return checkFormatSupport(D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL);
 	}
-
-	texture_usage usage;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE getRenderTargetView() { return renderTargetView; }
 	D3D12_CPU_DESCRIPTOR_HANDLE getDepthStencilView() { return depthStencilView; }

@@ -10,7 +10,6 @@ dx_texture::dx_texture(const dx_texture& other)
 {
 	this->depthStencilView = other.depthStencilView;
 	this->renderTargetView = other.renderTargetView;
-	this->usage = other.usage;
 	this->depthStencilView = other.depthStencilView;
 	this->renderTargetView = other.renderTargetView;
 }
@@ -21,17 +20,14 @@ dx_texture& dx_texture::operator=(const dx_texture& other)
 	this->device = other.device;
 	this->depthStencilView = other.depthStencilView;
 	this->renderTargetView = other.renderTargetView;
-	this->usage = other.usage;
 	this->depthStencilView = other.depthStencilView;
 	this->renderTargetView = other.renderTargetView;
 
 	return *this;
 }
 
-void dx_texture::initialize(ComPtr<ID3D12Device2> device, texture_usage usage, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue)
+void dx_texture::initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue)
 {
-	this->usage = usage;
-
 	dx_resource::initialize(device, resourceDesc, clearValue);
 	
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 &&
@@ -48,10 +44,8 @@ void dx_texture::initialize(ComPtr<ID3D12Device2> device, texture_usage usage, c
 	}
 }
 
-void dx_texture::initialize(ComPtr<ID3D12Device2> device, texture_usage usage, ComPtr<ID3D12Resource> resource)
+void dx_texture::initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource> resource)
 {
-	this->usage = usage;
-
 	dx_resource::initialize(device, resource);
 
 	D3D12_RESOURCE_DESC resourceDesc(resource->GetDesc());
@@ -72,7 +66,6 @@ void dx_texture::initialize(ComPtr<ID3D12Device2> device, texture_usage usage, C
 
 void dx_texture::initialize(const dx_texture& other)
 {
-	this->usage = other.usage;
 	this->device = other.device;
 	this->resource = other.resource;
 	this->shaderResourceViews = other.shaderResourceViews;
