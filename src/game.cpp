@@ -22,14 +22,8 @@ void loadScene(ComPtr<ID3D12Device2> device, scene_data& result)
 		result.meshes.push_back(commandList->createMesh(mesh));
 		commandList->loadTextureFromFile(result.materials[i].albedo, L"res/cerberus/Cerberus_A.tga", texture_type_color);
 		commandList->loadTextureFromFile(result.materials[i].normal, L"res/cerberus/Cerberus_N.tga", texture_type_noncolor);
-		commandList->loadTextureFromFile(result.materials[i].roughMetal, L"res/cerberus/Cerberus_RM.tga", texture_type_noncolor);
+		commandList->loadTextureFromFile(result.materials[i].roughMetal, L"res/cerberus/Cerberus_RMAO.png", texture_type_noncolor);
 	}
-
-	/*result.materials.resize(1);
-	result.meshes.push_back(commandList->createMesh(cpu_mesh<vertex_3PUN>::sphere(41, 41, 2.f)));
-	commandList->loadTextureFromFile(result.materials[0].albedo, L"res/rusted_iron/albedo.png", texture_usage_albedo);
-	commandList->loadTextureFromFile(result.materials[0].roughMetal, L"res/rusted_iron/roughMetal.png", texture_usage_roughness);*/
-	
 
 	cpu_mesh<vertex_3P> skybox = cpu_mesh<vertex_3P>::cube(1.f, true);
 	result.skyMesh = commandList->createMesh(skybox);
@@ -87,7 +81,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			albedoClearValue.Color[2] = 0.f;
 			albedoClearValue.Color[3] = 0.f;
 
-			dx_texture albedoTexture;
 			albedoTexture.initialize(device, albedoTextureDesc, &albedoClearValue);
 			gbufferRT.attachColorTexture(0, albedoTexture);
 		}
@@ -105,7 +98,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			hdrClearValue.Color[2] = 0.f;
 			hdrClearValue.Color[3] = 0.f;
 
-			dx_texture hdrTexture;
 			hdrTexture.initialize(device, hdrTextureDesc, &hdrClearValue);
 			gbufferRT.attachColorTexture(1, hdrTexture);
 			lightingRT.attachColorTexture(0, hdrTexture);
@@ -124,7 +116,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			normalClearValue.Color[2] = 0.f;
 			normalClearValue.Color[3] = 0.f;
 
-			dx_texture normalTexture;
 			normalTexture.initialize(device, normalMetalnessRoughnessTextureDesc, &normalClearValue);
 			gbufferRT.attachColorTexture(2, normalTexture);
 		}
@@ -139,7 +130,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			depthClearValue.Format = depthDesc.Format;
 			depthClearValue.DepthStencil = { 1.f, 0 };
 
-			dx_texture depthTexture;
 			depthTexture.initialize(device, depthDesc, &depthClearValue);
 
 			gbufferRT.attachDepthStencilTexture(depthTexture);
@@ -507,6 +497,9 @@ void dx_game::resize(uint32 width, uint32 height)
 		this->height = height;
 		viewport = CD3DX12_VIEWPORT(0.f, 0.f, (float)width, (float)height);
 		resizeDepthBuffer(width, height);
+
+		gbufferRT.resize(width, height);
+		lightingRT.resize(width, height);
 	}
 }
 
@@ -576,7 +569,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	// Render to GBuffer.
 	commandList->setRenderTarget(gbufferRT);
 	// No need to clear color, since we mark valid pixels with the stencil.
-	commandList->clearDepthAndStencil(gbufferRT.depthStencilAttachment.getDepthStencilView());
+	commandList->clearDepthAndStencil(gbufferRT.depthStencilAttachment->getDepthStencilView());
 	commandList->setStencilReference(1);
 
 	// Geometry.
@@ -641,8 +634,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->bindCubemap(AMBIENT_ROOTPARAM_TEXTURES, 0, scene.irradiance, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->bindCubemap(AMBIENT_ROOTPARAM_TEXTURES, 1, scene.prefilteredEnvironment, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 2, scene.brdf, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 3, gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 4, gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 3, *gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 4, *gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->drawIndexed(3, 1, 0, 0, 0);
 	}
@@ -655,8 +648,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		commandList->setShaderResourceView(0, 0, gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(0, 1, gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(0, 0, *gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(0, 1, *gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->drawIndexed(3, 1, 0, 0, 0);
 	}
@@ -684,7 +677,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		};
 
 		commandList->setGraphics32BitConstants(1, presentCB);
-		commandList->setShaderResourceView(2, 0, lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(2, 0, *lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->drawIndexed(3, 1, 0, 0, 0);
 	}

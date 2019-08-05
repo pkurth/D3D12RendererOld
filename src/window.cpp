@@ -3,6 +3,7 @@
 #include "error.h"
 #include "commands.h"
 #include "resource_state_tracker.h"
+#include "command_queue.h"
 
 
 static ComPtr<IDXGIFactory4> createFactory()

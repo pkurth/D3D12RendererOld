@@ -117,22 +117,22 @@ void dx_command_list::setRenderTarget(dx_render_target& renderTarget)
 	uint32 numRTVs = 0;
 	for (uint32 i = 0; i < arraysize(rtvs); ++i)
 	{
-		dx_texture& tex = renderTarget.colorAttachments[i];
-		if (tex.resource != nullptr)
+		dx_texture* tex = renderTarget.colorAttachments[i];
+		if (tex && tex->resource)
 		{
-			transitionBarrier(tex, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			rtvs[numRTVs++] = tex.getRenderTargetView();
-			trackObject(tex.resource);
+			transitionBarrier(*tex, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			rtvs[numRTVs++] = tex->getRenderTargetView();
+			trackObject(tex->resource);
 		}
 	}
-	dx_texture& depth = renderTarget.depthStencilAttachment;
+	dx_texture* depth = renderTarget.depthStencilAttachment;
 	D3D12_CPU_DESCRIPTOR_HANDLE* dsv = nullptr;
 	D3D12_CPU_DESCRIPTOR_HANDLE dsv_;
 
-	if (depth.resource != nullptr)
+	if (depth && depth->resource)
 	{
-		transitionBarrier(depth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-		dsv_ = depth.getDepthStencilView();
+		transitionBarrier(*depth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		dsv_ = depth->getDepthStencilView();
 		dsv = &dsv_;
 	}
 

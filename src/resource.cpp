@@ -143,6 +143,11 @@ namespace std
 dx_resource::dx_resource(const dx_resource& other)
 {
 	this->device = other.device;
+	this->clearValueValid = other.clearValueValid;
+	if (clearValueValid)
+	{
+		clearValue = other.clearValue;
+	}
 	this->formatSupport = other.formatSupport;
 	this->resource = other.resource;
 	this->shaderResourceViews = other.shaderResourceViews;
@@ -152,6 +157,12 @@ dx_resource::dx_resource(const dx_resource& other)
 void dx_resource::initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue)
 {
 	this->device = device;
+	clearValueValid = false;
+	if (clearValue)
+	{
+		this->clearValue = *clearValue;
+		clearValueValid = true;
+	}
 
 	checkResult(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
 		D3D12_HEAP_FLAG_NONE,
@@ -174,6 +185,7 @@ void dx_resource::initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource
 {
 	this->device = device;
 	this->resource = resource;
+	clearValueValid = false;
 
 	D3D12_RESOURCE_DESC resourceDesc(resource->GetDesc());
 

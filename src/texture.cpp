@@ -3,6 +3,7 @@
 #include "error.h"
 #include "descriptor_allocator.h"
 #include "common.h"
+#include "resource_state_tracker.h"
 
 
 dx_texture::dx_texture(const dx_texture& other)
@@ -18,12 +19,60 @@ dx_texture& dx_texture::operator=(const dx_texture& other)
 {
 	this->resource = other.resource;
 	this->device = other.device;
+	this->clearValueValid = other.clearValueValid;
+	if (clearValueValid)
+	{
+		clearValue = other.clearValue;
+	}
 	this->depthStencilView = other.depthStencilView;
 	this->renderTargetView = other.renderTargetView;
 	this->depthStencilView = other.depthStencilView;
 	this->renderTargetView = other.renderTargetView;
 
 	return *this;
+}
+
+void dx_texture::resize(uint32 width, uint32 height)
+{
+	CD3DX12_RESOURCE_DESC resourceDesc(resource->GetDesc());
+
+	if (width != resourceDesc.Width || height != resourceDesc.Height)
+	{
+		dx_resource_state_tracker::removeGlobalResourceState(resource.Get());
+
+		resourceDesc.Width = max(width, 1u);
+		resourceDesc.Height = max(height, 1u);
+
+		D3D12_CLEAR_VALUE* cv = clearValueValid ? &clearValue : nullptr;
+
+		checkResult(device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&resourceDesc,
+			D3D12_RESOURCE_STATE_COMMON,
+			cv,
+			IID_PPV_ARGS(&resource)
+		));
+
+		dx_resource_state_tracker::addGlobalResourceState(resource.Get(), D3D12_RESOURCE_STATE_COMMON, resourceDesc.MipLevels * resourceDesc.DepthOrArraySize);
+
+		shaderResourceViews.clear();
+		unorderedAccessViews.clear();
+
+		// TODO: This leaks the old descriptors. Find a way to free them.
+		if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 &&
+			checkRTVSupport())
+		{
+			renderTargetView = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV).getDescriptorHandle(0);
+			device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetView);
+		}
+		if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
+			checkDSVSupport())
+		{
+			depthStencilView = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_DSV).getDescriptorHandle(0);
+			device->CreateDepthStencilView(resource.Get(), nullptr, depthStencilView);
+		}
+	}
 }
 
 void dx_texture::initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue)

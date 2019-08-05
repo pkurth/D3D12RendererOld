@@ -42,6 +42,9 @@ protected:
 
 	ComPtr<ID3D12Device2> device;
 
+	D3D12_CLEAR_VALUE clearValue;
+	bool clearValueValid;
+
 	std::mutex srvMutex;
 	std::mutex uavMutex;
 };

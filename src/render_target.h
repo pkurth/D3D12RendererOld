@@ -4,11 +4,12 @@
 
 struct dx_render_target
 {
-	void attachColorTexture(uint32 attachmentPoint, const dx_texture& texture);
-	void attachDepthStencilTexture(const dx_texture& texture);
+	void attachColorTexture(uint32 attachmentPoint, dx_texture& texture);
+	void attachDepthStencilTexture(dx_texture& texture);
+	void resize(uint32 width, uint32 height);
 
-	dx_texture colorAttachments[8];
-	dx_texture depthStencilAttachment;
+	dx_texture* colorAttachments[8] = {};
+	dx_texture* depthStencilAttachment = nullptr;
 	D3D12_VIEWPORT viewport;
 
 	D3D12_RT_FORMAT_ARRAY renderTargetFormat = {};

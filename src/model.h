@@ -129,7 +129,7 @@ inline void cpu_mesh_group<vertex_t>::loadFromFile(const std::string& filename)
 		importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, aiPrimitiveType_POINT | aiPrimitiveType_LINE);
 
 		uint32 preprocessFlags = aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_OptimizeGraph | aiProcess_CalcTangentSpace;
-		scene = importer.ReadFile(path.string(), preprocessFlags);
+		scene = importer.ReadFile(path.string(), preprocessFlags | aiProcess_FlipUVs);
 
 		if (scene)
 		{

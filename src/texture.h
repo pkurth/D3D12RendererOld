@@ -18,6 +18,8 @@ struct dx_texture : dx_resource
 	dx_texture(const dx_texture& other);
 	dx_texture& operator=(const dx_texture& other);
 
+	void resize(uint32 width, uint32 height);
+
 	static bool isUAVCompatibleFormat(DXGI_FORMAT format);
 	static bool isSRGBFormat(DXGI_FORMAT format);
 	static bool isBGRFormat(DXGI_FORMAT format);

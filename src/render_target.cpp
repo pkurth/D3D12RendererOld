@@ -2,11 +2,11 @@
 #include "render_target.h"
 
 
-void dx_render_target::attachColorTexture(uint32 attachmentPoint, const dx_texture& texture)
+void dx_render_target::attachColorTexture(uint32 attachmentPoint, dx_texture& texture)
 {
 	assert(texture.resource != nullptr);
 
-	colorAttachments[attachmentPoint] = texture;
+	colorAttachments[attachmentPoint] = &texture;
 
 	D3D12_RESOURCE_DESC desc = texture.resource->GetDesc();
 
@@ -24,19 +24,19 @@ void dx_render_target::attachColorTexture(uint32 attachmentPoint, const dx_textu
 	renderTargetFormat.NumRenderTargets = 0;
 	for (uint32 i = 0; i < arraysize(colorAttachments); ++i)
 	{
-		const dx_texture& tex = colorAttachments[i];
-		if (tex.resource != nullptr) 
+		const dx_texture* tex = colorAttachments[i];
+		if (tex && tex->resource) 
 		{
-			renderTargetFormat.RTFormats[renderTargetFormat.NumRenderTargets++] = tex.resource->GetDesc().Format;
+			renderTargetFormat.RTFormats[renderTargetFormat.NumRenderTargets++] = tex->resource->GetDesc().Format;
 		}
 	}
 }
 
-void dx_render_target::attachDepthStencilTexture(const dx_texture& texture)
+void dx_render_target::attachDepthStencilTexture(dx_texture& texture)
 {
 	assert(texture.resource != nullptr);
 
-	depthStencilAttachment = texture;
+	depthStencilAttachment = &texture;
 
 	D3D12_RESOURCE_DESC desc = texture.resource->GetDesc();
 
@@ -52,4 +52,30 @@ void dx_render_target::attachDepthStencilTexture(const dx_texture& texture)
 	}
 
 	depthStencilFormat = desc.Format;
+}
+
+void dx_render_target::resize(uint32 width, uint32 height)
+{
+	width = max(width, 1u);
+	height = max(height, 1u);
+
+	this->width = width;
+	this->height = height;
+
+	for (uint32 i = 0; i < arraysize(colorAttachments); ++i)
+	{
+		dx_texture* tex = colorAttachments[i];
+		if (tex && tex->resource)
+		{
+			tex->resize(width, height);
+		}
+	}
+
+	if (depthStencilAttachment && depthStencilAttachment->resource)
+	{
+		depthStencilAttachment->resize(width, height);
+	}
+
+	viewport.Width = width;
+	viewport.Height = height;
 }

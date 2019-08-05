@@ -81,7 +81,13 @@ private:
 	
 	render_camera camera;
 
+
 	dx_render_target gbufferRT;
 	dx_render_target lightingRT;
+
+	dx_texture albedoTexture;
+	dx_texture hdrTexture;
+	dx_texture normalTexture;
+	dx_texture depthTexture;
 };
 

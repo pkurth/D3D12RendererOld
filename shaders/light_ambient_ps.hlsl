@@ -25,8 +25,9 @@ float4 main(ps_input IN) : SV_TARGET
 	float4 NRM = normalsRoughMetal.Sample(linearClampSampler, IN.uv);
 	float3 N = decodeNormal(NRM.xy);
 	float3 V = normalize(-IN.V);
-	float3 albedo = albedos.Sample(linearClampSampler, IN.uv).rgb;
-	float3 ao = float3(1.f, 1.f, 1.f);
+	float4 albedoAO = albedos.Sample(linearClampSampler, IN.uv);
+	float3 albedo = albedoAO.rgb;
+	float ao = albedoAO.w;
 	float roughness = clamp(NRM.z, 0.01f, 0.99f);
 	float metalness = NRM.w;
 
