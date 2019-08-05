@@ -9,6 +9,9 @@
 #include "game.h"
 #include "descriptor_allocator.h"
 #include "graphics.h"
+#include "platform.h"
+
+#include <windowsx.h>
 
 
 static bool exclusiveFullscreen = false;
@@ -24,6 +27,10 @@ static uint64 fenceValues[dx_window::numFrames] = {};
 static uint64 frameValues[dx_window::numFrames] = {};
 
 static uint64 frameCount = 0;
+
+static std::vector<std::function<bool(key_input_event event)>> keyboardCallbacks;
+static std::vector<std::function<bool(mouse_input_event event)>> mouseCallbacks;
+static HWND currentHoverHWND = 0;
 
 static void enableDebugLayer()
 {
@@ -185,12 +192,84 @@ void flushApplication()
 	dx_command_queue::copyCommandQueue.flush();
 }
 
+void registerKeyboardCallback(std::function<bool(key_input_event)> func)
+{
+	keyboardCallbacks.push_back(func);
+}
+
+void registerMouseCallback(std::function<bool(mouse_input_event)> func)
+{
+	mouseCallbacks.push_back(func);
+}
+
+static void callKeyboardCallbacks(key_input_event event)
+{
+	for (auto func : keyboardCallbacks)
+	{
+		if (func(event))
+		{
+			break; // Event handled.
+		}
+	}
+}
+
+static void callMouseCallbacks(mouse_input_event event)
+{
+	for (auto func : mouseCallbacks)
+	{
+		if (func(event))
+		{
+			break; // Event handled.
+		}
+	}
+}
+
+static kb_key mapVKCodeToKey(uint32 vkCode)
+{
+	if (vkCode >= '0' && vkCode <= '9')
+	{
+		return (kb_key)(vkCode - 48);
+	}
+	else if (vkCode >= 'A' && vkCode <= 'Z')
+	{
+		return (kb_key)(vkCode - 55);
+	}
+	else
+	{
+		switch (vkCode)
+		{
+		case VK_SPACE: return key_space;
+		case VK_TAB: return key_tab;
+		case VK_RETURN: return key_enter;
+		case VK_SHIFT: return key_shift;
+		case VK_CONTROL: return key_ctrl;
+		case VK_ESCAPE: return key_esc;
+		case VK_UP: return key_up;
+		case VK_DOWN: return key_down;
+		case VK_LEFT: return key_left;
+		case VK_RIGHT: return key_right;
+		case VK_MENU: return key_alt;
+		case VK_BACK: return key_backspace;
+		case VK_DELETE: return key_delete;
+		}
+	}
+	return key_unknown;
+}
+
 LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPARAM lParam)
 {
 	dx_window* window = (dx_window*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 
 	if (window && window->initialized)
 	{
+		bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+		bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+		bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+		uint32 modifiers = (alt ? key_alt : 0) | (shift ? key_shift : 0) | (ctrl ? key_ctrl : 0);
+
+		uint32 mouseX = GET_X_LPARAM(lParam); // Relative to client area. This is only valid, if the message is mouse related.
+		uint32 mouseY = window->clientHeight - 1 - GET_Y_LPARAM(lParam);
+
 		switch (msg)
 		{
 		case WM_PAINT:
@@ -204,8 +283,6 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 		case WM_SYSKEYDOWN:
 		case WM_KEYDOWN:
 		{
-			bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-
 			switch (wParam)
 			{
 				case 'V':
@@ -218,19 +295,153 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 				case VK_RETURN:
 					if (alt)
 					{
-						if (exclusiveFullscreen)
-						{
-							return DefWindowProc(hwnd, msg, wParam, lParam);
-						}
-						else
-						{
-							case VK_F11:
-								window->toggleFullscreen();
-						}
+						window->toggleFullscreen();
 					}
 					break;
+
+				default:
+				{
+					key_input_event event;
+					event.key = mapVKCodeToKey((uint32)wParam);
+					if (event.key != key_unknown)
+					{
+						event.type = event_type_down;
+						event.modifiers = modifiers;
+						callKeyboardCallbacks(event);
+					}
+				} break;
 			}
 		} break;
+
+		case WM_SYSKEYUP:
+		case WM_KEYUP:
+		{
+			key_input_event event;
+			event.key = mapVKCodeToKey((uint32)wParam);
+			if (event.key != key_unknown)
+			{
+				event.type = event_type_up;
+				event.modifiers = modifiers;
+				callKeyboardCallbacks(event);
+			}
+		} break;
+
+		case WM_LBUTTONDOWN:
+		{
+			mouse_input_event event;
+			event.button = mouse_left;
+			event.type = event_type_down;
+			event.modifiers = modifiers;
+			event.x = mouseX;
+			event.y = mouseY;
+			callMouseCallbacks(event);
+		} break;
+
+		case WM_LBUTTONUP:
+		{
+			mouse_input_event event;
+			event.button = mouse_left;
+			event.type = event_type_up;
+			event.modifiers = modifiers;
+			event.x = mouseX;
+			event.y = mouseY;
+			callMouseCallbacks(event);
+		} break;
+
+		case WM_RBUTTONDOWN:
+		{
+			mouse_input_event event;
+			event.button = mouse_right;
+			event.type = event_type_down;
+			event.modifiers = modifiers;
+			event.x = mouseX;
+			event.y = mouseY;
+			callMouseCallbacks(event);
+		} break;
+
+		case WM_RBUTTONUP:
+		{
+			mouse_input_event event;
+			event.button = mouse_right;
+			event.type = event_type_up;
+			event.modifiers = modifiers;
+			event.x = mouseX;
+			event.y = mouseY;
+			callMouseCallbacks(event);
+		} break;
+
+		case WM_MBUTTONDOWN:
+		{
+			mouse_input_event event;
+			event.button = mouse_middle;
+			event.type = event_type_down;
+			event.modifiers = modifiers;
+			event.x = mouseX;
+			event.y = mouseY;
+			callMouseCallbacks(event);
+		} break;
+
+		case WM_MBUTTONUP:
+		{
+			mouse_input_event event;
+			event.button = mouse_middle;
+			event.type = event_type_up;
+			event.modifiers = modifiers;
+			event.x = mouseX;
+			event.y = mouseY;
+			callMouseCallbacks(event);
+		} break;
+
+		case WM_MOUSEWHEEL:
+		{
+			mouse_input_event event;
+			event.type = event_type_scroll;
+			event.modifiers = modifiers;
+			event.x = mouseX;
+			event.y = mouseY;
+			event.scroll = GET_WHEEL_DELTA_WPARAM(wParam) / 120.f;
+			callMouseCallbacks(event);
+		} break;
+
+		case WM_MOUSEMOVE:
+		{
+			mouse_input_event event;
+			event.type = event_type_move;
+			event.modifiers = modifiers;
+			event.x = mouseX;
+			event.y = mouseY;
+
+			if (currentHoverHWND != hwnd)
+			{
+				TRACKMOUSEEVENT mouseEvent = { sizeof(TRACKMOUSEEVENT) };
+				mouseEvent.dwFlags = TME_LEAVE;
+				mouseEvent.hwndTrack = hwnd;
+				TrackMouseEvent(&mouseEvent);
+
+				currentHoverHWND = hwnd;
+
+				event.type = event_type_enter_window;
+			}
+
+			callMouseCallbacks(event);
+
+		} break;
+
+		case WM_NCMOUSELEAVE:
+		case WM_MOUSELEAVE:
+		{
+			if (currentHoverHWND == hwnd)
+			{
+				currentHoverHWND = 0;
+
+				mouse_input_event event;
+				event.type = event_type_leave_window;
+				event.modifiers = modifiers;
+				callMouseCallbacks(event);
+			}
+		} break;
+
+
 
 		// The default window procedure will play a system notification sound 
 		// when pressing the Alt+Enter keyboard combination if this message is 

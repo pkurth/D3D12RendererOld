@@ -95,9 +95,11 @@
   <ItemGroup>
     <ClCompile Include="src\command_list.cpp" />
     <ClCompile Include="src\command_queue.cpp" />
+    <ClCompile Include="src\debug_gui.cpp" />
     <ClCompile Include="src\descriptor_allocator.cpp" />
     <ClCompile Include="src\dynamic_descriptor_heap.cpp" />
     <ClCompile Include="src\brdf.cpp" />
+    <ClCompile Include="src\font.cpp" />
     <ClCompile Include="src\game.cpp" />
     <ClCompile Include="src\generate_mips.cpp" />
     <ClCompile Include="src\graphics.cpp" />
@@ -121,17 +123,20 @@
     <ClInclude Include="shaders\pbr_common.h" />
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\camera.h" />
+    <ClInclude Include="src\debug_gui.h" />
     <ClInclude Include="src\descriptor_allocator.h" />
     <ClInclude Include="src\dynamic_descriptor_heap.h" />
     <ClInclude Include="src\brdf.h" />
+    <ClInclude Include="src\font.h" />
     <ClInclude Include="src\generate_mips.h" />
     <ClInclude Include="src\graphics.h" />
+    <ClInclude Include="src\input.h" />
     <ClInclude Include="src\material.h" />
     <ClInclude Include="src\model.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\render_target.h" />
     <ClInclude Include="src\resource.h" />
-    <ClInclude Include="src\commands.h" />
+    <ClInclude Include="src\platform.h" />
     <ClInclude Include="src\command_list.h" />
     <ClInclude Include="src\command_queue.h" />
     <ClInclude Include="src\common.h" />

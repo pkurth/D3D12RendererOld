@@ -38,6 +38,7 @@ public:
 
 	// Texture creation.
 	void loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips = true);
+	void loadTextureFromMemory(dx_texture& texture, const void* data, uint32 width, uint32 height, DXGI_FORMAT format, texture_type type, bool genMips = true);
 	void copyTextureForReadback(dx_texture& texture, ComPtr<ID3D12Resource>& readbackBuffer, uint32 numMips = 0);
 	void convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
 	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32);
@@ -62,6 +63,10 @@ public:
 	template <typename T> D3D12_GPU_VIRTUAL_ADDRESS uploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, const T& data);
 
 	void setGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+
+	// These buffers are temporary! They only last one frame!
+	template <typename vertex_t> D3D12_VERTEX_BUFFER_VIEW createDynamicVertexBuffer(const vertex_t* vertices, uint32 count);
+
 
 	void setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ID3D12DescriptorHeap* heap);
 
@@ -96,6 +101,7 @@ public:
 	// Input assembly.
 	void setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology);
 	void setVertexBuffer(uint32 slot, dx_vertex_buffer& buffer);
+	void setVertexBuffer(uint32 slot, D3D12_VERTEX_BUFFER_VIEW& buffer);
 	void setIndexBuffer(dx_index_buffer& buffer);
 
 	// Rasterizer.
@@ -230,4 +236,18 @@ template<typename T>
 inline D3D12_GPU_VIRTUAL_ADDRESS dx_command_list::uploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, const T& data)
 {
 	return uploadAndSetGraphicsDynamicConstantBuffer(rootParameterIndex, sizeof(T), &data);
+}
+
+template<typename vertex_t>
+inline D3D12_VERTEX_BUFFER_VIEW dx_command_list::createDynamicVertexBuffer(const vertex_t* vertices, uint32 count)
+{
+	dx_upload_buffer::allocation allocation = uploadBuffer.allocate(sizeInBytes, 256);
+	memcpy(allocation.cpu, data, sizeInBytes);
+
+	D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
+	vertexBufferView.BufferLocation = allocation.gpu;
+	vertexBufferView.SizeInBytes = count * sizeof(vertex_t);
+	vertexBufferView.StrideInBytes = sizeof(vertex_t);
+
+	return vertexBufferView;
 }

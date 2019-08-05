@@ -8,6 +8,8 @@
 #include "camera.h"
 #include "render_target.h"
 #include "material.h"
+#include "font.h"
+#include "platform.h"
 
 #define GEOMETRY_ROOTPARAM_CAMERA	0
 #define GEOMETRY_ROOTPARAM_MODEL	1
@@ -19,20 +21,6 @@
 #define AMBIENT_ROOTPARAM_CAMERA	0
 #define AMBIENT_ROOTPARAM_TEXTURES	1
 
-struct scene_data
-{
-	std::vector<dx_material> materials;
-	std::vector<dx_mesh> meshes;
-	
-	dx_mesh skyMesh;
-	dx_texture cubemap;
-	dx_texture irradiance;
-	dx_texture prefilteredEnvironment;
-	dx_texture brdf;
-
-	dx_mesh quad;
-};
-
 class dx_game
 {
 
@@ -43,16 +31,13 @@ public:
 	void update(float dt);
 	void render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV);
 
+	bool keyboardCallback(key_input_event event);
+	bool mouseCallback(mouse_input_event event);
+
 private:
-	void resizeDepthBuffer(uint32 width, uint32 height);
-
-
 
 	bool contentLoaded = false;
 	ComPtr<ID3D12Device2> device;
-
-	ComPtr<ID3D12Resource> depthBuffer;
-	ComPtr<ID3D12DescriptorHeap> dsvHeap;
 
 	ComPtr<ID3D12PipelineState> opaqueGeometryPipelineState;
 	dx_root_signature opaqueGeometryRootSignature;
@@ -69,7 +54,17 @@ private:
 	ComPtr<ID3D12PipelineState> presentPipelineState;
 	dx_root_signature presentRootSignature;
 
-	scene_data scene;
+
+	std::vector<dx_material> materials;
+	std::vector<dx_mesh> meshes;
+
+	dx_mesh skyMesh;
+	dx_texture cubemap;
+	dx_texture irradiance;
+	dx_texture prefilteredEnvironment;
+	dx_texture brdf;
+
+
 
 	uint32 width;
 	uint32 height;
@@ -81,13 +76,15 @@ private:
 	
 	render_camera camera;
 
+	dx_font font;
 
 	dx_render_target gbufferRT;
 	dx_render_target lightingRT;
 
-	dx_texture albedoTexture;
+	// Render target textures.
+	dx_texture albedoAOTexture;
 	dx_texture hdrTexture;
-	dx_texture normalTexture;
+	dx_texture normalRoughnessMetalnessTexture;
 	dx_texture depthTexture;
 };
 

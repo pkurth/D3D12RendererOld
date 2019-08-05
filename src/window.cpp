@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "window.h"
 #include "error.h"
-#include "commands.h"
+#include "platform.h"
 #include "resource_state_tracker.h"
 #include "command_queue.h"
 
@@ -331,39 +331,46 @@ void dx_window::toggleFullscreen()
 {
 	fullscreen = !fullscreen;
 
-	if (fullscreen) // Switching to fullscreen.
+	if (exclusiveFullscreen)
 	{
-		GetWindowRect(windowHandle, &windowRectBeforeFullscreen);
-
-		uint32 windowStyle = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
-		SetWindowLongW(windowHandle, GWL_STYLE, windowStyle);
-
-		HMONITOR hMonitor = MonitorFromWindow(windowHandle, MONITOR_DEFAULTTONEAREST);
-		MONITORINFOEX monitorInfo = {};
-		monitorInfo.cbSize = sizeof(MONITORINFOEX);
-		GetMonitorInfo(hMonitor, &monitorInfo);
-
-		SetWindowPos(windowHandle, HWND_TOP,
-			monitorInfo.rcMonitor.left,
-			monitorInfo.rcMonitor.top,
-			monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
-			monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-			SWP_FRAMECHANGED | SWP_NOACTIVATE);
-
-		ShowWindow(windowHandle, SW_MAXIMIZE);
+		swapChain->SetFullscreenState(fullscreen, nullptr);
 	}
 	else
 	{
-		SetWindowLong(windowHandle, GWL_STYLE, WS_OVERLAPPEDWINDOW);
+		if (fullscreen) // Switching to fullscreen.
+		{
+			GetWindowRect(windowHandle, &windowRectBeforeFullscreen);
 
-		SetWindowPos(windowHandle, HWND_NOTOPMOST,
-			windowRectBeforeFullscreen.left,
-			windowRectBeforeFullscreen.top,
-			windowRectBeforeFullscreen.right - windowRectBeforeFullscreen.left,
-			windowRectBeforeFullscreen.bottom - windowRectBeforeFullscreen.top,
-			SWP_FRAMECHANGED | SWP_NOACTIVATE);
+			uint32 windowStyle = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+			SetWindowLongW(windowHandle, GWL_STYLE, windowStyle);
 
-		ShowWindow(windowHandle, SW_NORMAL);
+			HMONITOR hMonitor = MonitorFromWindow(windowHandle, MONITOR_DEFAULTTONEAREST);
+			MONITORINFOEX monitorInfo = {};
+			monitorInfo.cbSize = sizeof(MONITORINFOEX);
+			GetMonitorInfo(hMonitor, &monitorInfo);
+
+			SetWindowPos(windowHandle, HWND_TOP,
+				monitorInfo.rcMonitor.left,
+				monitorInfo.rcMonitor.top,
+				monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+				monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+				SWP_FRAMECHANGED | SWP_NOACTIVATE);
+
+			ShowWindow(windowHandle, SW_MAXIMIZE);
+		}
+		else
+		{
+				SetWindowLong(windowHandle, GWL_STYLE, WS_OVERLAPPEDWINDOW);
+
+				SetWindowPos(windowHandle, HWND_NOTOPMOST,
+					windowRectBeforeFullscreen.left,
+					windowRectBeforeFullscreen.top,
+					windowRectBeforeFullscreen.right - windowRectBeforeFullscreen.left,
+					windowRectBeforeFullscreen.bottom - windowRectBeforeFullscreen.top,
+					SWP_FRAMECHANGED | SWP_NOACTIVATE);
+
+				ShowWindow(windowHandle, SW_NORMAL);
+		}
 	}
 }
 

@@ -326,6 +326,40 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 	}
 }
 
+void dx_command_list::loadTextureFromMemory(dx_texture& texture, const void* data, uint32 width, uint32 height, DXGI_FORMAT format, texture_type type, bool genMips)
+{
+	if (type == texture_type_color)
+	{
+		format = DirectX::MakeSRGB(format);
+	}
+
+	CD3DX12_RESOURCE_DESC textureDesc = CD3DX12_RESOURCE_DESC::Tex2D(format, width, height);
+
+	if (!genMips)
+	{
+		textureDesc.MipLevels = 1;
+	}
+
+	texture.initialize(device, textureDesc);
+
+	uint32 numMips = texture.resource->GetDesc().MipLevels;
+	dx_resource_state_tracker::addGlobalResourceState(texture.resource.Get(), D3D12_RESOURCE_STATE_COMMON, numMips);
+
+	uint32 formatSize = dx_texture::getFormatSize(textureDesc.Format);
+
+	D3D12_SUBRESOURCE_DATA subresource;
+	subresource.RowPitch = width * formatSize;
+	subresource.SlicePitch = width * height * formatSize;
+	subresource.pData = data;
+
+	copyTextureSubresource(texture, 0, 1, &subresource);
+
+	if (numMips > 1)
+	{
+		generateMips(texture);
+	}
+}
+
 void dx_command_list::copyTextureForReadback(dx_texture& texture, ComPtr<ID3D12Resource>& readbackBuffer, uint32 numMips)
 {
 	UINT64 requiredSize = GetRequiredIntermediateSize(texture.resource.Get(), 0, (numMips == 0 ? texture.resource->GetDesc().MipLevels : numMips));
@@ -1029,6 +1063,11 @@ void dx_command_list::setVertexBuffer(uint32 slot, dx_vertex_buffer& buffer)
 	transitionBarrier(buffer.resource, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 	commandList->IASetVertexBuffers(slot, 1, &buffer.view);
 	trackObject(buffer.resource);
+}
+
+void dx_command_list::setVertexBuffer(uint32 slot, D3D12_VERTEX_BUFFER_VIEW& buffer)
+{
+	commandList->IASetVertexBuffers(slot, 1, &buffer);
 }
 
 void dx_command_list::setIndexBuffer(dx_index_buffer& buffer)

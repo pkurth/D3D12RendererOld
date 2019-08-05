@@ -76,6 +76,6 @@ void dx_render_target::resize(uint32 width, uint32 height)
 		depthStencilAttachment->resize(width, height);
 	}
 
-	viewport.Width = width;
-	viewport.Height = height;
+	viewport.Width = (float)width;
+	viewport.Height = (float)height;
 }
