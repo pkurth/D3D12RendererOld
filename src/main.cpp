@@ -131,7 +131,6 @@ static ComPtr<ID3D12Device2> createDevice(ComPtr<IDXGIAdapter4> adapter)
 static void update()
 {
 	static uint64 frameCounter = 0;
-	static float elapsedSeconds = 0.f;
 	static std::chrono::high_resolution_clock clock;
 	static auto t0 = clock.now();
 
@@ -141,17 +140,6 @@ static void update()
 	t0 = t1;
 
 	float dt = deltaTime.count() * 1e-9f;
-	elapsedSeconds += dt;
-	if (elapsedSeconds > 1.f)
-	{
-		char buffer[500];
-		float fps = frameCounter / elapsedSeconds;
-		sprintf_s(buffer, sizeof(buffer), "FPS: %f\n", fps);
-		std::cout << buffer << std::endl;
-
-		frameCounter = 0;
-		elapsedSeconds = 0.0;
-	}
 
 	game.update(dt);
 }
@@ -503,7 +491,7 @@ int main()
 
 	if (!RegisterClassEx(&windowClass))
 	{
-		std::cerr << "failed to create window class" << std::endl;
+		std::cerr << "Failed to create window class." << std::endl;
 		return 1;
 	}
 

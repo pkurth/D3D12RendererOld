@@ -241,12 +241,13 @@ inline D3D12_GPU_VIRTUAL_ADDRESS dx_command_list::uploadAndSetGraphicsDynamicCon
 template<typename vertex_t>
 inline D3D12_VERTEX_BUFFER_VIEW dx_command_list::createDynamicVertexBuffer(const vertex_t* vertices, uint32 count)
 {
-	dx_upload_buffer::allocation allocation = uploadBuffer.allocate(sizeInBytes, 256);
-	memcpy(allocation.cpu, data, sizeInBytes);
+	uint32 sizeInBytes = count * sizeof(vertex_t);
+	dx_upload_buffer::allocation allocation = uploadBuffer.allocate(sizeInBytes, sizeof(vertex_t));
+	memcpy(allocation.cpu, vertices, sizeInBytes);
 
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
 	vertexBufferView.BufferLocation = allocation.gpu;
-	vertexBufferView.SizeInBytes = count * sizeof(vertex_t);
+	vertexBufferView.SizeInBytes = sizeInBytes;
 	vertexBufferView.StrideInBytes = sizeof(vertex_t);
 
 	return vertexBufferView;

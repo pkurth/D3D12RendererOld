@@ -54,16 +54,16 @@ constexpr T clamp(T val, T min, T max)
 	return val < min ? min : val > max ? max : val;
 }
 
-template<typename T>
-inline T alignTo(T currentOffset, T alignment)
+template <typename T>
+inline T alignToWithMask(T value, size_t mask)
 {
-	assert(alignment > 0);
-	assert((alignment & (alignment - 1)) == 0);
+	return (T)(((size_t)value + mask) & ~mask);
+}
 
-	T mask = alignment - 1;
-	T misalignment = currentOffset & mask;
-	T adjustment = (alignment - misalignment) & mask; // & mask ensures that a misalignment of 0 does not lead to an adjustment of 'alignment'
-	return currentOffset + adjustment;
+template <typename T>
+inline T alignTo(T value, size_t alignment)
+{
+	return alignToWithMask(value, alignment - 1);
 }
 
 inline void* alignTo(void* currentAddress, uint64 alignment)

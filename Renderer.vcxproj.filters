@@ -188,5 +188,7 @@
     <FxCompile Include="shaders\light_directional_ps.hlsl" />
     <FxCompile Include="shaders\fullscreen_triangle_vs.hlsl" />
     <FxCompile Include="shaders\light_ambient_ps.hlsl" />
+    <FxCompile Include="shaders\gui_vs.hlsl" />
+    <FxCompile Include="shaders\gui_ps.hlsl" />
   </ItemGroup>
 </Project>

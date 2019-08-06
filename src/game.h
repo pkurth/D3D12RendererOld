@@ -9,6 +9,7 @@
 #include "render_target.h"
 #include "material.h"
 #include "font.h"
+#include "debug_gui.h"
 #include "platform.h"
 
 #define GEOMETRY_ROOTPARAM_CAMERA	0
@@ -77,6 +78,7 @@ private:
 	render_camera camera;
 
 	dx_font font;
+	debug_gui gui;
 
 	dx_render_target gbufferRT;
 	dx_render_target lightingRT;

@@ -435,6 +435,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	dx_command_queue& copyCommandQueue = dx_command_queue::copyCommandQueue;
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
+	font.initialize(commandList, "arial", 20);
+	gui.initialize(device, commandList, font, lightingRT.renderTargetFormat);
+
 
 	// Load scene.
 	cpu_mesh_group<vertex_3PUNT> model;
@@ -459,8 +462,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	commandList->createIrradianceMap(cubemap, irradiance);
 	commandList->prefilterEnvironmentMap(cubemap, prefilteredEnvironment, 256);
 	commandList->integrateBRDF(brdf);
-
-	font.initialize(commandList, "arial", 30);
 
 	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);
@@ -510,6 +511,11 @@ void dx_game::update(float dt)
 	modelMatrix = mat4::CreateScale(0.05f) * mat4::CreateRotationX(DirectX::XMConvertToRadians(-90.f)) * mat4::CreateTranslation(0.f, 0.f, -4.f);// mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
 
 	camera.update(width, height, dt);
+
+	gui.beginGroup("Stats");
+	gui.text("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
+	gui.text("Camera position: %.2f %.2f %.2f", camera.position.x, camera.position.y, camera.position.z);
+	gui.endGroup();
 }
 
 void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
@@ -614,6 +620,10 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->draw(3, 1, 0, 0);
 	}
 #endif
+
+
+	// GUI.
+	gui.render(commandList, viewport);
 
 
 	// Resolve to screen.
