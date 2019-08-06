@@ -123,6 +123,7 @@
     <ClInclude Include="shaders\pbr_common.h" />
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\camera.h" />
+    <ClInclude Include="src\color.h" />
     <ClInclude Include="src\debug_gui.h" />
     <ClInclude Include="src\descriptor_allocator.h" />
     <ClInclude Include="src\dynamic_descriptor_heap.h" />

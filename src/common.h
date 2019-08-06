@@ -54,6 +54,12 @@ constexpr T clamp(T val, T min, T max)
 	return val < min ? min : val > max ? max : val;
 }
 
+template<typename T>
+constexpr T clamp01(T val)
+{
+	return clamp(val, T(0), T(1));
+}
+
 template <typename T>
 inline T alignToWithMask(T value, size_t mask)
 {

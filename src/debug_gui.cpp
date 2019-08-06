@@ -9,7 +9,7 @@ void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* comman
 	yOffset = 1;
 	level = 0;
 	font.initialize(commandList, "arial", 25, true);
-	textHeight = font.height;
+	textHeight = font.height * 0.75f;
 
 	ComPtr<ID3DBlob> vertexShaderBlob;
 	checkResult(D3DReadFileToBlob(L"shaders/bin/font_vs.cso", &vertexShaderBlob));
