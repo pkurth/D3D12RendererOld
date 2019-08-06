@@ -8,7 +8,6 @@
 #include "camera.h"
 #include "render_target.h"
 #include "material.h"
-#include "font.h"
 #include "debug_gui.h"
 #include "platform.h"
 
@@ -77,7 +76,6 @@ private:
 	
 	render_camera camera;
 
-	dx_font font;
 	debug_gui gui;
 
 	dx_render_target gbufferRT;

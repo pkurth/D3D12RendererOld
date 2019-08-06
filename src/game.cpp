@@ -435,8 +435,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	dx_command_queue& copyCommandQueue = dx_command_queue::copyCommandQueue;
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
-	font.initialize(commandList, "arial", 20);
-	gui.initialize(device, commandList, font, lightingRT.renderTargetFormat);
+	gui.initialize(device, commandList, lightingRT.renderTargetFormat);
 
 
 	// Load scene.

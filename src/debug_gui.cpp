@@ -3,18 +3,18 @@
 #include "error.h"
 #include "graphics.h"
 
-void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, dx_font& font, D3D12_RT_FORMAT_ARRAY rtvFormats)
+void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, D3D12_RT_FORMAT_ARRAY rtvFormats)
 {
 	resizeIndexBuffer(commandList, 2048);
 	yOffset = 1;
 	level = 0;
+	font.initialize(commandList, "arial", 25, true);
 	textHeight = font.height;
-	this->font = &font;
 
 	ComPtr<ID3DBlob> vertexShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/gui_vs.cso", &vertexShaderBlob));
+	checkResult(D3DReadFileToBlob(L"shaders/bin/font_vs.cso", &vertexShaderBlob));
 	ComPtr<ID3DBlob> pixelShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/gui_ps.cso", &pixelShaderBlob));
+	checkResult(D3DReadFileToBlob(L"shaders/bin/font_ps.cso", &pixelShaderBlob));
 
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 		{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -87,7 +87,7 @@ void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* comman
 
 void debug_gui::resizeIndexBuffer(dx_command_list* commandList, uint32 numQuads)
 {
-	uint32* indices = new uint32[numQuads * 6]; // TODO: 16 bit.
+	uint16* indices = new uint16[numQuads * 6];
 	for (uint32 i = 0; i < numQuads; ++i)
 	{
 		indices[i * 6 + 0] = i * 4;
@@ -124,15 +124,24 @@ void debug_gui::text(const char* format, va_list arg)
 	currentVertices.resize(currentVertices.size() + numCharacters * 4);
 
 	float cursorX = 3.f + level * 10.f;
-	float cursorY = yOffset * font->height;
-	float scale = textHeight / font->height;
+	float scale = textHeight / font.height;
+	float cursorY = yOffset * textHeight;
 
 	uint32 color = 0xFFFFFFFF;
 
+	uint32 skippedChars = 0;
 	uint32 index = 0;
 	while (text[index])
 	{
 		char c = text[index];
+		if (c == ' ')
+		{
+			cursorX += font.spaceWidth * scale;
+			++skippedChars;
+			++index;
+			continue;
+		}
+
 		if (c < FIRST_CODEPOINT || c > LAST_CODEPOINT)
 		{
 			c = '?';
@@ -140,7 +149,7 @@ void debug_gui::text(const char* format, va_list arg)
 
 		uint32 glyphID = c - FIRST_CODEPOINT;
 
-		font_glyph& glyph = font->glyphs[glyphID];
+		font_glyph& glyph = font.glyphs[glyphID];
 
 		float xStart = cursorX + glyph.offsetX * scale;
 		float yStart = cursorY + glyph.offsetY * scale;
@@ -154,14 +163,12 @@ void debug_gui::text(const char* format, va_list arg)
 		currentVertices[currentVertex++] = { vec2(xStart + gWidth, yStart + gHeight), vec2(glyph.right, glyph.bottom), color };
 
 		char nextC = text[index + 1];
-		if (nextC)
-		{
-			uint32 nextGlyphID = nextC - FIRST_CODEPOINT;
-			cursorX += font->advanceX[glyphID * (uint64)NUM_CODEPOINTS + nextGlyphID] * scale;
-		}
+		cursorX += font.getAdvance(c, nextC) * scale;
 
 		++index;
 	}
+
+	currentVertices.resize(currentVertices.size() - skippedChars);
 
 	++yOffset;
 }
@@ -202,7 +209,7 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 		vec2 invScreenDim = { 1.f / viewport.Width, 1.f / viewport.Height };
 		commandList->setGraphics32BitConstants(0, invScreenDim);
 
-		commandList->setShaderResourceView(1, 0, font->atlas, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(1, 0, font.atlas, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 
 		commandList->setVertexBuffer(0, tmpVertexBuffer);

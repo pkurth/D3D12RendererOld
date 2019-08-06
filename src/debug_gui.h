@@ -16,7 +16,7 @@ struct gui_vertex
 class debug_gui
 {
 public:
-	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, dx_font& font, D3D12_RT_FORMAT_ARRAY rtvFormats);
+	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, D3D12_RT_FORMAT_ARRAY rtvFormats);
 
 	void beginGroup(const char* name);
 	void endGroup();
@@ -37,7 +37,7 @@ private:
 	uint32 yOffset;
 	uint32 level;
 	float textHeight;
-	dx_font* font;
+	dx_font font;
 
 	dx_texture whiteTexture;
 
