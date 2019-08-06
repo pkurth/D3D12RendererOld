@@ -597,7 +597,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 3, *gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 4, *gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-		commandList->drawIndexed(3, 1, 0, 0, 0);
+		commandList->draw(3, 1, 0, 0);
 	}
 
 #if 0
@@ -611,7 +611,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->setShaderResourceView(0, 0, *gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->setShaderResourceView(0, 1, *gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-		commandList->drawIndexed(3, 1, 0, 0, 0);
+		commandList->draw(3, 1, 0, 0);
 	}
 #endif
 
@@ -639,7 +639,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->setGraphics32BitConstants(1, presentCB);
 		commandList->setShaderResourceView(2, 0, *lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-		commandList->drawIndexed(3, 1, 0, 0, 0);
+		commandList->draw(3, 1, 0, 0);
 	}
 }
 
