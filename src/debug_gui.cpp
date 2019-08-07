@@ -6,10 +6,19 @@
 void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, D3D12_RT_FORMAT_ARRAY rtvFormats)
 {
 	resizeIndexBuffer(commandList, 2048);
-	yOffset = 1;
 	level = 0;
-	font.initialize(commandList, "arial", 25, true);
+	font.initialize(commandList, "consola", 25, true);
 	textHeight = font.height * 0.75f;
+	cursorY = 0.00001f;
+	lastEventType = event_type_none;
+	activeID = 0;
+	tabAdvance = 0.f;
+	activeTabs = 0;
+	openTab = 0;
+	firstTab = 0;
+	openTabSeenThisFrame = false;
+
+	mousePosition = vec2(0.f, 0.f);
 
 	ComPtr<ID3DBlob> vertexShaderBlob;
 	checkResult(D3DReadFileToBlob(L"shaders/bin/font_vs.cso", &vertexShaderBlob));
@@ -79,9 +88,6 @@ void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* comman
 	};
 	checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&pipelineState)));
 
-	//uint32 white = 0xFFFFFFFF;
-	//commandList->loadTextureFromMemory(whiteTexture, &white, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, texture_type_noncolor);
-
 	registerMouseCallback(BIND(mouseCallback));
 }
 
@@ -102,43 +108,76 @@ void debug_gui::resizeIndexBuffer(dx_command_list* commandList, uint32 numQuads)
 	delete[] indices;
 }
 
-void debug_gui::beginGroup(const char* name)
+float debug_gui::getCursorX()
 {
-	text(name);
-	++level;
-}
-
-void debug_gui::endGroup()
-{
-	assert(level > 0);
-	--level;
-}
-
-void debug_gui::text(const char* format, va_list arg)
-{
-	char text[2048];
-	uint32 N = vsnprintf(text, sizeof(text), format, arg);
-	uint32 numCharacters = min<uint32>(N, sizeof(text));
-
-	uint32 currentVertex = (uint32)currentVertices.size();
-	currentVertices.resize(currentVertices.size() + numCharacters * 4);
-
-	float cursorX = 3.f + level * 10.f;
-	float scale = textHeight / font.height;
-	float cursorY = yOffset * textHeight;
-
-	uint32 color = 0xFFFFFFFF;
-
-	uint32 skippedChars = 0;
-	uint32 index = 0;
-	while (text[index])
+	if (cursorY == 0.f)
 	{
-		char c = text[index];
+		return 3.f + tabAdvance;
+	}
+	return 5.f + level * 10.f;
+}
+
+debug_gui::text_analysis debug_gui::analyzeText(const char* text, float size)
+{
+	float cursorX = getCursorX();
+	float scale = textHeight / font.height * size;
+
+	float cursorY = this->cursorY + textHeight * size;
+
+	text_analysis result = { 0, vec2(FLT_MAX, FLT_MAX), vec2(-FLT_MAX, -FLT_MAX) };
+
+	while (*text)
+	{
+		char c = *text++;
+		if (c != ' ')
+		{
+			uint32 glyphID = c - FIRST_CODEPOINT;
+
+			font_glyph& glyph = font.glyphs[glyphID];
+
+			float xStart = cursorX + glyph.offsetX * scale;
+			float yStart = cursorY + glyph.offsetY * scale;
+
+			float gWidth = glyph.width * scale;
+			float gHeight = glyph.height * scale;
+
+			++result.numGlyphs;
+			result.topLeft.x = min(result.topLeft.x, xStart);
+			result.topLeft.y = min(result.topLeft.y, yStart);
+			result.bottomRight.x = max(result.bottomRight.x, xStart + gWidth);
+			result.bottomRight.y = max(result.bottomRight.y, yStart + gHeight);
+
+			char nextC = *text;
+			cursorX += font.getAdvance(c, nextC) * scale;
+		}
+	}
+
+	return result;
+}
+
+#define MAX_TEXT_LENGTH 2048
+
+void debug_gui::textInternal(const char* text, uint32 color, float size)
+{
+	if (activeTabs == 0)
+	{
+		assert(!"No open tab in GUI.");
+	}
+
+	currentVertices.reserve(currentVertices.size() + MAX_TEXT_LENGTH * 4);
+
+	float cursorX = getCursorX();
+	float scale = textHeight / font.height * size;
+
+	float cursorY = this->cursorY + textHeight * size;
+	this->cursorY = cursorY;
+
+	while (*text)
+	{
+		char c = *text++;
 		if (c == ' ')
 		{
 			cursorX += font.spaceWidth * scale;
-			++skippedChars;
-			++index;
 			continue;
 		}
 
@@ -157,34 +196,68 @@ void debug_gui::text(const char* format, va_list arg)
 		float gWidth = glyph.width * scale;
 		float gHeight = glyph.height * scale;
 
-		currentVertices[currentVertex++] = { vec2(xStart, yStart), vec2(glyph.left, glyph.top), color };
-		currentVertices[currentVertex++] = { vec2(xStart + gWidth, yStart), vec2(glyph.right, glyph.top), color };
-		currentVertices[currentVertex++] = { vec2(xStart, yStart + gHeight), vec2(glyph.left, glyph.bottom), color };
-		currentVertices[currentVertex++] = { vec2(xStart + gWidth, yStart + gHeight), vec2(glyph.right, glyph.bottom), color };
+		currentVertices.push_back({ vec2(xStart, yStart), vec2(glyph.left, glyph.top), color });
+		currentVertices.push_back({ vec2(xStart + gWidth, yStart), vec2(glyph.right, glyph.top), color });
+		currentVertices.push_back({ vec2(xStart, yStart + gHeight), vec2(glyph.left, glyph.bottom), color });
+		currentVertices.push_back({ vec2(xStart + gWidth, yStart + gHeight), vec2(glyph.right, glyph.bottom), color });
 
-		char nextC = text[index + 1];
+		char nextC = *text;
 		cursorX += font.getAdvance(c, nextC) * scale;
-
-		++index;
 	}
-
-	currentVertices.resize(currentVertices.size() - skippedChars);
-
-	++yOffset;
 }
 
-void debug_gui::text(const char* format, ...)
+void debug_gui::textInternalF(const char* text, uint32 color, float size, ...)
+{
+	va_list arg;
+	va_start(arg, size);
+	textInternalV(text, arg, color, size);
+	va_end(arg);
+}
+
+void debug_gui::textInternalV(const char* format, va_list arg, uint32 color, float size)
+{
+	char text[MAX_TEXT_LENGTH];
+	vsnprintf(text, sizeof(text), format, arg);
+	textInternal(text, color, size);
+}
+
+void debug_gui::textV(const char* format, va_list arg)
+{
+	textInternalV(format, arg);
+}
+
+void debug_gui::text(const char* text)
+{
+	textInternal(text);
+}
+
+void debug_gui::textF(const char* format, ...)
 {
 	va_list arg;
 	va_start(arg, format);
-	text(format, arg);
+	textInternalV(format, arg);
 	va_end(arg);
+}
 
+void debug_gui::value(const char* name, bool v)
+{
+	if (v) { textF("%s: true", name); }
+	else { textF("%s: false", name); }
+}
+
+void debug_gui::value(const char* name, int32 v)
+{
+	textF("%s: %d", name, v);
+}
+
+void debug_gui::value(const char* name, uint32 v)
+{
+	textF("%s: %u", name, v);
 }
 
 void debug_gui::value(const char* name, float v)
 {
-	text("%s: %f", name, v);
+	textF("%s: %f", name, v);
 }
 
 void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewport)
@@ -220,11 +293,161 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 		currentVertices.clear();
 	}
 
-	yOffset = 1;
+	cursorY = 0.00001f;
 	level = 0;
+	tabAdvance = 0.f;
+	if (!openTabSeenThisFrame)
+	{
+		openTab = firstTab; // This happens if a tab was closed.
+	}
+	activeTabs = 0;
+	firstTab = 0;
+	openTabSeenThisFrame = false;
+	lastEventType = event_type_none;
 }
 
 bool debug_gui::mouseCallback(mouse_input_event event)
 {
+	mousePosition = vec2((float)event.x, (float)event.y);
+	if (event.type == event_type_down || event.type == event_type_up)
+	{
+		lastEventType = event.type;
+	}
 	return false;
 }
+
+static bool pointInRectangle(vec2 p, vec2 topLeft, vec2 bottomRight)
+{
+	return p.x >= topLeft.x && p.y >= topLeft.y && p.x <= bottomRight.x && p.y <= bottomRight.y;
+}
+
+static uint64 hashLabel(const char* name)
+{
+	return std::hash<const char*>()(name);
+}
+
+// Returns bitmask. 1 is set if hovered, 2 is set if pressed.
+uint32 debug_gui::handleButtonPress(const char* name, float size)
+{
+	uint64 id = hashLabel(name);
+	text_analysis info = analyzeText(name, size);
+
+	uint32 result = 0;
+	if (pointInRectangle(mousePosition, info.topLeft, info.bottomRight))
+	{
+		result |= 1;
+
+		if (lastEventType == event_type_down)
+		{
+			activeID = id;
+		}
+		else if (lastEventType == event_type_up)
+		{
+			if (activeID == id)
+			{
+				result |= 2;
+			}
+			activeID = 0;
+		}
+	}
+
+	uint32 right = (uint32)info.bottomRight.x;
+	result |= right << 2;
+
+	return result;
+}
+
+bool debug_gui::buttonInternal(const char* name, uint32 color, float size, bool isTab)
+{
+	uint32 button = handleButtonPress(name, size);
+	if (button & 1)
+	{
+		color = DEBUG_GUI_HOVERED_COLOR;
+	}
+	textInternal(name, color, size);
+
+	if (isTab)
+	{
+		uint32 right = button >> 2;
+		tabAdvance = right + 100.f;
+	}
+
+	return button & 2;
+}
+
+bool debug_gui::buttonInternalF(const char* name, uint32 color, float size, ...)
+{
+	uint32 button = handleButtonPress(name, size);
+	if (button & 1)
+	{
+		color = DEBUG_GUI_HOVERED_COLOR;
+	}
+	va_list arg;
+	va_start(arg, size); // Must be last argument before ... .
+	textInternalV(name, arg, color, size);
+	va_end(arg);
+	return button & 2;
+}
+
+void debug_gui::toggle(const char* name, bool& v)
+{
+	if (buttonInternalF("%s: %d", DEBUG_GUI_TOGGLE_COLOR, 1.f, name, (int32)v))
+	{
+		v = !v;
+	}
+}
+
+bool debug_gui::button(const char* name)
+{
+	return buttonInternal(name, DEBUG_GUI_BUTTON_COLOR);
+}
+
+bool debug_gui::beginGroupInternal(const char* name, bool& isOpen)
+{
+	const float scale = 1.1f;
+
+	if (buttonInternal(name, DEBUG_GUI_GROUP_COLOR, scale))
+	{
+		isOpen = !isOpen;
+	}
+
+	if (isOpen)
+	{
+		++level;
+	}
+	return isOpen;
+}
+
+bool debug_gui::tab(const char* name)
+{
+	const float scale = 1.5f;
+	cursorY = 0.f;
+
+	uint64 id = hashLabel(name); // This is slightly inefficient since we hash the name in the buttonInternal function too.
+
+	if (activeTabs == 0)
+	{
+		firstTab = id;
+	}
+
+	++activeTabs;
+
+	if (buttonInternal(name, DEBUG_GUI_TAB_COLOR, scale, true))
+	{
+		openTab = id;
+	}
+
+	if (openTab == id)
+	{
+		openTabSeenThisFrame = true;
+		return true;
+	}
+	return false;
+}
+
+void debug_gui::endGroupInternal()
+{
+	assert(level > 0);
+	--level;
+}
+

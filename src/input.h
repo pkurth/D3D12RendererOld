@@ -34,6 +34,8 @@ enum event_type
 	event_type_move,
 	event_type_enter_window,
 	event_type_leave_window,
+
+	event_type_none,
 };
 
 struct key_input_event

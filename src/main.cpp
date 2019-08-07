@@ -256,7 +256,7 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 		uint32 modifiers = (alt ? key_alt : 0) | (shift ? key_shift : 0) | (ctrl ? key_ctrl : 0);
 
 		uint32 mouseX = GET_X_LPARAM(lParam); // Relative to client area. This is only valid, if the message is mouse related.
-		uint32 mouseY = window->clientHeight - 1 - GET_Y_LPARAM(lParam);
+		uint32 mouseY = GET_Y_LPARAM(lParam);
 
 		switch (msg)
 		{

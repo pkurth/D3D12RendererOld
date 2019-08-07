@@ -511,10 +511,31 @@ void dx_game::update(float dt)
 
 	camera.update(width, height, dt);
 
-	gui.beginGroup("Stats");
-	gui.text("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
-	gui.text("Camera position: %.2f %.2f %.2f", camera.position.x, camera.position.y, camera.position.z);
-	gui.endGroup();
+	
+	DEBUG_TAB(gui, "Tab 1")
+	{
+		DEBUG_GROUP(gui, "Stats")
+		{
+			gui.textF("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
+			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
+
+			static bool f = false;
+			gui.toggle("toggle", f);
+
+			DEBUG_GROUP(gui, "Nested")
+			{
+				gui.text("ABC");
+			}
+		}
+	}
+
+	DEBUG_TAB(gui, "Tab 2")
+	{
+		DEBUG_GROUP(gui, "Blubber")
+		{
+			gui.textF("Performance? What performance?");
+		}
+	}
 }
 
 void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
