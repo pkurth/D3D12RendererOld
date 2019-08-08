@@ -27,9 +27,6 @@ class debug_gui
 public:
 	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, D3D12_RT_FORMAT_ARRAY rtvFormats);
 
-	bool beginGroupInternal(const char* name, bool& isOpen);
-	void endGroupInternal();
-
 	bool tab(const char* name);
 
 	void text(const char* text);
@@ -49,6 +46,8 @@ public:
 	bool mouseCallback(mouse_input_event event);
 
 private:
+	friend struct debug_group_internal;
+
 	void resizeIndexBuffer(dx_command_list* commandList, uint32 numQuads);
 
 	float getCursorX();
@@ -65,17 +64,24 @@ private:
 	void textInternalF(const char* format, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f, ...);
 	void textInternalV(const char* format, va_list arg, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f);
 
-	uint32 handleButtonPress(const char* name, float size);
-	bool buttonInternal(const char* name, uint32 color, float size = 1.f, bool isTab = false);
-	bool buttonInternalF(const char* name, uint32 color, float size = 1.f, ...);
+	uint32 handleButtonPress(uint64 id, const char* name, float size);
+	bool buttonInternal(uint64 id, const char* name, uint32 color, float size = 1.f, bool isTab = false);
+	bool buttonInternalF(uint64 id, const char* name, uint32 color, float size = 1.f, ...);
+
+	bool beginGroupInternal(const char* name, bool& isOpen);
+	void endGroupInternal();
 
 	float cursorY;
 	uint32 level;
 	float textHeight;
 	dx_font font;
 
+	std::vector<uint64> allTabsSeeenThisFrame;
+
+	float tabRestoreCursorY;
+
 	float tabAdvance;
-	uint32 activeTabs;
+	uint32 numActiveTabs;
 	uint64 openTab;
 	uint64 firstTab;
 	bool openTabSeenThisFrame;

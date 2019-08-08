@@ -13,7 +13,7 @@ void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* comman
 	lastEventType = event_type_none;
 	activeID = 0;
 	tabAdvance = 0.f;
-	activeTabs = 0;
+	numActiveTabs = 0;
 	openTab = 0;
 	firstTab = 0;
 	openTabSeenThisFrame = false;
@@ -159,7 +159,7 @@ debug_gui::text_analysis debug_gui::analyzeText(const char* text, float size)
 
 void debug_gui::textInternal(const char* text, uint32 color, float size)
 {
-	if (activeTabs == 0)
+	if (numActiveTabs == 0)
 	{
 		assert(!"No open tab in GUI.");
 	}
@@ -300,10 +300,11 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 	{
 		openTab = firstTab; // This happens if a tab was closed.
 	}
-	activeTabs = 0;
+	numActiveTabs = 0;
 	firstTab = 0;
 	openTabSeenThisFrame = false;
 	lastEventType = event_type_none;
+	allTabsSeeenThisFrame.clear();
 }
 
 bool debug_gui::mouseCallback(mouse_input_event event)
@@ -327,9 +328,8 @@ static uint64 hashLabel(const char* name)
 }
 
 // Returns bitmask. 1 is set if hovered, 2 is set if pressed.
-uint32 debug_gui::handleButtonPress(const char* name, float size)
+uint32 debug_gui::handleButtonPress(uint64 id, const char* name, float size)
 {
-	uint64 id = hashLabel(name);
 	text_analysis info = analyzeText(name, size);
 
 	uint32 result = 0;
@@ -357,9 +357,9 @@ uint32 debug_gui::handleButtonPress(const char* name, float size)
 	return result;
 }
 
-bool debug_gui::buttonInternal(const char* name, uint32 color, float size, bool isTab)
+bool debug_gui::buttonInternal(uint64 id, const char* name, uint32 color, float size, bool isTab)
 {
-	uint32 button = handleButtonPress(name, size);
+	uint32 button = handleButtonPress(id, name, size);
 	if (button & 1)
 	{
 		color = DEBUG_GUI_HOVERED_COLOR;
@@ -375,15 +375,15 @@ bool debug_gui::buttonInternal(const char* name, uint32 color, float size, bool 
 	return button & 2;
 }
 
-bool debug_gui::buttonInternalF(const char* name, uint32 color, float size, ...)
+bool debug_gui::buttonInternalF(uint64 id, const char* name, uint32 color, float size, ...)
 {
-	uint32 button = handleButtonPress(name, size);
+	uint32 button = handleButtonPress(id, name, size);
 	if (button & 1)
 	{
 		color = DEBUG_GUI_HOVERED_COLOR;
 	}
 	va_list arg;
-	va_start(arg, size); // Must be last argument before ... .
+	va_start(arg, size); // Must be last argument before '...' .
 	textInternalV(name, arg, color, size);
 	va_end(arg);
 	return button & 2;
@@ -391,7 +391,7 @@ bool debug_gui::buttonInternalF(const char* name, uint32 color, float size, ...)
 
 void debug_gui::toggle(const char* name, bool& v)
 {
-	if (buttonInternalF("%s: %d", DEBUG_GUI_TOGGLE_COLOR, 1.f, name, (int32)v))
+	if (buttonInternalF(hashLabel(name), "%s: %d", DEBUG_GUI_TOGGLE_COLOR, 1.f, name, (int32)v))
 	{
 		v = !v;
 	}
@@ -399,14 +399,14 @@ void debug_gui::toggle(const char* name, bool& v)
 
 bool debug_gui::button(const char* name)
 {
-	return buttonInternal(name, DEBUG_GUI_BUTTON_COLOR);
+	return buttonInternal(hashLabel(name), name, DEBUG_GUI_BUTTON_COLOR);
 }
 
 bool debug_gui::beginGroupInternal(const char* name, bool& isOpen)
 {
 	const float scale = 1.1f;
 
-	if (buttonInternal(name, DEBUG_GUI_GROUP_COLOR, scale))
+	if (buttonInternal(hashLabel(name), name, DEBUG_GUI_GROUP_COLOR, scale))
 	{
 		isOpen = !isOpen;
 	}
@@ -418,36 +418,64 @@ bool debug_gui::beginGroupInternal(const char* name, bool& isOpen)
 	return isOpen;
 }
 
-bool debug_gui::tab(const char* name)
-{
-	const float scale = 1.5f;
-	cursorY = 0.f;
-
-	uint64 id = hashLabel(name); // This is slightly inefficient since we hash the name in the buttonInternal function too.
-
-	if (activeTabs == 0)
-	{
-		firstTab = id;
-	}
-
-	++activeTabs;
-
-	if (buttonInternal(name, DEBUG_GUI_TAB_COLOR, scale, true))
-	{
-		openTab = id;
-	}
-
-	if (openTab == id)
-	{
-		openTabSeenThisFrame = true;
-		return true;
-	}
-	return false;
-}
-
 void debug_gui::endGroupInternal()
 {
 	assert(level > 0);
 	--level;
+}
+
+bool debug_gui::tab(const char* name)
+{
+	assert(level == 0);
+
+	const float scale = 1.5f;
+
+	uint64 id = hashLabel(name);
+	if (id == openTab && openTabSeenThisFrame)
+	{
+		// This is the second time we encounter this tab this frame, so restore it.
+		cursorY = tabRestoreCursorY;
+		return true;
+	}
+	else
+	{
+		// Open new tab.
+
+		for (uint64 i : allTabsSeeenThisFrame)
+		{
+			if (id == i)
+			{
+				return false;
+			}
+		}
+
+		allTabsSeeenThisFrame.push_back(id);
+
+		if (openTabSeenThisFrame)
+		{
+			tabRestoreCursorY = cursorY;
+		}
+
+		cursorY = 0.f;
+
+		if (numActiveTabs == 0)
+		{
+			firstTab = id;
+		}
+
+		++numActiveTabs;
+
+		if (buttonInternal(id, name, DEBUG_GUI_TAB_COLOR, scale, true))
+		{
+			openTab = id;
+		}
+
+		if (openTab == id)
+		{
+			openTabSeenThisFrame = true;
+			return true;
+		}
+		return false;
+	}
 }
 

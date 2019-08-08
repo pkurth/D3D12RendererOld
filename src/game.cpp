@@ -536,6 +536,11 @@ void dx_game::update(float dt)
 			gui.textF("Performance? What performance?");
 		}
 	}
+
+	DEBUG_TAB(gui, "Tab 1")
+	{
+		gui.text("RESTORED");
+	}
 }
 
 void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
