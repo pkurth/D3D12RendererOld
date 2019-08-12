@@ -43,6 +43,9 @@ private:
 	bool contentLoaded = false;
 	ComPtr<ID3D12Device2> device;
 
+	ComPtr<ID3D12PipelineState> azdoGeometryPipelineState;
+	dx_root_signature azdoGeometryRootSignature;
+
 	ComPtr<ID3D12PipelineState> opaqueGeometryPipelineState;
 	dx_root_signature opaqueGeometryRootSignature;
 
@@ -58,6 +61,8 @@ private:
 	ComPtr<ID3D12PipelineState> presentPipelineState;
 	dx_root_signature presentRootSignature;
 
+
+	dx_mesh azdoMesh;
 
 	std::vector<dx_material> materials;
 	std::vector<dx_mesh> meshes;

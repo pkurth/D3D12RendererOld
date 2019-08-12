@@ -37,9 +37,9 @@ struct render_camera
 		{
 			time -= DirectX::XM_PI * 2.f;
 		}
-
-		float x = cosf(time) * 5.f;
-		float z = sinf(time) * 5.f;
+		
+		float x = cosf(time) * 13.f;
+		float z = sinf(time) * 13.f;
 
 		position.x = x;
 		position.z = z;

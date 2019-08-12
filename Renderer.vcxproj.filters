@@ -193,5 +193,7 @@
     <FxCompile Include="shaders\light_ambient_ps.hlsl" />
     <FxCompile Include="shaders\font_ps.hlsl" />
     <FxCompile Include="shaders\font_vs.hlsl" />
+    <FxCompile Include="shaders\azdo_vs.hlsl" />
+    <FxCompile Include="shaders\azdo_ps.hlsl" />
   </ItemGroup>
 </Project>

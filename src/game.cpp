@@ -94,6 +94,72 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		}
 	}
 
+	// AZDO.
+	{
+		ComPtr<ID3DBlob> vertexShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/azdo_vs.cso", &vertexShaderBlob));
+		ComPtr<ID3DBlob> pixelShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/azdo_ps.cso", &pixelShaderBlob));
+
+		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+
+		// Root signature.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		rootParameters[GEOMETRY_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
+		rootParameters[GEOMETRY_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.pParameters = rootParameters;
+		rootSignatureDesc.NumParameters = arraysize(rootParameters);
+		rootSignatureDesc.pStaticSamplers = nullptr;
+		rootSignatureDesc.NumStaticSamplers = 0;
+		azdoGeometryRootSignature.initialize(device, rootSignatureDesc);
+
+
+
+		struct pipeline_state_stream
+		{
+			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
+			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
+			CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
+		} pipelineStateStream;
+
+		pipelineStateStream.rootSignature = azdoGeometryRootSignature.rootSignature.Get();
+		pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
+		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+		pipelineStateStream.dsvFormat = gbufferRT.depthStencilFormat;
+		pipelineStateStream.rtvFormats = gbufferRT.renderTargetFormat;
+		pipelineStateStream.rasterizer = defaultRasterizerDesc;
+		pipelineStateStream.depthStencilDesc = alwaysReplaceStencilDesc;
+
+		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+			sizeof(pipeline_state_stream), &pipelineStateStream
+		};
+		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&azdoGeometryPipelineState)));
+	}
+
 	// Geometry. This writes to the GBuffer.
 	{
 		ComPtr<ID3DBlob> vertexShaderBlob;
@@ -455,6 +521,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	cpu_mesh<vertex_3P> skybox = cpu_mesh<vertex_3P>::cube(1.f, true);
 	skyMesh = commandList->createMesh(skybox);
 
+	cpu_mesh<vertex_3PUN> azdo = cpu_mesh<vertex_3PUN>::cube(0.1f);
+	azdoMesh = commandList->createMesh(azdo);
+
 	dx_texture equirectangular;
 	commandList->loadTextureFromFile(equirectangular, L"res/leadenhall_market_4k.hdr", texture_type_color);
 	commandList->convertEquirectangularToCubemap(equirectangular, cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
@@ -541,6 +610,32 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	// No need to clear color, since we mark valid pixels with the stencil.
 	commandList->clearDepthAndStencil(gbufferRT.depthStencilAttachment->getDepthStencilView());
 	commandList->setStencilReference(1);
+
+	// AZDO.
+	{
+		commandList->setPipelineState(azdoGeometryPipelineState);
+		commandList->setGraphicsRootSignature(azdoGeometryRootSignature);
+
+		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		commandList->setGraphicsDynamicConstantBuffer(GEOMETRY_ROOTPARAM_CAMERA, cameraCBAddress);
+
+		mat4 model = mat4::CreateWorld(vec3(0.f, 0.f, 0.f) * 2.f, vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
+		commandList->setVertexBuffer(0, azdoMesh.vertexBuffer); // TODO: Is the fair test to do this once or in the loop?
+		commandList->setIndexBuffer(azdoMesh.indexBuffer);
+		for (uint32 z = 0; z < 64; ++z)
+		{
+			for (uint32 y = 0; y < 64; ++y)
+			{
+				for (uint32 x = 0; x < 64; ++x)
+				{
+					model(3, 0) = x * 0.21f - 32 * 0.2f; model(3, 1) = y * 0.21f - 32 * 0.2f; model(3, 2) = z * 0.21f - 32 * 0.2f;
+					commandList->setGraphics32BitConstants(GEOMETRY_ROOTPARAM_MODEL, model);
+					commandList->drawIndexed(azdoMesh.indexBuffer.numIndices, 1, 0, 0, 0);
+				}
+			}
+		}
+	}
 
 	// Geometry.
 	{
