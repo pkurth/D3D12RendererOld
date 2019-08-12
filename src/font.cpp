@@ -166,7 +166,7 @@ bool dx_font::initialize(dx_command_list* commandList, const char* fontname, int
 		{
 			stbrp_context packingContext;
 			std::vector<stbrp_node> nodes(currentPackSize);
-			stbrp_init_target(&packingContext, currentPackSize, currentPackSize, nodes.data(), nodes.size());
+			stbrp_init_target(&packingContext, currentPackSize, currentPackSize, nodes.data(), (int32)nodes.size());
 			packResult = stbrp_pack_rects(&packingContext, packRects, NUM_CODEPOINTS);
 			
 			if (packResult)

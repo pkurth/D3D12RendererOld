@@ -383,9 +383,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
-		rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
-		rootParameters[1].InitAsConstants(2, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Present params.
-		rootParameters[2].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Texture.
+		rootParameters[PRESENT_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
+		rootParameters[PRESENT_ROOTPARAM_MODE].InitAsConstants(2, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Present params.
+		rootParameters[PRESENT_ROOTPARAM_TEXTURE].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Texture.
 
 		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
 			D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
@@ -512,34 +512,13 @@ void dx_game::update(float dt)
 	camera.update(width, height, dt);
 
 	
-	DEBUG_TAB(gui, "Tab 1")
+	DEBUG_TAB(gui, "Stats")
 	{
-		DEBUG_GROUP(gui, "Stats")
+		gui.textF("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
+		DEBUG_GROUP(gui, "Camera")
 		{
-			gui.textF("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
 			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
-
-			static bool f = false;
-			gui.toggle("toggle", f);
-
-			DEBUG_GROUP(gui, "Nested")
-			{
-				gui.text("ABC");
-			}
 		}
-	}
-
-	DEBUG_TAB(gui, "Tab 2")
-	{
-		DEBUG_GROUP(gui, "Blubber")
-		{
-			gui.textF("Performance? What performance?");
-		}
-	}
-
-	DEBUG_TAB(gui, "Tab 1")
-	{
-		gui.text("RESTORED");
 	}
 }
 
@@ -671,8 +650,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 			0, 0.f
 		};
 
-		commandList->setGraphics32BitConstants(1, presentCB);
-		commandList->setShaderResourceView(2, 0, *lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setGraphics32BitConstants(PRESENT_ROOTPARAM_MODE, presentCB);
+		commandList->setShaderResourceView(PRESENT_ROOTPARAM_TEXTURE, 0, *lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->draw(3, 1, 0, 0);
 	}
