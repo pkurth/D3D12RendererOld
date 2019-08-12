@@ -304,7 +304,7 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 	firstTab = 0;
 	openTabSeenThisFrame = false;
 	lastEventType = event_type_none;
-	allTabsSeeenThisFrame.clear();
+	allTabsSeenThisFrame.clear();
 }
 
 bool debug_gui::mouseCallback(mouse_input_event event)
@@ -322,7 +322,7 @@ static bool pointInRectangle(vec2 p, vec2 topLeft, vec2 bottomRight)
 	return p.x >= topLeft.x && p.y >= topLeft.y && p.x <= bottomRight.x && p.y <= bottomRight.y;
 }
 
-static uint64 hashLabel(const char* name)
+uint64 debug_gui::hashLabel(const char* name)
 {
 	return std::hash<const char*>()(name);
 }
@@ -433,15 +433,14 @@ bool debug_gui::tab(const char* name)
 	uint64 id = hashLabel(name);
 	if (id == openTab && openTabSeenThisFrame)
 	{
-		// This is the second time we encounter this tab this frame, so restore it.
-		cursorY = tabRestoreCursorY;
+		// We have encountered this tab this frame already, so restore it.
 		return true;
 	}
 	else
 	{
 		// Open new tab.
 
-		for (uint64 i : allTabsSeeenThisFrame)
+		for (uint64 i : allTabsSeenThisFrame)
 		{
 			if (id == i)
 			{
@@ -449,13 +448,9 @@ bool debug_gui::tab(const char* name)
 			}
 		}
 
-		allTabsSeeenThisFrame.push_back(id);
+		allTabsSeenThisFrame.push_back(id);
 
-		if (openTabSeenThisFrame)
-		{
-			tabRestoreCursorY = cursorY;
-		}
-
+		float cursorRestore = cursorY;
 		cursorY = 0.f;
 
 		if (numActiveTabs == 0)
@@ -475,6 +470,8 @@ bool debug_gui::tab(const char* name)
 			openTabSeenThisFrame = true;
 			return true;
 		}
+
+		cursorY = cursorRestore;
 		return false;
 	}
 }

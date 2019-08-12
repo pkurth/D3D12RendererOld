@@ -59,6 +59,8 @@ private:
 		vec2 bottomRight;
 	};
 
+	uint64 hashLabel(const char* name);
+
 	text_analysis analyzeText(const char* text, float size = 1.f);
 	void textInternal(const char* text, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f);
 	void textInternalF(const char* format, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f, ...);
@@ -71,14 +73,15 @@ private:
 	bool beginGroupInternal(const char* name, bool& isOpen);
 	void endGroupInternal();
 
-	float cursorY;
-	uint32 level;
+
 	float textHeight;
 	dx_font font;
 
-	std::vector<uint64> allTabsSeeenThisFrame;
 
-	float tabRestoreCursorY;
+	float cursorY;
+	uint32 level;
+
+	std::vector<uint64> allTabsSeenThisFrame;
 
 	float tabAdvance;
 	uint32 numActiveTabs;
