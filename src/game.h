@@ -25,6 +25,9 @@
 #define PRESENT_ROOTPARAM_MODE		1
 #define PRESENT_ROOTPARAM_TEXTURE	2
 
+#define NUM_AZDO_CUBES_PER_DIMENSION 64
+#define TOTAL_NUM_AZDO_CUBES (NUM_AZDO_CUBES_PER_DIMENSION * NUM_AZDO_CUBES_PER_DIMENSION * NUM_AZDO_CUBES_PER_DIMENSION)
+
 class dx_game
 {
 
@@ -45,6 +48,7 @@ private:
 
 	ComPtr<ID3D12PipelineState> azdoGeometryPipelineState;
 	dx_root_signature azdoGeometryRootSignature;
+	ComPtr<ID3D12CommandSignature> azdoCommandSignature;
 
 	ComPtr<ID3D12PipelineState> opaqueGeometryPipelineState;
 	dx_root_signature opaqueGeometryRootSignature;
@@ -63,6 +67,7 @@ private:
 
 
 	dx_mesh azdoMesh;
+	ComPtr<ID3D12Resource> azdoCommandBuffer;
 
 	std::vector<dx_material> materials;
 	std::vector<dx_mesh> meshes;
@@ -77,6 +82,7 @@ private:
 
 	uint32 width;
 	uint32 height;
+	float dt;
 
 	D3D12_VIEWPORT viewport;
 	D3D12_RECT scissorRect;

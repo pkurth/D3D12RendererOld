@@ -67,6 +67,10 @@ public:
 	// These buffers are temporary! They only last one frame!
 	template <typename vertex_t> D3D12_VERTEX_BUFFER_VIEW createDynamicVertexBuffer(const vertex_t* vertices, uint32 count);
 
+	
+	void updateBufferResource(ComPtr<ID3D12Resource>& destinationResource,
+		size_t numElements, size_t elementSize, const void* bufferData, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
+
 
 	void setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ID3D12DescriptorHeap* heap);
 
@@ -134,10 +138,6 @@ public:
 	inline dx_command_list* getComputeCommandList() const { return computeCommandList; }
 
 private:
-
-	void updateBufferResource(ComPtr<ID3D12Resource>& destinationResource,
-		size_t numElements, size_t elementSize, const void* bufferData, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
-
 	void trackObject(ComPtr<ID3D12Object> object);
 	void flushResourceBarriers();
 

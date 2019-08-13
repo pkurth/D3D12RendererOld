@@ -4,6 +4,11 @@
 #include "model.h"
 #include "graphics.h"
 
+struct indirect_command
+{
+	mat4 modelMatrix;
+	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
+};
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
 {
@@ -158,6 +163,23 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			sizeof(pipeline_state_stream), &pipelineStateStream
 		};
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&azdoGeometryPipelineState)));
+
+
+
+		D3D12_INDIRECT_ARGUMENT_DESC argumentDescs[2];
+		argumentDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+		argumentDescs[0].Constant.RootParameterIndex = GEOMETRY_ROOTPARAM_MODEL;
+		argumentDescs[0].Constant.DestOffsetIn32BitValues = 0;
+		argumentDescs[0].Constant.Num32BitValuesToSet = 16;
+		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+
+		D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc = {};
+		commandSignatureDesc.pArgumentDescs = argumentDescs;
+		commandSignatureDesc.NumArgumentDescs = arraysize(argumentDescs);
+		commandSignatureDesc.ByteStride = sizeof(indirect_command);
+
+		checkResult(device->CreateCommandSignature(&commandSignatureDesc, azdoGeometryRootSignature.rootSignature.Get(), 
+			IID_PPV_ARGS(&azdoCommandSignature)));
 	}
 
 	// Geometry. This writes to the GBuffer.
@@ -505,13 +527,13 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 	// Load scene.
-	cpu_mesh_group<vertex_3PUNT> model;
-	model.loadFromFile("res/cerberus/Cerberus_LP.FBX");
+	cpu_mesh_group<vertex_3PUNT> cerberus;
+	cerberus.loadFromFile("res/cerberus/Cerberus_LP.FBX");
 
-	materials.resize(model.meshes.size());
-	for (uint32 i = 0; i < model.meshes.size(); ++i)
+	materials.resize(cerberus.meshes.size());
+	for (uint32 i = 0; i < cerberus.meshes.size(); ++i)
 	{
-		cpu_mesh<vertex_3PUNT>& mesh = model.meshes[i];
+		cpu_mesh<vertex_3PUNT>& mesh = cerberus.meshes[i];
 		meshes.push_back(commandList->createMesh(mesh));
 		commandList->loadTextureFromFile(materials[i].albedo, L"res/cerberus/Cerberus_A.tga", texture_type_color);
 		commandList->loadTextureFromFile(materials[i].normal, L"res/cerberus/Cerberus_N.tga", texture_type_noncolor);
@@ -523,6 +545,42 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	cpu_mesh<vertex_3PUN> azdo = cpu_mesh<vertex_3PUN>::cube(0.1f);
 	azdoMesh = commandList->createMesh(azdo);
+
+
+
+	indirect_command* azdoCommands = new indirect_command[TOTAL_NUM_AZDO_CUBES * 1];
+
+	mat4 model = mat4::CreateWorld(vec3(0.f, 0.f, 0.f) * 2.f, vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
+
+	uint32 i = 0;
+	//for (uint32 f = 0; f < 3; ++f)
+	{
+		for (uint32 z = 0; z < NUM_AZDO_CUBES_PER_DIMENSION; ++z)
+		{
+			for (uint32 y = 0; y < NUM_AZDO_CUBES_PER_DIMENSION; ++y)
+			{
+				for (uint32 x = 0; x < NUM_AZDO_CUBES_PER_DIMENSION; ++x)
+				{
+					model(3, 0) = x * 0.21f - (NUM_AZDO_CUBES_PER_DIMENSION / 2) * 0.2f; 
+					model(3, 1) = y * 0.21f - (NUM_AZDO_CUBES_PER_DIMENSION / 2) * 0.2f; 
+					model(3, 2) = z * 0.21f - (NUM_AZDO_CUBES_PER_DIMENSION / 2) * 0.2f;
+					azdoCommands[i].modelMatrix = model;
+
+					azdoCommands[i].drawArguments.IndexCountPerInstance = 36;
+					azdoCommands[i].drawArguments.InstanceCount = 1;
+					azdoCommands[i].drawArguments.StartIndexLocation = 0;
+					azdoCommands[i].drawArguments.BaseVertexLocation = 0;
+					azdoCommands[i].drawArguments.StartInstanceLocation = 0;
+
+					++i;
+				}
+			}
+		}
+	}
+
+	commandList->updateBufferResource(azdoCommandBuffer, TOTAL_NUM_AZDO_CUBES * 1, sizeof(indirect_command), azdoCommands);
+
+	delete[] azdoCommands;
 
 	dx_texture equirectangular;
 	commandList->loadTextureFromFile(equirectangular, L"res/leadenhall_market_4k.hdr", texture_type_color);
@@ -580,6 +638,8 @@ void dx_game::update(float dt)
 
 	camera.update(width, height, dt);
 
+	this->dt = dt;
+
 	
 	DEBUG_TAB(gui, "Stats")
 	{
@@ -620,21 +680,19 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->setGraphicsDynamicConstantBuffer(GEOMETRY_ROOTPARAM_CAMERA, cameraCBAddress);
 
-		mat4 model = mat4::CreateWorld(vec3(0.f, 0.f, 0.f) * 2.f, vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
-		commandList->setVertexBuffer(0, azdoMesh.vertexBuffer); // TODO: Is the fair test to do this once or in the loop?
+		commandList->setVertexBuffer(0, azdoMesh.vertexBuffer);
 		commandList->setIndexBuffer(azdoMesh.indexBuffer);
-		for (uint32 z = 0; z < 64; ++z)
-		{
-			for (uint32 y = 0; y < 64; ++y)
-			{
-				for (uint32 x = 0; x < 64; ++x)
-				{
-					model(3, 0) = x * 0.21f - 32 * 0.2f; model(3, 1) = y * 0.21f - 32 * 0.2f; model(3, 2) = z * 0.21f - 32 * 0.2f;
-					commandList->setGraphics32BitConstants(GEOMETRY_ROOTPARAM_MODEL, model);
-					commandList->drawIndexed(azdoMesh.indexBuffer.numIndices, 1, 0, 0, 0);
-				}
-			}
-		}
+		
+		static uint32 frameIndex = 0;
+		commandList->getD3D12CommandList()->ExecuteIndirect(
+			azdoCommandSignature.Get(),
+			TOTAL_NUM_AZDO_CUBES,
+			azdoCommandBuffer.Get(),
+			sizeof(indirect_command) * TOTAL_NUM_AZDO_CUBES * frameIndex,
+			nullptr,
+			0);
+
+		//frameIndex = (frameIndex + 1) % 3;
 	}
 
 	// Geometry.
