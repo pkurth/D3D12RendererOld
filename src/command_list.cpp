@@ -1186,11 +1186,13 @@ void dx_command_list::flushResourceBarriers()
 	resourceStateTracker.flushResourceBarriers(commandList);
 }
 
-void dx_command_list::setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ID3D12DescriptorHeap* heap)
+void dx_command_list::setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ComPtr<ID3D12DescriptorHeap> heap)
 {
-	if (descriptorHeaps[heapType] != heap)
+	ID3D12DescriptorHeap* heapPtr = heap.Get();
+
+	if (descriptorHeaps[heapType] != heapPtr)
 	{
-		descriptorHeaps[heapType] = heap;
+		descriptorHeaps[heapType] = heapPtr;
 		
 
 		uint32 numDescriptorHeaps = 0;
@@ -1207,5 +1209,6 @@ void dx_command_list::setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ID3
 
 		commandList->SetDescriptorHeaps(numDescriptorHeaps, descriptorHeaps);
 
+		trackObject(heap);
 	}
 }

@@ -121,20 +121,24 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0); // Unbounded.
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 		rootParameters[GEOMETRY_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
 		rootParameters[GEOMETRY_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
+		rootParameters[GEOMETRY_ROOTPARAM_TEXTURES].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Material textures.
+
+		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearWrapSampler(0);
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.Flags = rootSignatureFlags;
 		rootSignatureDesc.pParameters = rootParameters;
 		rootSignatureDesc.NumParameters = arraysize(rootParameters);
-		rootSignatureDesc.pStaticSamplers = nullptr;
-		rootSignatureDesc.NumStaticSamplers = 0;
+		rootSignatureDesc.pStaticSamplers = &sampler;
+		rootSignatureDesc.NumStaticSamplers = 1;
 		azdoGeometryRootSignature.initialize(device, rootSignatureDesc);
 
 
@@ -547,13 +551,42 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	cpu_mesh<vertex_3PUNT> azdo;
 	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Coffee Sack/Coffee_Sack.FBX"));
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Chopped Wood Pile/Chopped_Wood_Pile.FBX"));
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Pick Axe/Pick_Axe.FBX"));
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Milk Churn/Milk_Churn.FBX"));
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Wooden Crate/Wooden_Crate_Cracked.FBX"));
-	
+	//append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Chopped Wood Pile/Chopped_Wood_Pile.FBX"));
+	//append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Milk Churn/Milk_Churn.FBX"));
 	azdoMesh.initialize(device, commandList, azdo);
 
+	azdoMaterials.resize(azdoSubmeshes.size());
+	commandList->loadTextureFromFile(azdoMaterials[0].albedo, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_Albedo.png", texture_type_color);
+	commandList->loadTextureFromFile(azdoMaterials[0].normal, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_Normal.png", texture_type_noncolor);
+	commandList->loadTextureFromFile(azdoMaterials[0].roughMetal, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_RMAO.png", texture_type_noncolor);
+
+	//commandList->loadTextureFromFile(azdoMaterials[1].albedo, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Albedo.png", texture_type_color);
+	//commandList->loadTextureFromFile(azdoMaterials[1].normal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Normal.png", texture_type_noncolor);
+	//commandList->loadTextureFromFile(azdoMaterials[1].roughMetal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_RMAO.png", texture_type_noncolor);
+	//
+	//commandList->loadTextureFromFile(azdoMaterials[2].albedo, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_Albedo.png", texture_type_color);
+	//commandList->loadTextureFromFile(azdoMaterials[2].normal, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_Normal.png", texture_type_noncolor);
+	//commandList->loadTextureFromFile(azdoMaterials[2].roughMetal, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_RMAO.png", texture_type_noncolor);
+
+	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
+	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	descriptorHeapDesc.NumDescriptors = 3;// azdoMaterials.size() * 3;
+	descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&azdoDescriptorHeap)));
+
+	uint32 descriptorHandleIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(azdoDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+
+	for (uint32 i = 0; i < 1;/*azdoMaterials.size();*/ ++i)
+	{
+		device->CreateShaderResourceView(azdoMaterials[i].albedo.resource.Get(), nullptr, srvHandle);
+		srvHandle.Offset(descriptorHandleIncrementSize);
+		device->CreateShaderResourceView(azdoMaterials[i].normal.resource.Get(), nullptr, srvHandle);
+		srvHandle.Offset(descriptorHandleIncrementSize);
+		device->CreateShaderResourceView(azdoMaterials[i].roughMetal.resource.Get(), nullptr, srvHandle);
+		srvHandle.Offset(descriptorHandleIncrementSize);
+	}
 
 	indirect_command* azdoCommands = new indirect_command[NUM_RANDOM_OBJECTS];
 
@@ -592,7 +625,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);
 
-
+	
 	// Loading scene done.
 	contentLoaded = true;
 
@@ -674,6 +707,10 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 #if 1
 	// AZDO.
 	{
+		commandList->transitionBarrier(azdoMaterials[0].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(azdoMaterials[0].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(azdoMaterials[0].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
 		commandList->setPipelineState(azdoGeometryPipelineState);
 		commandList->setGraphicsRootSignature(azdoGeometryRootSignature);
 
@@ -681,6 +718,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->setGraphicsDynamicConstantBuffer(GEOMETRY_ROOTPARAM_CAMERA, cameraCBAddress);
 
+		commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, azdoDescriptorHeap);
+		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(GEOMETRY_ROOTPARAM_TEXTURES, azdoDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 		commandList->setVertexBuffer(0, azdoMesh.vertexBuffer);
 		commandList->setIndexBuffer(azdoMesh.indexBuffer);
 		

@@ -53,7 +53,10 @@ void dx_root_signature::initialize(ComPtr<ID3D12Device2> device, const D3D12_ROO
 				case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
 				case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
 				case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:
-					descriptorTableBitMask |= (1 << i);
+					if (rootParameter.DescriptorTable.pDescriptorRanges[0].NumDescriptors != -1) // Only if bounded.
+					{
+						descriptorTableBitMask |= (1 << i);
+					}
 					break;
 				case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
 					samplerTableBitMask |= (1 << i);

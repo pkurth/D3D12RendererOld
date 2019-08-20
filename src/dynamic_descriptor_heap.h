@@ -13,7 +13,6 @@ public:
 
 	void stageDescriptors(uint32 rootParameterIndex, uint32 offset, uint32 numDescriptors, D3D12_CPU_DESCRIPTOR_HANDLE srcDescriptor);
 
-	void commitStagedDescriptors(dx_command_list* commandList, std::function<void(ID3D12GraphicsCommandList*, uint32, D3D12_GPU_DESCRIPTOR_HANDLE)> setFunc);
 	void commitStagedDescriptorsForDraw(dx_command_list* commandList);
 	void commitStagedDescriptorsForDispatch(dx_command_list* commandList);
 
@@ -29,6 +28,8 @@ private:
 	ComPtr<ID3D12DescriptorHeap> createDescriptorHeap();
 
 	uint32 computeStaleDescriptorCount() const;
+
+	void commitStagedDescriptors(dx_command_list* commandList, std::function<void(ID3D12GraphicsCommandList*, uint32, D3D12_GPU_DESCRIPTOR_HANDLE)> setFunc);
 
 	static const uint32 maxDescriptorTables = 32;
 

@@ -53,7 +53,7 @@ void dx_dynamic_descriptor_heap::commitStagedDescriptors(dx_command_list* comman
 			currentGPUDescriptorHandle = currentDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 			numFreeHandles = numDescriptorsPerHeap;
 
-			commandList->setDescriptorHeap(descriptorHeapType, currentDescriptorHeap.Get());
+			commandList->setDescriptorHeap(descriptorHeapType, currentDescriptorHeap);
 
 			// When updating the descriptor heap on the command list, all descriptor
 			// tables must be (re)recopied to the new descriptor heap (not just

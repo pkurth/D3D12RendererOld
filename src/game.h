@@ -67,7 +67,9 @@ private:
 
 	dx_mesh azdoMesh;
 	std::vector<submesh_info> azdoSubmeshes;
+	std::vector<dx_material> azdoMaterials;
 	dx_buffer azdoCommandBuffer;
+	ComPtr<ID3D12DescriptorHeap> azdoDescriptorHeap;
 
 	dx_material cerberusMaterial;
 	dx_mesh sceneMesh;

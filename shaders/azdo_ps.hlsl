@@ -13,15 +13,19 @@ struct ps_output
 	float4 normal	: SV_Target2;
 };
 
+SamplerState linearWrapSampler				: register(s0);
+Texture2D<float4> materialTextures[1024]	: register(t0);
+
 ps_output main(ps_input IN)
 {
 	ps_output OUT;
 
-	float4 color = float4(1.f, 0.f, 0.f, 1.f);
+	float4 color = materialTextures[0].Sample(linearWrapSampler, IN.uv);
+	float3 RMAO = materialTextures[2].Sample(linearWrapSampler, IN.uv).xyz;
 
-	OUT.albedoAO = float4(color.xyz, 1.f);
+	OUT.albedoAO = float4(color.xyz, RMAO.z);
 	OUT.emission = float4(0.f, 0.f, 0.f, 0.f);
-	OUT.normal = float4(encodeNormal(normalize(IN.normal)), float2(1.f, 0.f));
+	OUT.normal = float4(encodeNormal(normalize(IN.normal)), RMAO.xy);
 
 	return OUT;
 }
