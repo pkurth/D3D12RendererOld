@@ -77,6 +77,12 @@ inline void* alignTo(void* currentAddress, uint64 alignment)
 	return (void*)alignTo((uint64)currentAddress, alignment);
 }
 
+template <typename T>
+inline void append(std::vector<T>& appendHere, const std::vector<T>& appendMe)
+{
+	appendHere.insert(appendHere.end(), appendMe.begin(), appendMe.end());
+}
+
 #define defineHasMember(member_name)                                         \
     template <typename T>                                                      \
     class has_member_##member_name                                             \

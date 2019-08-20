@@ -5,6 +5,7 @@
 
 void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, D3D12_RT_FORMAT_ARRAY rtvFormats)
 {
+	this->device = device;
 	resizeIndexBuffer(commandList, 2048);
 	level = 0;
 	font.initialize(commandList, "consola", 25, true);
@@ -104,7 +105,7 @@ void debug_gui::resizeIndexBuffer(dx_command_list* commandList, uint32 numQuads)
 		indices[i * 6 + 5] = i * 4 + 2;
 	}
 
-	indexBuffer = commandList->createIndexBuffer(indices, numQuads * 6);
+	indexBuffer.initialize(device, indices, numQuads * 6, commandList);
 	delete[] indices;
 }
 

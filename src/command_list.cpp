@@ -164,26 +164,13 @@ void dx_command_list::setStencilReference(uint32 stencilReference)
 	commandList->OMSetStencilRef(stencilReference);
 }
 
-void dx_command_list::updateBufferResource(ComPtr<ID3D12Resource>& destinationResource, size_t numElements, size_t elementSize, const void* bufferData, D3D12_RESOURCE_FLAGS flags)
+void dx_command_list::uploadBufferData(ComPtr<ID3D12Resource> destinationResource, const void* bufferData, uint32 bufferSize)
 {
-	size_t bufferSize = numElements * elementSize;
-
-	// Create a committed resource for the GPU resource in a default heap.
-	checkResult(device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags),
-		D3D12_RESOURCE_STATE_COMMON,
-		nullptr,
-		IID_PPV_ARGS(&destinationResource)));
-
-	dx_resource_state_tracker::addGlobalResourceState(destinationResource.Get(), D3D12_RESOURCE_STATE_COMMON, 1);
-
 	if (bufferData)
 	{
 		ComPtr<ID3D12Resource> intermediateResource;
 
-		// Create an committed resource for the upload.
+		// Create a committed resource for the upload.
 		checkResult(device->CreateCommittedResource(
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
 			D3D12_HEAP_FLAG_NONE,
@@ -205,9 +192,38 @@ void dx_command_list::updateBufferResource(ComPtr<ID3D12Resource>& destinationRe
 			0, 0, 1, &subresourceData);
 
 		trackObject(intermediateResource);
+		trackObject(destinationResource);
 	}
+}
 
-	trackObject(destinationResource);
+void dx_command_list::updateBufferDataRange(ComPtr<ID3D12Resource> destinationResource, const void* data, uint32 offset, uint32 size)
+{
+	if (data)
+	{
+		ComPtr<ID3D12Resource> intermediateResource;
+
+		// Create a committed resource for the upload.
+		checkResult(device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3DX12_RESOURCE_DESC::Buffer(size),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&intermediateResource)));
+
+		resourceStateTracker.transitionResource(destinationResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
+		flushResourceBarriers();
+
+		void* mapped;
+		checkResult(intermediateResource->Map(0, nullptr, &mapped));
+		memcpy(mapped, data, size);
+		intermediateResource->Unmap(0, nullptr);
+
+		commandList->CopyBufferRegion(destinationResource.Get(), offset, intermediateResource.Get(), 0, size);
+
+		trackObject(intermediateResource);
+		trackObject(destinationResource);
+	}
 }
 
 void dx_command_list::copyTextureSubresource(dx_texture& texture, uint32 firstSubresource, uint32 numSubresources, D3D12_SUBRESOURCE_DATA* subresourceData)
@@ -220,7 +236,7 @@ void dx_command_list::copyTextureSubresource(dx_texture& texture, uint32 firstSu
 
 		UINT64 requiredSize = GetRequiredIntermediateSize(destinationResource.Get(), firstSubresource, numSubresources);
 
-		// Create a temporary (intermediate) resource for uploading the subresources
+		// Create a temporary (intermediate) resource for uploading the subresources.
 		ComPtr<ID3D12Resource> intermediateResource;
 		checkResult(device->CreateCommittedResource(
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -240,8 +256,8 @@ void dx_command_list::copyTextureSubresource(dx_texture& texture, uint32 firstSu
 
 void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips)
 {
-	std::filesystem::path path(filename);
-	assert(std::filesystem::exists(path));
+	fs::path path(filename);
+	assert(fs::exists(path));
 
 	auto it = textureCache.find(filename);
 	if (it != textureCache.end())

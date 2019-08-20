@@ -12,6 +12,8 @@ struct indirect_command
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
 {
+	//parseAssetDirectory("res/western-props-pack");
+
 	this->device = device;
 	scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 	viewport = CD3DX12_VIEWPORT(0.f, 0.f, (float)width, (float)height);
@@ -110,6 +112,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
 
@@ -171,7 +174,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		argumentDescs[0].Constant.RootParameterIndex = GEOMETRY_ROOTPARAM_MODEL;
 		argumentDescs[0].Constant.DestOffsetIn32BitValues = 0;
 		argumentDescs[0].Constant.Num32BitValuesToSet = 16;
-		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 
 		D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc = {};
 		commandSignatureDesc.pArgumentDescs = argumentDescs;
@@ -527,58 +530,55 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 	// Load scene.
-	cpu_mesh_group<vertex_3PUNT> cerberus;
-	cerberus.loadFromFile("res/cerberus/Cerberus_LP.FBX");
+	cpu_mesh<vertex_3PUNT> scene;
+	append(sceneSubmeshes, scene.pushFromFile("res/cerberus/Cerberus_LP.FBX"));
+	
+	sceneMesh.initialize(device, commandList, scene);
 
-	materials.resize(cerberus.meshes.size());
-	for (uint32 i = 0; i < cerberus.meshes.size(); ++i)
-	{
-		cpu_mesh<vertex_3PUNT>& mesh = cerberus.meshes[i];
-		meshes.push_back(commandList->createMesh(mesh));
-		commandList->loadTextureFromFile(materials[i].albedo, L"res/cerberus/Cerberus_A.tga", texture_type_color);
-		commandList->loadTextureFromFile(materials[i].normal, L"res/cerberus/Cerberus_N.tga", texture_type_noncolor);
-		commandList->loadTextureFromFile(materials[i].roughMetal, L"res/cerberus/Cerberus_RMAO.png", texture_type_noncolor);
-	}
-
-	cpu_mesh<vertex_3P> skybox = cpu_mesh<vertex_3P>::cube(1.f, true);
-	skyMesh = commandList->createMesh(skybox);
-
-	cpu_mesh<vertex_3PUN> azdo = cpu_mesh<vertex_3PUN>::cube(0.1f);
-	azdoMesh = commandList->createMesh(azdo);
+	commandList->loadTextureFromFile(cerberusMaterial.albedo, L"res/cerberus/Cerberus_A.tga", texture_type_color);
+	commandList->loadTextureFromFile(cerberusMaterial.normal, L"res/cerberus/Cerberus_N.tga", texture_type_noncolor);
+	commandList->loadTextureFromFile(cerberusMaterial.roughMetal, L"res/cerberus/Cerberus_RMAO.png", texture_type_noncolor);
 
 
+	cpu_mesh<vertex_3P> skybox;
+	skySubmesh = skybox.pushCube(1.f, true);
+	skyMesh.initialize(device, commandList, skybox);
 
-	indirect_command* azdoCommands = new indirect_command[TOTAL_NUM_AZDO_CUBES * 1];
 
-	mat4 model = mat4::CreateWorld(vec3(0.f, 0.f, 0.f) * 2.f, vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
+	cpu_mesh<vertex_3PUNT> azdo;
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Coffee Sack/Coffee_Sack.FBX"));
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Chopped Wood Pile/Chopped_Wood_Pile.FBX"));
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Pick Axe/Pick_Axe.FBX"));
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Milk Churn/Milk_Churn.FBX"));
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Wooden Crate/Wooden_Crate_Cracked.FBX"));
+	
+	azdoMesh.initialize(device, commandList, azdo);
 
-	uint32 i = 0;
+
+	indirect_command* azdoCommands = new indirect_command[NUM_RANDOM_OBJECTS];
+
+	mat4 model = mat4::CreateScale(0.02f) * mat4::CreateWorld(vec3(0.f, 0.f, 0.f) * 2.f, vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
+
 	//for (uint32 f = 0; f < 3; ++f)
 	{
-		for (uint32 z = 0; z < NUM_AZDO_CUBES_PER_DIMENSION; ++z)
+		for (uint32 i = 0; i < NUM_RANDOM_OBJECTS; ++i)
 		{
-			for (uint32 y = 0; y < NUM_AZDO_CUBES_PER_DIMENSION; ++y)
-			{
-				for (uint32 x = 0; x < NUM_AZDO_CUBES_PER_DIMENSION; ++x)
-				{
-					model(3, 0) = x * 0.21f - (NUM_AZDO_CUBES_PER_DIMENSION / 2) * 0.2f; 
-					model(3, 1) = y * 0.21f - (NUM_AZDO_CUBES_PER_DIMENSION / 2) * 0.2f; 
-					model(3, 2) = z * 0.21f - (NUM_AZDO_CUBES_PER_DIMENSION / 2) * 0.2f;
-					azdoCommands[i].modelMatrix = model;
+			model(3, 0) = randomFloat(-10.f, 10.f);
+			model(3, 1) = 0.f; 
+			model(3, 2) = randomFloat(-10.f, 10.f);
+			azdoCommands[i].modelMatrix = model;
 
-					azdoCommands[i].drawArguments.IndexCountPerInstance = 36;
-					azdoCommands[i].drawArguments.InstanceCount = 1;
-					azdoCommands[i].drawArguments.StartIndexLocation = 0;
-					azdoCommands[i].drawArguments.BaseVertexLocation = 0;
-					azdoCommands[i].drawArguments.StartInstanceLocation = 0;
+			submesh_info mesh = azdoSubmeshes[randomUint(0, (uint32)azdoSubmeshes.size())];
 
-					++i;
-				}
-			}
+			azdoCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
+			azdoCommands[i].drawArguments.InstanceCount = 1;
+			azdoCommands[i].drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
+			azdoCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
+			azdoCommands[i].drawArguments.StartInstanceLocation = 0;
 		}
 	}
 
-	commandList->updateBufferResource(azdoCommandBuffer, TOTAL_NUM_AZDO_CUBES * 1, sizeof(indirect_command), azdoCommands);
+	azdoCommandBuffer.initialize(device, azdoCommands, NUM_RANDOM_OBJECTS, commandList);
 
 	delete[] azdoCommands;
 
@@ -602,7 +602,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	flushApplication();
 
 	camera.fov = DirectX::XMConvertToRadians(70.f);
-	camera.position = vec3(0.f, 2.f, 5.f);
+	camera.position = vec3(0.f, 5.f, 5.f);
 	camera.rotation = quat::Identity;
 	camera.update(width, height, 0.f);
 
@@ -634,7 +634,7 @@ void dx_game::update(float dt)
 	totalTime += dt;
 	float angle = totalTime * 45.f;
 	vec3 rotationAxis(0, 1, 0);
-	modelMatrix = mat4::CreateScale(0.05f) * mat4::CreateRotationX(DirectX::XMConvertToRadians(-90.f)) * mat4::CreateTranslation(0.f, 0.f, -4.f);// mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
+	modelMatrix = mat4::CreateScale(0.1f) * mat4::CreateRotationX(DirectX::XMConvertToRadians(-90.f))* mat4::CreateTranslation(0.f, 0.f, -4.f);// mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
 
 	camera.update(width, height, dt);
 
@@ -671,6 +671,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	commandList->clearDepthAndStencil(gbufferRT.depthStencilAttachment->getDepthStencilView());
 	commandList->setStencilReference(1);
 
+#if 1
 	// AZDO.
 	{
 		commandList->setPipelineState(azdoGeometryPipelineState);
@@ -686,15 +687,17 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		static uint32 frameIndex = 0;
 		commandList->getD3D12CommandList()->ExecuteIndirect(
 			azdoCommandSignature.Get(),
-			TOTAL_NUM_AZDO_CUBES,
-			azdoCommandBuffer.Get(),
-			sizeof(indirect_command) * TOTAL_NUM_AZDO_CUBES * frameIndex,
+			NUM_RANDOM_OBJECTS,
+			azdoCommandBuffer.resource.Get(),
+			sizeof(indirect_command) * NUM_RANDOM_OBJECTS * frameIndex,
 			nullptr,
 			0);
 
 		//frameIndex = (frameIndex + 1) % 3;
 	}
+#endif
 
+#if 0
 	// Geometry.
 	{
 		commandList->setPipelineState(opaqueGeometryPipelineState);
@@ -707,17 +710,20 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->setGraphicsDynamicConstantBuffer(GEOMETRY_ROOTPARAM_CAMERA, cameraCBAddress);
 		commandList->setGraphics32BitConstants(GEOMETRY_ROOTPARAM_MODEL, modelMatrix);
 
-		for (uint32 i = 0; i < meshes.size(); ++i)
-		{
-			commandList->setVertexBuffer(0, meshes[i].vertexBuffer);
-			commandList->setIndexBuffer(meshes[i].indexBuffer);
-			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 0, materials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 1, materials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 2, materials[i].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 0, cerberusMaterial.albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 1, cerberusMaterial.normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 2, cerberusMaterial.roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-			commandList->drawIndexed(meshes[i].indexBuffer.numIndices, 1, 0, 0, 0);
+		commandList->setVertexBuffer(0, sceneMesh.vertexBuffer);
+		commandList->setIndexBuffer(sceneMesh.indexBuffer);
+
+		for (uint32 i = 0; i < sceneSubmeshes.size(); ++i)
+		{
+			submesh_info submesh = sceneSubmeshes[i];
+			commandList->drawIndexed(submesh.numTriangles * 3, 1, submesh.firstTriangle * 3, submesh.baseVertex, 0);
 		}
 	}
+#endif
 
 
 	// Accumulate lighting.

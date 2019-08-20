@@ -25,8 +25,7 @@
 #define PRESENT_ROOTPARAM_MODE		1
 #define PRESENT_ROOTPARAM_TEXTURE	2
 
-#define NUM_AZDO_CUBES_PER_DIMENSION 64
-#define TOTAL_NUM_AZDO_CUBES (NUM_AZDO_CUBES_PER_DIMENSION * NUM_AZDO_CUBES_PER_DIMENSION * NUM_AZDO_CUBES_PER_DIMENSION)
+#define NUM_RANDOM_OBJECTS (1024)
 
 class dx_game
 {
@@ -67,12 +66,16 @@ private:
 
 
 	dx_mesh azdoMesh;
-	ComPtr<ID3D12Resource> azdoCommandBuffer;
+	std::vector<submesh_info> azdoSubmeshes;
+	dx_buffer azdoCommandBuffer;
 
-	std::vector<dx_material> materials;
-	std::vector<dx_mesh> meshes;
+	dx_material cerberusMaterial;
+	dx_mesh sceneMesh;
+	std::vector<submesh_info> sceneSubmeshes;
 
 	dx_mesh skyMesh;
+	submesh_info skySubmesh;
+
 	dx_texture cubemap;
 	dx_texture irradiance;
 	dx_texture prefilteredEnvironment;

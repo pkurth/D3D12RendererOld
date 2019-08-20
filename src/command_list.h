@@ -28,13 +28,10 @@ public:
 	void copyResource(ComPtr<ID3D12Resource> dstRes, ComPtr<ID3D12Resource> srcRes);
 	void copyResource(dx_resource& dstRes, const dx_resource& srcRes);
 
+	// Buffer copy.
+	void uploadBufferData(ComPtr<ID3D12Resource> destinationResource, const void* bufferData, uint32 bufferSize);
+	void updateBufferDataRange(ComPtr<ID3D12Resource> destinationResource, const void* data, uint32 offset, uint32 size);
 
-	
-
-	// Buffer creation.
-	template <typename vertex_t> dx_vertex_buffer createVertexBuffer(vertex_t* vertices, uint32 count); 
-	template <typename index_t> dx_index_buffer createIndexBuffer(index_t* indices, uint32 count);
-	template <typename vertex_t> dx_mesh createMesh(const cpu_mesh<vertex_t>& model);
 
 	// Texture creation.
 	void loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips = true);
@@ -68,9 +65,6 @@ public:
 	template <typename vertex_t> D3D12_VERTEX_BUFFER_VIEW createDynamicVertexBuffer(const vertex_t* vertices, uint32 count);
 
 	
-	void updateBufferResource(ComPtr<ID3D12Resource>& destinationResource,
-		size_t numElements, size_t elementSize, const void* bufferData, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
-
 
 	void setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ID3D12DescriptorHeap* heap);
 
@@ -165,52 +159,6 @@ private:
 	dx_prefilter_environment_pso		prefilterEnvironmentPSO;
 	dx_integrate_brdf_pso				integrateBrdfPSO;
 };
-
-template <typename vertex_t>
-dx_vertex_buffer dx_command_list::createVertexBuffer(vertex_t* vertices, uint32 count)
-{
-	dx_vertex_buffer result;
-
-	updateBufferResource(
-		result.resource,
-		count, sizeof(vertex_t), vertices);
-	
-	result.view.BufferLocation = result.resource->GetGPUVirtualAddress();
-	result.view.SizeInBytes = count * sizeof(vertex_t);
-	result.view.StrideInBytes = sizeof(vertex_t);
-
-	return result;
-}
-
-template <typename index_t> inline DXGI_FORMAT getFormat() { static_assert(false, "Unknown pixel format"); return DXGI_FORMAT_UNKNOWN; }
-template <>					inline DXGI_FORMAT getFormat<uint16>() { return DXGI_FORMAT_R16_UINT; }
-template <>					inline DXGI_FORMAT getFormat<uint32>() { return DXGI_FORMAT_R32_UINT; }
-
-template <typename index_t>
-dx_index_buffer dx_command_list::createIndexBuffer(index_t* indices, uint32 count)
-{
-	dx_index_buffer result;
-
-	updateBufferResource(
-		result.resource,
-		count, sizeof(index_t), indices);
-
-	result.view.BufferLocation = result.resource->GetGPUVirtualAddress();
-	result.view.Format = getFormat<index_t>();
-	result.view.SizeInBytes = count * sizeof(index_t);
-	result.numIndices = count;
-
-	return result;
-}
-
-template<typename vertex_t>
-inline dx_mesh dx_command_list::createMesh(const cpu_mesh<vertex_t>& model)
-{
-	dx_mesh result;
-	result.vertexBuffer = createVertexBuffer(model.vertices.data(), (uint32)model.vertices.size());
-	result.indexBuffer = createIndexBuffer((uint32*)model.triangles.data(), (uint32)model.triangles.size() * 3);
-	return result;
-}
 
 template<typename T>
 inline void dx_command_list::setGraphics32BitConstants(uint32 rootParameterIndex, const T& constants)

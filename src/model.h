@@ -33,11 +33,6 @@ struct indexed_triangle32
 	uint32 a, b, c;
 };
 
-struct cpu_render_material_desc
-{
-	std::wstring albedo;
-	float r, g, b;
-};
 
 defineHasMember(position);
 defineHasMember(normal);
@@ -45,80 +40,81 @@ defineHasMember(tangent);
 defineHasMember(uv);
 
 template <typename vertex_t>
+void setPosition(vertex_t& v, vec3 p)
+{
+	if constexpr (hasMember(vertex_t, position))
+	{
+		v.position = p;
+	}
+}
+
+template <typename vertex_t>
+void setNormal(vertex_t& v, vec3 n)
+{
+	if constexpr (hasMember(vertex_t, normal))
+	{
+		v.normal = n;
+	}
+}
+
+template <typename vertex_t>
+void setTangent(vertex_t& v, vec3 n)
+{
+	if constexpr (hasMember(vertex_t, tangent))
+	{
+		v.tangent = n;
+	}
+}
+
+template <typename vertex_t>
+void setUV(vertex_t& v, vec2 uv)
+{
+	if constexpr (hasMember(vertex_t, uv))
+	{
+		v.uv = uv;
+	}
+}
+
+struct submesh_info
+{
+	uint32 firstTriangle;
+	uint32 numTriangles;
+	uint32 baseVertex;
+};
+
+template <typename vertex_t>
 struct cpu_mesh
 {
 	std::vector<vertex_t> vertices;
 	std::vector<indexed_triangle32> triangles;
 
-	cpu_render_material_desc material;
+	submesh_info pushQuad(float radius = 1.f);
+	submesh_info pushCube(float radius = 1.f, bool invertWindingOrder = false);
+	submesh_info pushSphere(uint32 slices, uint32 rows, float radius = 1.f);
+	submesh_info pushCapsule(uint32 slices, uint32 rows, float height, float radius = 1.f);
 
-	static cpu_mesh quad(float radius = 1.f);
-	static cpu_mesh cube(float radius = 1.f, bool invertWindingOrder = false);
-	static cpu_mesh sphere(uint32 slices, uint32 rows, float radius = 1.f);
-	static cpu_mesh capsule(uint32 slices, uint32 rows, float height, float radius = 1.f);
+	std::vector<submesh_info> pushFromFile(const std::string& filename);
 
 private:
-	template <typename vertex_t> friend struct cpu_mesh_group;
-
-	void loadFromAssimp(const std::filesystem::path& parentPath, const aiScene* scene, uint32 meshIndex);
-
-	void setPosition(vertex_t& v, vec3 p)
-	{
-		if constexpr (hasMember(vertex_t, position))
-		{
-			v.position = p;
-		}
-	}
-
-	void setNormal(vertex_t& v, vec3 n)
-	{
-		if constexpr (hasMember(vertex_t, normal))
-		{
-			v.normal = n;
-		}
-	}
-
-	void setTangent(vertex_t& v, vec3 n)
-	{
-		if constexpr (hasMember(vertex_t, tangent))
-		{
-			v.tangent = n;
-		}
-	}
-
-	void setUV(vertex_t& v, vec2 uv)
-	{
-		if constexpr (hasMember(vertex_t, uv))
-		{
-			v.uv = uv;
-		}
-	}
-};
-
-template <typename vertex_t>
-struct cpu_mesh_group
-{
-	std::vector<cpu_mesh<vertex_t>> meshes;
-
-	void loadFromFile(const std::string& filename);
+	submesh_info loadAssimpMesh(const aiMesh* mesh);
 };
 
 template<typename vertex_t>
-inline void cpu_mesh_group<vertex_t>::loadFromFile(const std::string& filename)
+inline std::vector<submesh_info> cpu_mesh<vertex_t>::pushFromFile(const std::string& filename)
 {
-	std::filesystem::path path(filename);
-	assert(std::filesystem::exists(path));
+	fs::path path(filename);
+	assert(fs::exists(path));
 
-	std::filesystem::path exportPath = path;
+	fs::path exportPath = path;
 	exportPath.replace_extension("assbin");
 
-	std::filesystem::path parent = path.parent_path();
+	fs::path parent = path.parent_path();
 
 	Assimp::Importer importer;
 	const aiScene* scene;
 
 	// Check if a preprocessed file exists.
-	if (std::filesystem::exists(exportPath) && std::filesystem::is_regular_file(exportPath))
+	if (fs::exists(exportPath) && fs::is_regular_file(exportPath))
 	{
 		scene = importer.ReadFile(exportPath.string(), 0);
 	}
@@ -139,24 +135,29 @@ inline void cpu_mesh_group<vertex_t>::loadFromFile(const std::string& filename)
 		}
 	}
 
+	std::vector<submesh_info> result;
+
 	if (scene)
 	{
-		meshes.resize(scene->mNumMeshes);
+		result.resize(scene->mNumMeshes);
 		for (uint32 i = 0; i < scene->mNumMeshes; ++i)
 		{
-			meshes[i].loadFromAssimp(parent, scene, i);
+			result[i] = loadAssimpMesh(scene->mMeshes[i]);
 		}
 	}
+
+	return result;
 }
 
 template<typename vertex_t>
-inline void cpu_mesh<vertex_t>::loadFromAssimp(const std::filesystem::path& parentPath, const aiScene* scene, uint32 meshIndex)
+inline submesh_info cpu_mesh<vertex_t>::loadAssimpMesh(const aiMesh* mesh)
 {
-	const aiMesh* mesh = scene->mMeshes[meshIndex];
-	const aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+	uint32 baseVertex = (uint32)vertices.size();
+	uint32 firstTriangle = (uint32)triangles.size();
+	uint32 numTriangles = mesh->mNumFaces;
 
-	vertices.resize(mesh->mNumVertices);
-	triangles.resize(mesh->mNumFaces);
+	vertices.resize(vertices.size() + mesh->mNumVertices);
+	triangles.resize(triangles.size() + mesh->mNumFaces);
 
 	vec3 position(0.f, 0.f, 0.f);
 	vec3 normal(0.f, 0.f, 0.f);
@@ -182,36 +183,26 @@ inline void cpu_mesh<vertex_t>::loadFromAssimp(const std::filesystem::path& pare
 			uv = vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y);
 		}
 
-		setPosition(vertices[i], position);
-		setNormal(vertices[i], normal);
-		setTangent(vertices[i], tangent);
-		setUV(vertices[i], uv);
+		setPosition(vertices[i + baseVertex], position);
+		setNormal(vertices[i + baseVertex], normal);
+		setTangent(vertices[i + baseVertex], tangent);
+		setUV(vertices[i + baseVertex], uv);
 	}
 
 
 	for (uint32 i = 0; i < mesh->mNumFaces; ++i)
 	{
 		const aiFace& face = mesh->mFaces[i];
-		triangles[i].a = face.mIndices[0];
-		triangles[i].b = face.mIndices[1];
-		triangles[i].c = face.mIndices[2];
+		triangles[i + firstTriangle].a = face.mIndices[0];
+		triangles[i + firstTriangle].b = face.mIndices[1];
+		triangles[i + firstTriangle].c = face.mIndices[2];
 	}
 
-	aiColor3D color;
-	material->Get(AI_MATKEY_COLOR_DIFFUSE, color);
-	this->material.r = color.r;
-	this->material.g = color.g;
-	this->material.b = color.b;
-
-	aiString diffusePath;
-	material->GetTexture(aiTextureType_DIFFUSE, 0, &diffusePath);
-	
-	std::filesystem::path path = parentPath / diffusePath.C_Str();
-	this->material.albedo = path.wstring();
+	return submesh_info{ firstTriangle, numTriangles, baseVertex };
 }
 
 template<typename vertex_t>
-inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::quad(float radius)
+inline submesh_info cpu_mesh<vertex_t>::pushQuad(float radius)
 {
 	vertex_3PUN vertices[] = {
 		{ { -radius, -radius, 0.f }, { 0.f, 0.f }, { 0.f, 0.f, 1.f } },
@@ -225,24 +216,27 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::quad(float radius)
 		{ 1, 3, 2 }
 	};
 
-	cpu_mesh<vertex_t> result;
-	result.vertices.resize(arraysize(vertices));
-	result.triangles.resize(arraysize(triangles));
+	uint32 baseVertex = (uint32)this->vertices.size();
+	uint32 firstTriangle = (uint32)this->triangles.size();
+	uint32 numTriangles = arraysize(triangles);
+
+	this->vertices.resize(this->vertices.size() + arraysize(vertices));
+	this->triangles.resize(this->vertices.size() + arraysize(triangles));
 
 	for (uint32 i = 0; i < arraysize(vertices); ++i)
 	{
-		result.setPosition(result.vertices[i], vertices[i].position);
-		result.setUV(result.vertices[i], vertices[i].uv);
-		result.setNormal(result.vertices[i], vertices[i].normal);
+		setPosition(this->vertices[i + baseVertex], vertices[i].position);
+		setUV(this->vertices[i + baseVertex], vertices[i].uv);
+		setNormal(this->vertices[i + baseVertex], vertices[i].normal);
 	}
 
-	memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * arraysize(triangles));
+	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * arraysize(triangles));
 
-	return result;
+	return submesh_info{ firstTriangle, numTriangles, baseVertex };
 }
 
 template<typename vertex_t>
-inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::cube(float radius, bool invertWindingOrder)
+inline submesh_info cpu_mesh<vertex_t>::pushCube(float radius, bool invertWindingOrder)
 {
 	if constexpr (hasMember(vertex_t, position) && !hasMember(vertex_t, uv) && !hasMember(vertex_t, normal))
 	{
@@ -286,18 +280,21 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::cube(float radius, bool invertWind
 			}
 		}
 
-		cpu_mesh<vertex_t> result;
-		result.vertices.resize(arraysize(vertices));
-		result.triangles.resize(arraysize(triangles));
+		uint32 baseVertex = (uint32)this->vertices.size();
+		uint32 firstTriangle = (uint32)this->triangles.size();
+		uint32 numTriangles = arraysize(triangles);
+
+		this->vertices.resize(this->vertices.size() + arraysize(vertices));
+		this->triangles.resize(this->triangles.size() + arraysize(triangles));
 
 		for (uint32 i = 0; i < arraysize(vertices); ++i)
 		{
-			result.vertices[i].position = vertices[i].position;
+			this->vertices[i + baseVertex].position = vertices[i].position;
 		}
 
-		memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * arraysize(triangles));
+		memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * arraysize(triangles));
 
-		return result;
+		return submesh_info{ firstTriangle, numTriangles, baseVertex };
 	}
 	else
 	{
@@ -356,25 +353,28 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::cube(float radius, bool invertWind
 			}
 		}
 
-		cpu_mesh<vertex_t> result;
-		result.vertices.resize(arraysize(vertices));
-		result.triangles.resize(arraysize(triangles));
+		uint32 baseVertex = (uint32)this->vertices.size();
+		uint32 firstTriangle = (uint32)this->triangles.size();
+		uint32 numTriangles = arraysize(triangles);
+
+		this->vertices.resize(this->vertices.size() + arraysize(vertices));
+		this->triangles.resize(this->triangles.size() + arraysize(triangles));
 
 		for (uint32 i = 0; i < arraysize(vertices); ++i)
 		{
-			result.setPosition(result.vertices[i], vertices[i].position);
-			result.setUV(result.vertices[i], vertices[i].uv);
-			result.setNormal(result.vertices[i], vertices[i].normal);
+			setPosition(this->vertices[i + baseVertex], vertices[i].position);
+			setUV(this->vertices[i + baseVertex], vertices[i].uv);
+			setNormal(this->vertices[i + baseVertex], vertices[i].normal);
 		}
 
-		memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * arraysize(triangles));
+		memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * arraysize(triangles));
 
-		return result;
+		return submesh_info{ firstTriangle, numTriangles, baseVertex };
 	}
 }
 
 template<typename vertex_t>
-inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::sphere(uint32 slices, uint32 rows, float radius)
+inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, float radius)
 {
 	assert(slices > 2);
 	assert(rows > 0);
@@ -448,27 +448,30 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::sphere(uint32 slices, uint32 rows,
 	assert(triIndex == 2 * rows * slices);
 
 
-	cpu_mesh<vertex_t> result;
-	result.vertices.resize(vertIndex);
-	result.triangles.resize(triIndex);
+	uint32 baseVertex = (uint32)this->vertices.size();
+	uint32 firstTriangle = (uint32)this->triangles.size();
+	uint32 numTriangles = triIndex;
+
+	this->vertices.resize(this->vertices.size() + vertIndex);
+	this->triangles.resize(this->triangles.size() + triIndex);
 
 	for (uint32 i = 0; i < vertIndex; ++i)
 	{
-		result.setPosition(result.vertices[i], vertices[i].position);
-		result.setUV(result.vertices[i], vertices[i].uv);
-		result.setNormal(result.vertices[i], vertices[i].normal);
+		setPosition(this->vertices[i + baseVertex], vertices[i].position);
+		setUV(this->vertices[i + baseVertex], vertices[i].uv);
+		setNormal(this->vertices[i + baseVertex], vertices[i].normal);
 	}
 
-	memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * triIndex);
+	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * triIndex);
 
 	delete[] vertices;
 	delete[] triangles;
 
-	return result;
+	return submesh_info{ firstTriangle, numTriangles, baseVertex };
 }
 
 template<typename vertex_t>
-inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::capsule(uint32 slices, uint32 rows, float height, float radius)
+inline submesh_info cpu_mesh<vertex_t>::pushCapsule(uint32 slices, uint32 rows, float height, float radius)
 {
 	assert(slices > 2);
 	assert(rows > 0);
@@ -561,21 +564,24 @@ inline cpu_mesh<vertex_t> cpu_mesh<vertex_t>::capsule(uint32 slices, uint32 rows
 	triangles[triIndex++] = indexed_triangle32{ vertIndex - 1 - slices, vertIndex - 2, vertIndex - 1 };
 
 
-	cpu_mesh<vertex_t> result;
-	result.vertices.resize(vertIndex);
-	result.triangles.resize(triIndex);
+	uint32 baseVertex = (uint32)this->vertices.size();
+	uint32 firstTriangle = (uint32)this->triangles.size();
+	uint32 numTriangles = triIndex;
+
+	this->vertices.resize(this->vertices.size() + vertIndex);
+	this->triangles.resize(this->triangles.size() + triIndex);
 
 	for (uint32 i = 0; i < vertIndex; ++i)
 	{
-		result.setPosition(result.vertices[i], vertices[i].position);
-		result.setUV(result.vertices[i], vertices[i].uv);
-		result.setNormal(result.vertices[i], vertices[i].normal);
+		setPosition(this->vertices[i + baseVertex], vertices[i].position);
+		setUV(this->vertices[i + baseVertex], vertices[i].uv);
+		setNormal(this->vertices[i + baseVertex], vertices[i].normal);
 	}
 
-	memcpy(result.triangles.data(), triangles, sizeof(indexed_triangle32) * triIndex);
+	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * triIndex);
 
 	delete[] vertices;
 	delete[] triangles;
 
-	return result;
+	return submesh_info{ firstTriangle, numTriangles, baseVertex };
 }

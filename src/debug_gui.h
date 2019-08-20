@@ -91,6 +91,7 @@ private:
 
 	std::vector<gui_vertex> currentVertices;
 
+	ComPtr<ID3D12Device2> device;
 	dx_index_buffer indexBuffer;
 
 	ComPtr<ID3D12PipelineState> pipelineState;
