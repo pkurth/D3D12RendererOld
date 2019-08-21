@@ -3,6 +3,20 @@ struct ps_input
 	float2 uv	: TEXCOORDS;
 };
 
+struct tonemap_cb
+{
+	float A; // Shoulder strength.
+	float B; // Linear strength.
+	float C; // Linear angle.
+	float D; // Toe strength.
+	float E; // Toe Numerator.
+	float F; // Toe denominator.
+	// Note E/F = Toe angle.
+	float linearWhite;
+
+	float exposure;
+};
+
 struct present_cb
 {
 	uint displayMode;
@@ -10,6 +24,7 @@ struct present_cb
 };
 
 ConstantBuffer<present_cb> present : register(b1);
+ConstantBuffer<tonemap_cb> tonemap : register(b2);
 
 #define SDR 0
 #define HDR 1
@@ -17,19 +32,19 @@ ConstantBuffer<present_cb> present : register(b1);
 SamplerState texSampler	: register(s0);
 Texture2D<float4> tex	: register(t0);
 
-float3 linearToSRGB(float3 color)
+static float3 linearToSRGB(float3 color)
 {
 	// Approximately pow(color, 1.0 / 2.2).
 	return color < 0.0031308f ? 12.92f * color : 1.055f * pow(abs(color), 1.f / 2.4f) - 0.055f;
 }
 
-float3 sRGBToLinear(float3 color)
+static float3 sRGBToLinear(float3 color)
 {
 	// Approximately pow(color, 2.2).
 	return color < 0.04045f ? color / 12.92f : pow(abs(color + 0.055f) / 1.055f, 2.4f);
 }
 
-float3 rec709ToRec2020(float3 color)
+static float3 rec709ToRec2020(float3 color)
 {
 	static const float3x3 conversion =
 	{
@@ -40,7 +55,7 @@ float3 rec709ToRec2020(float3 color)
 	return mul(conversion, color);
 }
 
-float3 rec2020ToRec709(float3 color)
+static float3 rec2020ToRec709(float3 color)
 {
 	static const float3x3 conversion =
 	{
@@ -51,7 +66,7 @@ float3 rec2020ToRec709(float3 color)
 	return mul(conversion, color);
 }
 
-float3 linearToST2084(float3 color)
+static float3 linearToST2084(float3 color)
 {
 	float m1 = 2610.f / 4096.f / 4.f;
 	float m2 = 2523.f / 4096.f * 128.f;
@@ -62,9 +77,25 @@ float3 linearToST2084(float3 color)
 	return pow((c1 + c2 * cp) / (1.f + c3 * cp), m2);
 }
 
+// https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting/142
+static float3 acesFilmic(float3 x, float A, float B, float C, float D, float E, float F)
+{
+	return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - (E / F);
+}
+
+static float3 filmicTonemapping(float3 color)
+{
+	color *= exp2(tonemap.exposure);
+
+	return acesFilmic(color,			tonemap.A, tonemap.B, tonemap.C, tonemap.D, tonemap.E, tonemap.F) /
+		acesFilmic(tonemap.linearWhite, tonemap.A, tonemap.B, tonemap.C, tonemap.D, tonemap.E, tonemap.F);
+}
+
 float4 main(ps_input IN) : SV_TARGET
 {
 	float4 scene = tex.Sample(texSampler, IN.uv);
+
+	scene.rgb = filmicTonemapping(scene.rgb);
 
 	if (present.displayMode == SDR)
 	{

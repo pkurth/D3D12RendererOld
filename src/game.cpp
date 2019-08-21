@@ -488,9 +488,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[4];
 		rootParameters[PRESENT_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
 		rootParameters[PRESENT_ROOTPARAM_MODE].InitAsConstants(2, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Present params.
+		rootParameters[PRESENT_ROOTPARAM_TONEMAP].InitAsConstants(8, 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Tonemap params.
 		rootParameters[PRESENT_ROOTPARAM_TEXTURE].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Texture.
 
 		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
@@ -541,7 +542,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	dx_command_queue& copyCommandQueue = dx_command_queue::copyCommandQueue;
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
-	gui.initialize(device, commandList, lightingRT.renderTargetFormat);
+	gui.initialize(device, commandList, screenRTVFormats);
 
 
 	// Load scene.
@@ -586,7 +587,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
 	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	descriptorHeapDesc.NumDescriptors = azdoMaterials.size() * 3;
+	descriptorHeapDesc.NumDescriptors = (uint32)azdoMaterials.size() * 3;
 	descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&azdoDescriptorHeap)));
 
@@ -855,10 +856,6 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 #endif
 
 
-	// GUI.
-	gui.render(commandList, viewport);
-
-
 	// Resolve to screen.
 	// No need to clear RTV (or for a depth buffer), since we are blitting the whole lighting buffer.
 	commandList->setScreenRenderTarget(&screenRTV, 1, nullptr);
@@ -879,11 +876,39 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 			0, 0.f
 		};
 
+		struct tonemap_cb
+		{
+			float A; // Shoulder strength.
+			float B; // Linear strength.
+			float C; // Linear angle.
+			float D; // Toe strength.
+			float E; // Toe Numerator.
+			float F; // Toe denominator.
+			// Note E/F = Toe angle.
+			float linearWhite;
+			float exposure; // 0 is default.
+		};
+
+		tonemap_cb tonemapCB;
+		tonemapCB.exposure = 1.f;
+		tonemapCB.A = 0.22f;
+		tonemapCB.B = 0.3f;
+		tonemapCB.C = 0.1f;
+		tonemapCB.D = 0.2f;
+		tonemapCB.E = 0.01f;
+		tonemapCB.F = 0.3f;
+		tonemapCB.linearWhite = 11.2f;
+
 		commandList->setGraphics32BitConstants(PRESENT_ROOTPARAM_MODE, presentCB);
+		commandList->setGraphics32BitConstants(PRESENT_ROOTPARAM_TONEMAP, tonemapCB);
 		commandList->setShaderResourceView(PRESENT_ROOTPARAM_TEXTURE, 0, *lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->draw(3, 1, 0, 0);
 	}
+
+	// GUI.
+	gui.render(commandList, viewport);
+
 }
 
 bool dx_game::keyboardCallback(key_input_event event)
