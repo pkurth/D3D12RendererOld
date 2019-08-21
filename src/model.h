@@ -124,7 +124,7 @@ inline std::vector<submesh_info> cpu_mesh<vertex_t>::pushFromFile(const std::str
 		importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 80.0f);
 		importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, aiPrimitiveType_POINT | aiPrimitiveType_LINE);
 
-		uint32 preprocessFlags = aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_OptimizeGraph | aiProcess_CalcTangentSpace;
+		uint32 preprocessFlags = aiProcess_GenSmoothNormals | aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_OptimizeGraph | aiProcess_CalcTangentSpace;
 		scene = importer.ReadFile(path.string(), preprocessFlags | aiProcess_FlipUVs);
 
 		if (scene)

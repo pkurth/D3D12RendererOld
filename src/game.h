@@ -25,7 +25,7 @@
 #define PRESENT_ROOTPARAM_MODE		1
 #define PRESENT_ROOTPARAM_TEXTURE	2
 
-#define NUM_RANDOM_OBJECTS (1024)
+#define NUM_RANDOM_OBJECTS (10)
 
 class dx_game
 {

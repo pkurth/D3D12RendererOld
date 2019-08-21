@@ -4,11 +4,15 @@
 #include "model.h"
 #include "graphics.h"
 
+#pragma pack(push, 1)
 struct indirect_command
 {
 	mat4 modelMatrix;
+	uint32 materialID;
 	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
+	uint32 padding[2];
 };
+#pragma pack(pop)
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
 {
@@ -126,10 +130,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0); // Unbounded.
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[4];
 		rootParameters[GEOMETRY_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
 		rootParameters[GEOMETRY_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
 		rootParameters[GEOMETRY_ROOTPARAM_TEXTURES].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Material textures.
+		rootParameters[3].InitAsConstants(1, 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material ID.
 
 		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearWrapSampler(0);
 
@@ -173,12 +178,18 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 
-		D3D12_INDIRECT_ARGUMENT_DESC argumentDescs[2];
+		D3D12_INDIRECT_ARGUMENT_DESC argumentDescs[3];
 		argumentDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
 		argumentDescs[0].Constant.RootParameterIndex = GEOMETRY_ROOTPARAM_MODEL;
 		argumentDescs[0].Constant.DestOffsetIn32BitValues = 0;
 		argumentDescs[0].Constant.Num32BitValuesToSet = 16;
-		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+
+		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+		argumentDescs[1].Constant.RootParameterIndex = 3;
+		argumentDescs[1].Constant.DestOffsetIn32BitValues = 0;
+		argumentDescs[1].Constant.Num32BitValuesToSet = 1;
+
+		argumentDescs[2].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 
 		D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc = {};
 		commandSignatureDesc.pArgumentDescs = argumentDescs;
@@ -551,8 +562,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	cpu_mesh<vertex_3PUNT> azdo;
 	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Coffee Sack/Coffee_Sack.FBX"));
-	//append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Chopped Wood Pile/Chopped_Wood_Pile.FBX"));
-	//append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Milk Churn/Milk_Churn.FBX"));
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Milk Churn/Milk_Churn.FBX"));
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Chopped Wood Pile/Chopped_Wood_Pile.FBX"));
 	azdoMesh.initialize(device, commandList, azdo);
 
 	azdoMaterials.resize(azdoSubmeshes.size());
@@ -560,17 +571,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	commandList->loadTextureFromFile(azdoMaterials[0].normal, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_Normal.png", texture_type_noncolor);
 	commandList->loadTextureFromFile(azdoMaterials[0].roughMetal, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_RMAO.png", texture_type_noncolor);
 
-	//commandList->loadTextureFromFile(azdoMaterials[1].albedo, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Albedo.png", texture_type_color);
-	//commandList->loadTextureFromFile(azdoMaterials[1].normal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Normal.png", texture_type_noncolor);
-	//commandList->loadTextureFromFile(azdoMaterials[1].roughMetal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_RMAO.png", texture_type_noncolor);
-	//
-	//commandList->loadTextureFromFile(azdoMaterials[2].albedo, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_Albedo.png", texture_type_color);
-	//commandList->loadTextureFromFile(azdoMaterials[2].normal, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_Normal.png", texture_type_noncolor);
-	//commandList->loadTextureFromFile(azdoMaterials[2].roughMetal, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_RMAO.png", texture_type_noncolor);
+	commandList->loadTextureFromFile(azdoMaterials[1].albedo, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_Albedo.png", texture_type_color);
+	commandList->loadTextureFromFile(azdoMaterials[1].normal, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_Normal.png", texture_type_noncolor);
+	commandList->loadTextureFromFile(azdoMaterials[1].roughMetal, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_RMAO.png", texture_type_noncolor);
 
+	commandList->loadTextureFromFile(azdoMaterials[2].albedo, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Albedo.png", texture_type_color);
+	commandList->loadTextureFromFile(azdoMaterials[2].normal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Normal.png", texture_type_noncolor);
+	commandList->loadTextureFromFile(azdoMaterials[2].roughMetal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_RMAO.png", texture_type_noncolor);
+	
 	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
 	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	descriptorHeapDesc.NumDescriptors = 3;// azdoMaterials.size() * 3;
+	descriptorHeapDesc.NumDescriptors = azdoMaterials.size() * 3;
 	descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&azdoDescriptorHeap)));
 
@@ -578,7 +589,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(azdoDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
-	for (uint32 i = 0; i < 1;/*azdoMaterials.size();*/ ++i)
+	for (uint32 i = 0; i < azdoMaterials.size(); ++i)
 	{
 		device->CreateShaderResourceView(azdoMaterials[i].albedo.resource.Get(), nullptr, srvHandle);
 		srvHandle.Offset(descriptorHandleIncrementSize);
@@ -590,7 +601,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	indirect_command* azdoCommands = new indirect_command[NUM_RANDOM_OBJECTS];
 
-	mat4 model = mat4::CreateScale(0.02f) * mat4::CreateWorld(vec3(0.f, 0.f, 0.f) * 2.f, vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
+	mat4 model = mat4::CreateScale(0.03f) * mat4::CreateWorld(vec3(0.f, 0.f, 0.f), vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
 
 	//for (uint32 f = 0; f < 3; ++f)
 	{
@@ -601,7 +612,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			model(3, 2) = randomFloat(-10.f, 10.f);
 			azdoCommands[i].modelMatrix = model;
 
-			submesh_info mesh = azdoSubmeshes[randomUint(0, (uint32)azdoSubmeshes.size())];
+			uint32 id = randomUint(0, (uint32)azdoSubmeshes.size());
+			azdoCommands[i].materialID = id;
+
+			submesh_info mesh = azdoSubmeshes[id];
 
 			azdoCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
 			azdoCommands[i].drawArguments.InstanceCount = 1;
@@ -707,9 +721,12 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 #if 1
 	// AZDO.
 	{
-		commandList->transitionBarrier(azdoMaterials[0].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->transitionBarrier(azdoMaterials[0].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->transitionBarrier(azdoMaterials[0].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		for (uint32 i = 0; i < azdoMaterials.size(); ++i)
+		{
+			commandList->transitionBarrier(azdoMaterials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->transitionBarrier(azdoMaterials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->transitionBarrier(azdoMaterials[i].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		}
 
 		commandList->setPipelineState(azdoGeometryPipelineState);
 		commandList->setGraphicsRootSignature(azdoGeometryRootSignature);
