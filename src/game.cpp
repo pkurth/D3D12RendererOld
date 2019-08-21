@@ -564,6 +564,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Coffee Sack/Coffee_Sack.FBX"));
 	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Milk Churn/Milk_Churn.FBX"));
 	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Chopped Wood Pile/Chopped_Wood_Pile.FBX"));
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Pick Axe/Pick_Axe.FBX"));
 	azdoMesh.initialize(device, commandList, azdo);
 
 	azdoMaterials.resize(azdoSubmeshes.size());
@@ -578,7 +579,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	commandList->loadTextureFromFile(azdoMaterials[2].albedo, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Albedo.png", texture_type_color);
 	commandList->loadTextureFromFile(azdoMaterials[2].normal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Normal.png", texture_type_noncolor);
 	commandList->loadTextureFromFile(azdoMaterials[2].roughMetal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_RMAO.png", texture_type_noncolor);
-	
+
+	commandList->loadTextureFromFile(azdoMaterials[3].albedo, L"res/western-props-pack/Pick Axe/Textures/Pick_Axe_Albedo.png", texture_type_color);
+	commandList->loadTextureFromFile(azdoMaterials[3].normal, L"res/western-props-pack/Pick Axe/Textures/Pick_Axe_Normal.png", texture_type_noncolor);
+	commandList->loadTextureFromFile(azdoMaterials[3].roughMetal, L"res/western-props-pack/Pick Axe/Textures/Pick_Axe_RMAO.png", texture_type_noncolor);
+
 	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
 	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	descriptorHeapDesc.NumDescriptors = azdoMaterials.size() * 3;
@@ -601,7 +606,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	indirect_command* azdoCommands = new indirect_command[NUM_RANDOM_OBJECTS];
 
-	mat4 model = mat4::CreateScale(0.03f) * mat4::CreateWorld(vec3(0.f, 0.f, 0.f), vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
+	mat4 model = mat4::CreateScale(0.05f) * mat4::CreateWorld(vec3(0.f, 0.f, 0.f), vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
 
 	//for (uint32 f = 0; f < 3; ++f)
 	{
@@ -636,8 +641,24 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	commandList->prefilterEnvironmentMap(cubemap, prefilteredEnvironment, 256);
 	commandList->integrateBRDF(brdf);
 
+
 	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
 	copyCommandQueue.waitForFenceValue(fenceValue);
+
+	dx_command_queue& renderCommandQueue = dx_command_queue::renderCommandQueue;
+	commandList = renderCommandQueue.getAvailableCommandList();
+
+
+	// Transition AZDO textures to pixel shader state.
+	for (uint32 i = 0; i < azdoMaterials.size(); ++i)
+	{
+		commandList->transitionBarrier(azdoMaterials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(azdoMaterials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(azdoMaterials[i].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	}
+
+	fenceValue = renderCommandQueue.executeCommandList(commandList);
+	renderCommandQueue.waitForFenceValue(fenceValue);
 
 	
 	// Loading scene done.
@@ -721,13 +742,6 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 #if 1
 	// AZDO.
 	{
-		for (uint32 i = 0; i < azdoMaterials.size(); ++i)
-		{
-			commandList->transitionBarrier(azdoMaterials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			commandList->transitionBarrier(azdoMaterials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			commandList->transitionBarrier(azdoMaterials[i].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		}
-
 		commandList->setPipelineState(azdoGeometryPipelineState);
 		commandList->setGraphicsRootSignature(azdoGeometryRootSignature);
 
