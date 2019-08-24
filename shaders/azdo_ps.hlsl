@@ -17,10 +17,11 @@ struct ps_output
 
 ConstantBuffer<material_cb> material : register(b2);
 
-SamplerState linearWrapSampler		: register(s0);
-Texture2D<float4> albedoTextures[]	: register(t0, space0);
-Texture2D<float4> normalTextures[]	: register(t0, space1);
-Texture2D<float4> rmaoTextures[]	: register(t0, space2);
+SamplerState linearWrapSampler			: register(s0);
+Texture2D<float4> albedoTextures[]		: register(t0, space0);
+Texture2D<float4> normalTextures[]		: register(t0, space1);
+Texture2D<float> roughnessTextures[]	: register(t0, space2);
+Texture2D<float> metallicTextures[]		: register(t0, space3);
 
 ps_output main(ps_input IN)
 {
@@ -36,11 +37,16 @@ ps_output main(ps_input IN)
 		: float3(0.f, 0.f, 1.f),
 		normalize(IN.tbn));
 
-	float3 RMAO = rmaoTextures[material.textureID].Sample(linearWrapSampler, IN.uv).xyz;
+	//float3 RMAO = rmaoTextures[material.textureID].Sample(linearWrapSampler, IN.uv).xyz;
 
-	float roughness = (material.usageFlags & USE_ROUGHNESS_TEXTURE) ? RMAO.x : material.roughnessOverride;
-	float metallic = (material.usageFlags & USE_METALLIC_TEXTURE) ? RMAO.y : material.metallicOverride;
-	float ao = (material.usageFlags & USE_AO_TEXTURE) ? RMAO.z : 1.f;
+	float roughness = (material.usageFlags & USE_ROUGHNESS_TEXTURE) 
+		? roughnessTextures[material.textureID].Sample(linearWrapSampler, IN.uv) 
+		: material.roughnessOverride;
+
+	float metallic = (material.usageFlags & USE_METALLIC_TEXTURE) 
+		? metallicTextures[material.textureID].Sample(linearWrapSampler, IN.uv)
+		: material.metallicOverride;
+	float ao = 1.f;// (material.usageFlags & USE_AO_TEXTURE) ? RMAO.z : 1.f;
 
 	OUT.albedoAO = float4(color.xyz, ao);
 	OUT.emission = float4(0.f, 0.f, 0.f, 0.f);

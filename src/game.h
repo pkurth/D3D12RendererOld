@@ -20,7 +20,8 @@
 #define AZDO_ROOTPARAM_MATERIAL		2
 #define AZDO_ROOTPARAM_ALBEDOS		3
 #define AZDO_ROOTPARAM_NORMALS		4
-#define AZDO_ROOTPARAM_RMAOS		5
+#define AZDO_ROOTPARAM_ROUGHNESSES	5
+#define AZDO_ROOTPARAM_METALLICS	6
 
 #define SKY_ROOTPARAM_VP			0
 #define SKY_ROOTPARAM_TEXTURE		1
@@ -32,8 +33,6 @@
 #define PRESENT_ROOTPARAM_MODE		1
 #define PRESENT_ROOTPARAM_TONEMAP	2
 #define PRESENT_ROOTPARAM_TEXTURE	3
-
-#define NUM_RANDOM_OBJECTS (10)
 
 class dx_game
 {
@@ -80,7 +79,8 @@ private:
 	ComPtr<ID3D12DescriptorHeap> azdoDescriptorHeap;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE albedosOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE rmaosOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE roughnessesOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE metallicsOffset;
 
 	dx_material cerberusMaterial;
 	dx_mesh sceneMesh;

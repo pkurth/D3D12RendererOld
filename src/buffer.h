@@ -69,5 +69,5 @@ template<typename vertex_t>
 inline void dx_mesh::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const cpu_mesh<vertex_t>& cpuMesh)
 {
 	vertexBuffer.initialize(device, cpuMesh.vertices.data(), (uint32)cpuMesh.vertices.size(), commandList);
-	indexBuffer.initialize(device, (uint32*)cpuMesh.triangles.data(), (uint32)cpuMesh.triangles.size() * 3, commandList);
+	indexBuffer.initialize(device, (decltype(cpuMesh.triangles.data()->a)*)cpuMesh.triangles.data(), (uint32)cpuMesh.triangles.size() * 3, commandList);
 }

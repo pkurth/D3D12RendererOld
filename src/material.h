@@ -8,7 +8,8 @@ struct dx_material
 {
 	dx_texture albedo;
 	dx_texture normal;
-	dx_texture roughMetal;
+	dx_texture roughness;
+	dx_texture metallic;
 };
 
 #define USE_ALBEDO_TEXTURE		(1 << 0)

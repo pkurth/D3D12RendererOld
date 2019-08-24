@@ -128,15 +128,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		CD3DX12_DESCRIPTOR_RANGE1 albedos(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 0);
 		CD3DX12_DESCRIPTOR_RANGE1 normals(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 1);
-		CD3DX12_DESCRIPTOR_RANGE1 rmaos(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 2);
+		CD3DX12_DESCRIPTOR_RANGE1 roughnesses(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 2);
+		CD3DX12_DESCRIPTOR_RANGE1 metallics(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 3);
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[6];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[7];
 		rootParameters[AZDO_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
 		rootParameters[AZDO_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
 		rootParameters[AZDO_ROOTPARAM_MATERIAL].InitAsConstants(sizeof(material_cb) / sizeof(float), 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material.
 		rootParameters[AZDO_ROOTPARAM_ALBEDOS].InitAsDescriptorTable(1, &albedos, D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[AZDO_ROOTPARAM_NORMALS].InitAsDescriptorTable(1, &normals, D3D12_SHADER_VISIBILITY_PIXEL);
-		rootParameters[AZDO_ROOTPARAM_RMAOS].InitAsDescriptorTable(1, &rmaos, D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[AZDO_ROOTPARAM_ROUGHNESSES].InitAsDescriptorTable(1, &roughnesses, D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[AZDO_ROOTPARAM_METALLICS].InitAsDescriptorTable(1, &metallics, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearWrapSampler(0);
 
@@ -548,14 +550,14 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 	// Load scene.
-	cpu_mesh<vertex_3PUNT> scene;
-	append(sceneSubmeshes, scene.pushFromFile("res/cerberus/Cerberus_LP.FBX"));
+	/*cpu_mesh<vertex_3PUNT> scene;
+	append(sceneSubmeshes, scene.pushFromFile("res/cerberus/Cerberus_LP.FBX").first);
 	
 	sceneMesh.initialize(device, commandList, scene);
 
 	commandList->loadTextureFromFile(cerberusMaterial.albedo, L"res/cerberus/Cerberus_A.tga", texture_type_color);
 	commandList->loadTextureFromFile(cerberusMaterial.normal, L"res/cerberus/Cerberus_N.tga", texture_type_noncolor);
-	commandList->loadTextureFromFile(cerberusMaterial.roughMetal, L"res/cerberus/Cerberus_RMAO.png", texture_type_noncolor);
+	commandList->loadTextureFromFile(cerberusMaterial.roughMetal, L"res/cerberus/Cerberus_RMAO.png", texture_type_noncolor);*/
 
 
 	cpu_mesh<vertex_3P> skybox;
@@ -564,13 +566,16 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 	cpu_mesh<vertex_3PUNT> azdo;
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Coffee Sack/Coffee_Sack.FBX"));
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Milk Churn/Milk_Churn.FBX"));
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Chopped Wood Pile/Chopped_Wood_Pile.FBX"));
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Pick Axe/Pick_Axe.FBX"));
+	auto[sponzaSubmeshes, sponzaMaterials] = azdo.pushFromFile("res/sponza/sponza.obj");
+	append(azdoSubmeshes, sponzaSubmeshes);
+
+	/*append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Coffee Sack/Coffee_Sack.FBX").first);
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Milk Churn/Milk_Churn.FBX").first);
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Chopped Wood Pile/Chopped_Wood_Pile.FBX").first);
+	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Pick Axe/Pick_Axe.FBX").first);*/
 	azdoMesh.initialize(device, commandList, azdo);
 
-	azdoMaterials.resize(azdoSubmeshes.size());
+	/*azdoMaterials.resize(azdoSubmeshes.size());
 	commandList->loadTextureFromFile(azdoMaterials[0].albedo, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_Albedo.png", texture_type_color);
 	commandList->loadTextureFromFile(azdoMaterials[0].normal, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_Normal.png", texture_type_noncolor);
 	commandList->loadTextureFromFile(azdoMaterials[0].roughMetal, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_RMAO.png", texture_type_noncolor);
@@ -586,10 +591,20 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	commandList->loadTextureFromFile(azdoMaterials[3].albedo, L"res/western-props-pack/Pick Axe/Textures/Pick_Axe_Albedo.png", texture_type_color);
 	commandList->loadTextureFromFile(azdoMaterials[3].normal, L"res/western-props-pack/Pick Axe/Textures/Pick_Axe_Normal.png", texture_type_noncolor);
 	commandList->loadTextureFromFile(azdoMaterials[3].roughMetal, L"res/western-props-pack/Pick Axe/Textures/Pick_Axe_RMAO.png", texture_type_noncolor);
+*/
+
+	azdoMaterials.resize(sponzaMaterials.size());
+	for (uint32 i = 0; i < sponzaMaterials.size(); ++i)
+	{
+		commandList->loadTextureFromFile(azdoMaterials[i].albedo, stringToWString(sponzaMaterials[i].albedoName), texture_type_color);
+		commandList->loadTextureFromFile(azdoMaterials[i].normal, stringToWString(sponzaMaterials[i].normalName), texture_type_noncolor);
+		commandList->loadTextureFromFile(azdoMaterials[i].roughness, stringToWString(sponzaMaterials[i].roughnessName), texture_type_noncolor);
+		commandList->loadTextureFromFile(azdoMaterials[i].metallic, stringToWString(sponzaMaterials[i].metallicName), texture_type_noncolor);
+	}
 
 	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
 	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	descriptorHeapDesc.NumDescriptors = (uint32)azdoMaterials.size() * 3;
+	descriptorHeapDesc.NumDescriptors = (uint32)azdoMaterials.size() * 4;
 	descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&azdoDescriptorHeap)));
 
@@ -612,45 +627,46 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		cpuHandle.Offset(descriptorHandleIncrementSize);
 		gpuHandle.Offset(descriptorHandleIncrementSize);
 	}
-	rmaosOffset = gpuHandle;
+	roughnessesOffset = gpuHandle;
 	for (uint32 i = 0; i < azdoMaterials.size(); ++i)
 	{
-		device->CreateShaderResourceView(azdoMaterials[i].roughMetal.resource.Get(), nullptr, cpuHandle);
+		device->CreateShaderResourceView(azdoMaterials[i].roughness.resource.Get(), nullptr, cpuHandle);
+		cpuHandle.Offset(descriptorHandleIncrementSize);
+		gpuHandle.Offset(descriptorHandleIncrementSize);
+	}
+	metallicsOffset = gpuHandle;
+	for (uint32 i = 0; i < azdoMaterials.size(); ++i)
+	{
+		device->CreateShaderResourceView(azdoMaterials[i].metallic.resource.Get(), nullptr, cpuHandle);
 		cpuHandle.Offset(descriptorHandleIncrementSize);
 		gpuHandle.Offset(descriptorHandleIncrementSize);
 	}
 
-	indirect_command* azdoCommands = new indirect_command[NUM_RANDOM_OBJECTS];
+	indirect_command* azdoCommands = new indirect_command[sponzaSubmeshes.size()];
 
-	mat4 model = mat4::CreateScale(0.05f) * mat4::CreateWorld(vec3(0.f, 0.f, 0.f), vec3(0.f, 0.f, -1.f), vec3(0.f, 1.f, 0.f));
+	mat4 model = mat4::CreateScale(0.03f);
 
-	//for (uint32 f = 0; f < 3; ++f)
+	for (uint32 i = 0; i < sponzaSubmeshes.size(); ++i)
 	{
-		for (uint32 i = 0; i < NUM_RANDOM_OBJECTS; ++i)
-		{
-			model(3, 0) = randomFloat(-10.f, 10.f);
-			model(3, 1) = 0.f; 
-			model(3, 2) = randomFloat(-10.f, 10.f);
-			azdoCommands[i].modelMatrix = model;
+		azdoCommands[i].modelMatrix = model;
 
-			uint32 id = randomUint(0, (uint32)azdoSubmeshes.size());
+		uint32 id = i;
 
-			azdoCommands[i].material.textureID = id;
-			azdoCommands[i].material.usageFlags = (USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
-			azdoCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
+		submesh_info mesh = azdoSubmeshes[id];
 
-			submesh_info mesh = azdoSubmeshes[id];
+		azdoCommands[i].material.textureID = mesh.materialIndex;
+		azdoCommands[i].material.usageFlags = (USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
+		azdoCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
 
-			azdoCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
-			azdoCommands[i].drawArguments.InstanceCount = 1;
-			azdoCommands[i].drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
-			azdoCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
-			azdoCommands[i].drawArguments.StartInstanceLocation = 0;
-		}
+		azdoCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
+		azdoCommands[i].drawArguments.InstanceCount = 1;
+		azdoCommands[i].drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
+		azdoCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
+		azdoCommands[i].drawArguments.StartInstanceLocation = 0;
 	}
 
-	azdoCommandBuffer.initialize(device, azdoCommands, NUM_RANDOM_OBJECTS, commandList);
-
+	azdoCommandBuffer.initialize(device, azdoCommands, (uint32)sponzaSubmeshes.size(), commandList);
+	
 	delete[] azdoCommands;
 
 	dx_texture equirectangular;
@@ -673,7 +689,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		commandList->transitionBarrier(azdoMaterials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->transitionBarrier(azdoMaterials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->transitionBarrier(azdoMaterials[i].roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(azdoMaterials[i].roughness, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(azdoMaterials[i].metallic, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 
 	fenceValue = renderCommandQueue.executeCommandList(commandList);
@@ -771,20 +788,18 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, azdoDescriptorHeap);
 		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_ALBEDOS, albedosOffset);
 		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_NORMALS, normalsOffset);
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_RMAOS, rmaosOffset);
+		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_ROUGHNESSES, roughnessesOffset);
+		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_METALLICS, metallicsOffset);
 		commandList->setVertexBuffer(0, azdoMesh.vertexBuffer);
 		commandList->setIndexBuffer(azdoMesh.indexBuffer);
 		
-		static uint32 frameIndex = 0;
 		commandList->getD3D12CommandList()->ExecuteIndirect(
 			azdoCommandSignature.Get(),
-			NUM_RANDOM_OBJECTS,
+			(uint32)azdoSubmeshes.size(),
 			azdoCommandBuffer.resource.Get(),
-			sizeof(indirect_command) * NUM_RANDOM_OBJECTS * frameIndex,
+			0,
 			nullptr,
 			0);
-
-		//frameIndex = (frameIndex + 1) % 3;
 	}
 #endif
 

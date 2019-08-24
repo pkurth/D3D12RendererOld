@@ -83,6 +83,11 @@ inline void append(std::vector<T>& appendHere, const std::vector<T>& appendMe)
 	appendHere.insert(appendHere.end(), appendMe.begin(), appendMe.end());
 }
 
+inline std::wstring stringToWString(const std::string& s)
+{
+	return std::wstring(s.begin(), s.end());
+}
+
 #define defineHasMember(member_name)                                         \
     template <typename T>                                                      \
     class has_member_##member_name                                             \

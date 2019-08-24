@@ -28,6 +28,11 @@ struct vertex_3PUNT
 	vec3 tangent;
 };
 
+struct indexed_triangle16
+{
+	uint16 a, b, c;
+};
+
 struct indexed_triangle32
 {
 	uint32 a, b, c;
@@ -80,27 +85,38 @@ struct submesh_info
 	uint32 firstTriangle;
 	uint32 numTriangles;
 	uint32 baseVertex;
+
+	uint32 materialIndex;
+};
+
+struct submesh_material_info
+{
+	std::string albedoName;
+	std::string normalName;
+	std::string roughnessName;
+	std::string metallicName;
 };
 
 template <typename vertex_t>
 struct cpu_mesh
 {
 	std::vector<vertex_t> vertices;
-	std::vector<indexed_triangle32> triangles;
+	std::vector<indexed_triangle16> triangles;
 
 	submesh_info pushQuad(float radius = 1.f);
 	submesh_info pushCube(float radius = 1.f, bool invertWindingOrder = false);
 	submesh_info pushSphere(uint32 slices, uint32 rows, float radius = 1.f);
 	submesh_info pushCapsule(uint32 slices, uint32 rows, float height, float radius = 1.f);
 
-	std::vector<submesh_info> pushFromFile(const std::string& filename);
+	std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> pushFromFile(const std::string& filename);
 
 private:
 	submesh_info loadAssimpMesh(const aiMesh* mesh);
+	submesh_material_info loadAssimpMaterial(const aiMaterial* material, const fs::path& parent);
 };
 
 template<typename vertex_t>
-inline std::vector<submesh_info> cpu_mesh<vertex_t>::pushFromFile(const std::string& filename)
+inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> cpu_mesh<vertex_t>::pushFromFile(const std::string& filename)
 {
 	fs::path path(filename);
 	assert(fs::exists(path));
@@ -121,11 +137,17 @@ inline std::vector<submesh_info> cpu_mesh<vertex_t>::pushFromFile(const std::str
 	else
 	{
 		// File has not been preprocessed yet. Import and processes the file.
-		importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 80.0f);
+		importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 80.f);
 		importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, aiPrimitiveType_POINT | aiPrimitiveType_LINE);
+		importer.SetPropertyInteger(AI_CONFIG_PP_SLM_VERTEX_LIMIT, UINT16_MAX);
 
-		uint32 preprocessFlags = aiProcess_GenSmoothNormals | aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_OptimizeGraph | aiProcess_CalcTangentSpace;
+		uint32 preprocessFlags = aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_OptimizeGraph;
+
 		scene = importer.ReadFile(path.string(), preprocessFlags | aiProcess_FlipUVs);
+		if (!scene)
+		{
+			std::cerr << importer.GetErrorString() << std::endl;
+		}
 
 		if (scene)
 		{
@@ -135,18 +157,25 @@ inline std::vector<submesh_info> cpu_mesh<vertex_t>::pushFromFile(const std::str
 		}
 	}
 
-	std::vector<submesh_info> result;
+	std::vector<submesh_info> submeshes;
+	std::vector<submesh_material_info> submeshMaterials;
 
 	if (scene)
 	{
-		result.resize(scene->mNumMeshes);
+		submeshes.resize(scene->mNumMeshes);
 		for (uint32 i = 0; i < scene->mNumMeshes; ++i)
 		{
-			result[i] = loadAssimpMesh(scene->mMeshes[i]);
+			submeshes[i] = loadAssimpMesh(scene->mMeshes[i]);
+		}
+
+		submeshMaterials.resize(scene->mNumMaterials);
+		for (uint32 i = 0; i < scene->mNumMaterials; ++i)
+		{
+			submeshMaterials[i] = loadAssimpMaterial(scene->mMaterials[i], parent);
 		}
 	}
 
-	return result;
+	return { submeshes, submeshMaterials };
 }
 
 template<typename vertex_t>
@@ -155,6 +184,8 @@ inline submesh_info cpu_mesh<vertex_t>::loadAssimpMesh(const aiMesh* mesh)
 	uint32 baseVertex = (uint32)vertices.size();
 	uint32 firstTriangle = (uint32)triangles.size();
 	uint32 numTriangles = mesh->mNumFaces;
+
+	assert(mesh->mNumVertices <= UINT16_MAX);
 
 	vertices.resize(vertices.size() + mesh->mNumVertices);
 	triangles.resize(triangles.size() + mesh->mNumFaces);
@@ -198,7 +229,25 @@ inline submesh_info cpu_mesh<vertex_t>::loadAssimpMesh(const aiMesh* mesh)
 		triangles[i + firstTriangle].c = face.mIndices[2];
 	}
 
-	return submesh_info{ firstTriangle, numTriangles, baseVertex };
+	return submesh_info{ firstTriangle, numTriangles, baseVertex, mesh->mMaterialIndex };
+}
+
+template<typename vertex_t>
+inline submesh_material_info cpu_mesh<vertex_t>::loadAssimpMaterial(const aiMaterial* material, const fs::path& parent)
+{
+	aiString diffuse, normal, roughness, metallic;
+	aiReturn hasDiffuse = material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuse);
+	aiReturn hasNormal = material->GetTexture(aiTextureType_HEIGHT, 0, &normal);
+	aiReturn hasRoughness = material->GetTexture(aiTextureType_SHININESS, 0, &roughness);
+	aiReturn hasMetallic = material->GetTexture(aiTextureType_AMBIENT, 0, &metallic);
+
+	submesh_material_info result;
+	if (hasDiffuse == aiReturn_SUCCESS) { result.albedoName = (parent / fs::path(diffuse.C_Str())).string(); }
+	if (hasNormal == aiReturn_SUCCESS) { result.normalName = (parent / fs::path(normal.C_Str())).string(); }
+	if (hasRoughness == aiReturn_SUCCESS) { result.roughnessName = (parent / fs::path(roughness.C_Str())).string(); }
+	if (hasMetallic == aiReturn_SUCCESS) { result.metallicName = (parent / fs::path(metallic.C_Str())).string(); }
+
+	return result;
 }
 
 template<typename vertex_t>
@@ -211,7 +260,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushQuad(float radius)
 		{ { radius, radius, 0.f }, { 1.f, 1.f }, { 0.f, 0.f, 1.f } },
 	};
 
-	indexed_triangle32 triangles[] = {
+	indexed_triangle16 triangles[] = {
 		{ 0, 1, 2 },
 		{ 1, 3, 2 }
 	};
@@ -230,7 +279,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushQuad(float radius)
 		setNormal(this->vertices[i + baseVertex], vertices[i].normal);
 	}
 
-	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * arraysize(triangles));
+	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(triangles));
 
 	return submesh_info{ firstTriangle, numTriangles, baseVertex };
 }
@@ -241,7 +290,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushCube(float radius, bool invertWindin
 	if constexpr (hasMember(vertex_t, position) && !hasMember(vertex_t, uv) && !hasMember(vertex_t, normal))
 	{
 		vertex_3P vertices[8];
-		indexed_triangle32 triangles[12];
+		indexed_triangle16 triangles[12];
 
 		vertices[0] = { vec3(-radius, -radius, radius) };  // 0
 		vertices[1] = { vec3(radius, -radius, radius) };   // x
@@ -292,14 +341,14 @@ inline submesh_info cpu_mesh<vertex_t>::pushCube(float radius, bool invertWindin
 			this->vertices[i + baseVertex].position = vertices[i].position;
 		}
 
-		memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * arraysize(triangles));
+		memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(triangles));
 
 		return submesh_info{ firstTriangle, numTriangles, baseVertex };
 	}
 	else
 	{
 		vertex_3PUN vertices[24];
-		indexed_triangle32 triangles[12];
+		indexed_triangle16 triangles[12];
 
 		vertices[0] = { vec3(-radius, -radius, radius), vec2(0.f, 0.f), vec3(0.f, 0.f, 1.f) };
 		vertices[1] = { vec3(radius, -radius, radius), vec2(1.f, 0.f), vec3(0.f, 0.f, 1.f) };
@@ -367,7 +416,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushCube(float radius, bool invertWindin
 			setNormal(this->vertices[i + baseVertex], vertices[i].normal);
 		}
 
-		memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * arraysize(triangles));
+		memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(triangles));
 
 		return submesh_info{ firstTriangle, numTriangles, baseVertex };
 	}
@@ -382,8 +431,9 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, f
 	float vertDeltaAngle = DirectX::XM_PI / (rows + 1);
 	float horzDeltaAngle = 2.f * DirectX::XM_PI / slices;
 
+	assert(slices * rows + 2 <= UINT16_MAX);
 	vertex_3PUN* vertices = new vertex_3PUN[slices * rows + 2];
-	indexed_triangle32* triangles = new indexed_triangle32[2 * rows * slices];
+	indexed_triangle16* triangles = new indexed_triangle16[2 * rows * slices];
 
 	uint32 vertIndex = 0;
 
@@ -426,24 +476,24 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, f
 	// Indices.
 	for (uint32 x = 0; x < slices - 1; ++x)
 	{
-		triangles[triIndex++] = indexed_triangle32{ 0, x + 1, x + 2 };
+		triangles[triIndex++] = indexed_triangle16{ 0, x + 1, x + 2 };
 	}
-	triangles[triIndex++] = indexed_triangle32{ 0, slices, 1 };
+	triangles[triIndex++] = indexed_triangle16{ 0, slices, 1 };
 	for (uint32 y = 0; y < rows - 1; ++y)
 	{
 		for (uint32 x = 0; x < slices - 1; ++x)
 		{
-			triangles[triIndex++] = indexed_triangle32{ y * slices + 1 + x, (y + 1) * slices + 2 + x, y * slices + 2 + x };
-			triangles[triIndex++] = indexed_triangle32{ y * slices + 1 + x, (y + 1) * slices + 1 + x, (y + 1) * slices + 2 + x };
+			triangles[triIndex++] = indexed_triangle16{ y * slices + 1 + x, (y + 1) * slices + 2 + x, y * slices + 2 + x };
+			triangles[triIndex++] = indexed_triangle16{ y * slices + 1 + x, (y + 1) * slices + 1 + x, (y + 1) * slices + 2 + x };
 		}
-		triangles[triIndex++] = indexed_triangle32{ y * slices + slices, (y + 1) * slices + 1, y * slices + 1 };
-		triangles[triIndex++] = indexed_triangle32{ y * slices + slices, (y + 1) * slices + slices, (y + 1) * slices + 1 };
+		triangles[triIndex++] = indexed_triangle16{ y * slices + slices, (y + 1) * slices + 1, y * slices + 1 };
+		triangles[triIndex++] = indexed_triangle16{ y * slices + slices, (y + 1) * slices + slices, (y + 1) * slices + 1 };
 	}
 	for (uint32 x = 0; x < slices - 1; ++x)
 	{
-		triangles[triIndex++] = indexed_triangle32{ vertIndex - 2 - x, vertIndex - 3 - x, vertIndex - 1 };
+		triangles[triIndex++] = indexed_triangle16{ vertIndex - 2 - x, vertIndex - 3 - x, vertIndex - 1 };
 	}
-	triangles[triIndex++] = indexed_triangle32{ vertIndex - 1 - slices, vertIndex - 2, vertIndex - 1 };
+	triangles[triIndex++] = indexed_triangle16{ vertIndex - 1 - slices, vertIndex - 2, vertIndex - 1 };
 
 	assert(triIndex == 2 * rows * slices);
 
@@ -462,7 +512,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, f
 		setNormal(this->vertices[i + baseVertex], vertices[i].normal);
 	}
 
-	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * triIndex);
+	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle16) * triIndex);
 
 	delete[] vertices;
 	delete[] triangles;
@@ -482,8 +532,9 @@ inline submesh_info cpu_mesh<vertex_t>::pushCapsule(uint32 slices, uint32 rows, 
 	float halfHeight = 0.5f * height;
 	float texStretch = radius / (radius + halfHeight);
 
+	assert(slices * (rows + 1) + 2 <= UINT16_MAX);
 	vertex_3PUN* vertices = new vertex_3PUN[slices * (rows + 1) + 2];
-	indexed_triangle32* triangles = new indexed_triangle32[2 * (rows + 1) * slices];
+	indexed_triangle16* triangles = new indexed_triangle16[2 * (rows + 1) * slices];
 
 	uint32 vertIndex = 0;
 
@@ -544,24 +595,24 @@ inline submesh_info cpu_mesh<vertex_t>::pushCapsule(uint32 slices, uint32 rows, 
 	// Indices.
 	for (uint32 x = 0; x < slices - 1; ++x)
 	{
-		triangles[triIndex++] = indexed_triangle32{ 0, x + 1, x + 2 };
+		triangles[triIndex++] = indexed_triangle16{ 0, x + 1, x + 2 };
 	}
-	triangles[triIndex++] = indexed_triangle32{ 0, slices, 1 };
+	triangles[triIndex++] = indexed_triangle16{ 0, slices, 1 };
 	for (uint32 y = 0; y < rows; ++y)
 	{
 		for (uint32 x = 0; x < slices - 1; ++x)
 		{
-			triangles[triIndex++] = indexed_triangle32{ y * slices + 1 + x, (y + 1) * slices + 2 + x, y * slices + 2 + x };
-			triangles[triIndex++] = indexed_triangle32{ y * slices + 1 + x, (y + 1) * slices + 1 + x, (y + 1) * slices + 2 + x };
+			triangles[triIndex++] = indexed_triangle16{ y * slices + 1 + x, (y + 1) * slices + 2 + x, y * slices + 2 + x };
+			triangles[triIndex++] = indexed_triangle16{ y * slices + 1 + x, (y + 1) * slices + 1 + x, (y + 1) * slices + 2 + x };
 		}
-		triangles[triIndex++] = indexed_triangle32{ y * slices + slices, (y + 1) * slices + 1, y * slices + 1 };
-		triangles[triIndex++] = indexed_triangle32{ y * slices + slices, (y + 1) * slices + slices, (y + 1) * slices + 1 };
+		triangles[triIndex++] = indexed_triangle16{ y * slices + slices, (y + 1) * slices + 1, y * slices + 1 };
+		triangles[triIndex++] = indexed_triangle16{ y * slices + slices, (y + 1) * slices + slices, (y + 1) * slices + 1 };
 	}
 	for (uint32 x = 0; x < slices - 1; ++x)
 	{
-		triangles[triIndex++] = indexed_triangle32{ vertIndex - 2 - x, vertIndex - 3 - x, vertIndex - 1 };
+		triangles[triIndex++] = indexed_triangle16{ vertIndex - 2 - x, vertIndex - 3 - x, vertIndex - 1 };
 	}
-	triangles[triIndex++] = indexed_triangle32{ vertIndex - 1 - slices, vertIndex - 2, vertIndex - 1 };
+	triangles[triIndex++] = indexed_triangle16{ vertIndex - 1 - slices, vertIndex - 2, vertIndex - 1 };
 
 
 	uint32 baseVertex = (uint32)this->vertices.size();
@@ -578,7 +629,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushCapsule(uint32 slices, uint32 rows, 
 		setNormal(this->vertices[i + baseVertex], vertices[i].normal);
 	}
 
-	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle32) * triIndex);
+	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle16) * triIndex);
 
 	delete[] vertices;
 	delete[] triangles;
