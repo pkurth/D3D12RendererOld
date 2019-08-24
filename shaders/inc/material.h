@@ -1,16 +1,3 @@
-#pragma once
-
-#include "texture.h"
-#include "math.h"
-
-// TODO: Probably change to pointers eventually.
-struct dx_material
-{
-	dx_texture albedo;
-	dx_texture normal;
-	dx_texture roughMetal;
-};
-
 #define USE_ALBEDO_TEXTURE		(1 << 0)
 #define USE_NORMAL_TEXTURE		(1 << 1)
 #define USE_ROUGHNESS_TEXTURE	(1 << 2)
@@ -19,13 +6,11 @@ struct dx_material
 
 struct material_cb
 {
-	uint32 textureID;
-	uint32 usageFlags;
+	uint textureID;
+	uint usageFlags;
 
 	float roughnessOverride;
 	float metallicOverride;
 
-	vec4 albedoTint;
+	float4 albedoTint;
 };
-
-

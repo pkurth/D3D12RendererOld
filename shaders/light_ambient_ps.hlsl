@@ -1,4 +1,4 @@
-#include "pbr_common.h"
+#include "pbr.h"
 #include "normals.h"
 
 struct ps_input

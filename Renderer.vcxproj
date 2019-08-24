@@ -67,6 +67,7 @@
     <FxCompile>
       <ShaderModel>5.1</ShaderModel>
       <ObjectFileOutput>$(SolutionDir)shaders\bin\%(Filename).cso</ObjectFileOutput>
+      <AdditionalIncludeDirectories>$(SolutionDir)shaders\inc\</AdditionalIncludeDirectories>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -90,6 +91,7 @@
     <FxCompile>
       <ShaderModel>5.1</ShaderModel>
       <ObjectFileOutput>$(SolutionDir)shaders\bin\%(Filename).cso</ObjectFileOutput>
+      <AdditionalIncludeDirectories>$(SolutionDir)shaders\inc\</AdditionalIncludeDirectories>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -119,9 +121,11 @@
     <ClCompile Include="src\window.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="shaders\camera.h" />
-    <ClInclude Include="shaders\normals.h" />
-    <ClInclude Include="shaders\pbr_common.h" />
+    <ClInclude Include="shaders\inc\camera.h" />
+    <ClInclude Include="shaders\inc\material.h" />
+    <ClInclude Include="shaders\inc\normals.h" />
+    <ClInclude Include="shaders\inc\pbr.h" />
+    <ClInclude Include="shaders\inc\quaternion.h" />
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\camera.h" />
     <ClInclude Include="src\color.h" />
@@ -157,6 +161,8 @@
     <FxCompile Include="shaders\azdo_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <EnableUnboundedDescriptorTables Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</EnableUnboundedDescriptorTables>
+      <EnableUnboundedDescriptorTables Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</EnableUnboundedDescriptorTables>
     </FxCompile>
     <FxCompile Include="shaders\azdo_vs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>

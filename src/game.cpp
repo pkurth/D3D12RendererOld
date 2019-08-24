@@ -8,16 +8,14 @@
 struct indirect_command
 {
 	mat4 modelMatrix;
-	uint32 materialID;
+	material_cb material;
 	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
-	uint32 padding[2];
+	uint32 padding[3];
 };
 #pragma pack(pop)
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
 {
-	//parseAssetDirectory("res/western-props-pack");
-
 	this->device = device;
 	scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 	viewport = CD3DX12_VIEWPORT(0.f, 0.f, (float)width, (float)height);
@@ -128,13 +126,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 
-		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0); // Unbounded.
+		CD3DX12_DESCRIPTOR_RANGE1 albedos(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 0);
+		CD3DX12_DESCRIPTOR_RANGE1 normals(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 1);
+		CD3DX12_DESCRIPTOR_RANGE1 rmaos(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 2);
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[4];
-		rootParameters[GEOMETRY_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
-		rootParameters[GEOMETRY_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
-		rootParameters[GEOMETRY_ROOTPARAM_TEXTURES].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Material textures.
-		rootParameters[3].InitAsConstants(1, 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material ID.
+		CD3DX12_ROOT_PARAMETER1 rootParameters[6];
+		rootParameters[AZDO_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
+		rootParameters[AZDO_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
+		rootParameters[AZDO_ROOTPARAM_MATERIAL].InitAsConstants(sizeof(material_cb) / sizeof(float), 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material.
+		rootParameters[AZDO_ROOTPARAM_ALBEDOS].InitAsDescriptorTable(1, &albedos, D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[AZDO_ROOTPARAM_NORMALS].InitAsDescriptorTable(1, &normals, D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[AZDO_ROOTPARAM_RMAOS].InitAsDescriptorTable(1, &rmaos, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearWrapSampler(0);
 
@@ -185,9 +187,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		argumentDescs[0].Constant.Num32BitValuesToSet = 16;
 
 		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
-		argumentDescs[1].Constant.RootParameterIndex = 3;
+		argumentDescs[1].Constant.RootParameterIndex = AZDO_ROOTPARAM_MATERIAL;
 		argumentDescs[1].Constant.DestOffsetIn32BitValues = 0;
-		argumentDescs[1].Constant.Num32BitValuesToSet = 1;
+		argumentDescs[1].Constant.Num32BitValuesToSet = rootParameters[AZDO_ROOTPARAM_MATERIAL].Constants.Num32BitValues;
 
 		argumentDescs[2].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 
@@ -593,16 +595,29 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	uint32 descriptorHandleIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(azdoDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+	CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(azdoDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(azdoDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 
+	albedosOffset = gpuHandle;
 	for (uint32 i = 0; i < azdoMaterials.size(); ++i)
 	{
-		device->CreateShaderResourceView(azdoMaterials[i].albedo.resource.Get(), nullptr, srvHandle);
-		srvHandle.Offset(descriptorHandleIncrementSize);
-		device->CreateShaderResourceView(azdoMaterials[i].normal.resource.Get(), nullptr, srvHandle);
-		srvHandle.Offset(descriptorHandleIncrementSize);
-		device->CreateShaderResourceView(azdoMaterials[i].roughMetal.resource.Get(), nullptr, srvHandle);
-		srvHandle.Offset(descriptorHandleIncrementSize);
+		device->CreateShaderResourceView(azdoMaterials[i].albedo.resource.Get(), nullptr, cpuHandle);
+		cpuHandle.Offset(descriptorHandleIncrementSize);
+		gpuHandle.Offset(descriptorHandleIncrementSize);
+	}
+	normalsOffset = gpuHandle;
+	for (uint32 i = 0; i < azdoMaterials.size(); ++i)
+	{
+		device->CreateShaderResourceView(azdoMaterials[i].normal.resource.Get(), nullptr, cpuHandle);
+		cpuHandle.Offset(descriptorHandleIncrementSize);
+		gpuHandle.Offset(descriptorHandleIncrementSize);
+	}
+	rmaosOffset = gpuHandle;
+	for (uint32 i = 0; i < azdoMaterials.size(); ++i)
+	{
+		device->CreateShaderResourceView(azdoMaterials[i].roughMetal.resource.Get(), nullptr, cpuHandle);
+		cpuHandle.Offset(descriptorHandleIncrementSize);
+		gpuHandle.Offset(descriptorHandleIncrementSize);
 	}
 
 	indirect_command* azdoCommands = new indirect_command[NUM_RANDOM_OBJECTS];
@@ -619,7 +634,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			azdoCommands[i].modelMatrix = model;
 
 			uint32 id = randomUint(0, (uint32)azdoSubmeshes.size());
-			azdoCommands[i].materialID = id;
+
+			azdoCommands[i].material.textureID = id;
+			azdoCommands[i].material.usageFlags = (USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
+			azdoCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
 
 			submesh_info mesh = azdoSubmeshes[id];
 
@@ -748,10 +766,12 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		commandList->setGraphicsDynamicConstantBuffer(GEOMETRY_ROOTPARAM_CAMERA, cameraCBAddress);
+		commandList->setGraphicsDynamicConstantBuffer(AZDO_ROOTPARAM_CAMERA, cameraCBAddress);
 
 		commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, azdoDescriptorHeap);
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(GEOMETRY_ROOTPARAM_TEXTURES, azdoDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_ALBEDOS, albedosOffset);
+		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_NORMALS, normalsOffset);
+		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_RMAOS, rmaosOffset);
 		commandList->setVertexBuffer(0, azdoMesh.vertexBuffer);
 		commandList->setIndexBuffer(azdoMesh.indexBuffer);
 		
@@ -907,7 +927,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	}
 
 	// GUI.
-	gui.render(commandList, viewport);
+	gui.render(commandList, viewport); // Probably not completely correct here, since alpha blending assumes linear colors?
 
 }
 

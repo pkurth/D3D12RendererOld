@@ -143,9 +143,6 @@
     <ClInclude Include="src\camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="shaders\pbr_common.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\brdf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -155,13 +152,7 @@
     <ClInclude Include="src\graphics.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="shaders\camera.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\material.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="shaders\normals.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\platform.h">
@@ -177,6 +168,21 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\color.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\inc\camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\inc\material.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\inc\normals.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\inc\quaternion.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\inc\pbr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

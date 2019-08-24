@@ -15,6 +15,13 @@
 #define GEOMETRY_ROOTPARAM_MODEL	1
 #define GEOMETRY_ROOTPARAM_TEXTURES	2
 
+#define AZDO_ROOTPARAM_CAMERA		0
+#define AZDO_ROOTPARAM_MODEL		1
+#define AZDO_ROOTPARAM_MATERIAL		2
+#define AZDO_ROOTPARAM_ALBEDOS		3
+#define AZDO_ROOTPARAM_NORMALS		4
+#define AZDO_ROOTPARAM_RMAOS		5
+
 #define SKY_ROOTPARAM_VP			0
 #define SKY_ROOTPARAM_TEXTURE		1
 
@@ -71,6 +78,9 @@ private:
 	std::vector<dx_material> azdoMaterials;
 	dx_buffer azdoCommandBuffer;
 	ComPtr<ID3D12DescriptorHeap> azdoDescriptorHeap;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE albedosOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE rmaosOffset;
 
 	dx_material cerberusMaterial;
 	dx_mesh sceneMesh;
