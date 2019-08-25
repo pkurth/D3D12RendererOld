@@ -128,7 +128,7 @@ static ComPtr<ID3D12Device2> createDevice(ComPtr<IDXGIAdapter4> adapter)
 	return d3d12Device2;
 }
 
-static void update()
+static void updateMatrices()
 {
 	static uint64 frameCounter = 0;
 	static std::chrono::high_resolution_clock clock;
@@ -141,7 +141,7 @@ static void update()
 
 	float dt = deltaTime.count() * 1e-9f;
 
-	game.update(dt);
+	game.updateMatrices(dt);
 }
 
 void render(dx_window* window)
@@ -264,7 +264,7 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 		{
 			++frameCount;
 
-			update();
+			updateMatrices();
 			render(window);
 		} break;
 

@@ -644,7 +644,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	indirect_command* azdoCommands = new indirect_command[sponzaSubmeshes.size()];
 
-	mat4 model = mat4::CreateScale(0.03f);
+	mat4 model = createScaleMatrix(0.03f);
 
 	for (uint32 i = 0; i < sponzaSubmeshes.size(); ++i)
 	{
@@ -707,8 +707,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	camera.fov = DirectX::XMConvertToRadians(70.f);
 	camera.position = vec3(0.f, 5.f, 5.f);
-	camera.rotation = quat::Identity;
-	camera.update(width, height, 0.f);
+	camera.rotation = quat::identity;
+	camera.updateMatrices(width, height);
 
 	registerKeyboardCallback(BIND(keyboardCallback));
 	registerMouseCallback(BIND(mouseCallback));
@@ -732,15 +732,15 @@ void dx_game::resize(uint32 width, uint32 height)
 	}
 }
 
-void dx_game::update(float dt)
+void dx_game::updateMatrices(float dt)
 {
 	static float totalTime = 0.f;
 	totalTime += dt;
 	float angle = totalTime * 45.f;
 	vec3 rotationAxis(0, 1, 0);
-	modelMatrix = mat4::CreateScale(0.1f) * mat4::CreateRotationX(DirectX::XMConvertToRadians(-90.f))* mat4::CreateTranslation(0.f, 0.f, -4.f);// mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
+	//modelMatrix = createScale(0.1f) * mat4::CreateRotationX(DirectX::XMConvertToRadians(-90.f))* mat4::CreateTranslation(0.f, 0.f, -4.f);// mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
 
-	camera.update(width, height, dt);
+	camera.updateMatrices(width, height);
 
 	this->dt = dt;
 
@@ -844,8 +844,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 
 		mat4 view = camera.viewMatrix;
-		view(3, 0) = 0.f; view(3, 1) = 0.f; view(3, 2) = 0.f;
-		mat4 skyVP = view * camera.projectionMatrix;
+		view.m03 = 0.f; view.m13 = 0.f; view.m23 = 0.f;
+		mat4 skyVP = camera.projectionMatrix * view;
 
 		commandList->setGraphics32BitConstants(SKY_ROOTPARAM_VP, skyVP);
 
