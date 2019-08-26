@@ -28,8 +28,16 @@ static uint64 frameValues[dx_window::numFrames] = {};
 
 static uint64 frameCount = 0;
 
-static std::vector<std::function<bool(key_input_event event)>> keyboardCallbacks;
-static std::vector<std::function<bool(mouse_input_event event)>> mouseCallbacks;
+static std::vector<std::function<bool(keyboard_event event)>> keyDownCallbacks;
+static std::vector<std::function<bool(keyboard_event event)>> keyUpCallbacks;
+static std::vector<std::function<bool(character_event event)>> characterCallbacks;
+
+static std::vector<std::function<bool(mouse_button_event event)>> mouseButtonDownCallbacks;
+static std::vector<std::function<bool(mouse_button_event event)>> mouseButtonUpCallbacks;
+static std::vector<std::function<bool(mouse_move_event event)>> mouseMoveCallbacks;
+static std::vector<std::function<bool(mouse_scroll_event event)>> mouseScrollCallbacks;
+
+
 static HWND currentHoverHWND = 0;
 
 static void enableDebugLayer()
@@ -180,19 +188,45 @@ void flushApplication()
 	dx_command_queue::copyCommandQueue.flush();
 }
 
-void registerKeyboardCallback(std::function<bool(key_input_event)> func)
+void registerKeyDownCallback(std::function<bool(keyboard_event)> func)
 {
-	keyboardCallbacks.push_back(func);
+	keyDownCallbacks.push_back(func);
 }
 
-void registerMouseCallback(std::function<bool(mouse_input_event)> func)
+void registerKeyUpCallback(std::function<bool(keyboard_event)> func)
 {
-	mouseCallbacks.push_back(func);
+	keyUpCallbacks.push_back(func);
 }
 
-static void callKeyboardCallbacks(key_input_event event)
+void registerCharacterCallback(std::function<bool(character_event)> func)
 {
-	for (auto func : keyboardCallbacks)
+	characterCallbacks.push_back(func);
+}
+
+void registerMouseButtonDownCallback(std::function<bool(mouse_button_event)> func)
+{
+	mouseButtonDownCallbacks.push_back(func);
+}
+
+void registerMouseButtonUpCallback(std::function<bool(mouse_button_event)> func)
+{
+	mouseButtonUpCallbacks.push_back(func);
+}
+
+void registerMouseMoveCallback(std::function<bool(mouse_move_event)> func)
+{
+	mouseMoveCallbacks.push_back(func);
+}
+
+void registerMouseScrollCallback(std::function<bool(mouse_scroll_event)> func)
+{
+	mouseScrollCallbacks.push_back(func);
+}
+
+template <typename T>
+static void callCallback(std::vector<std::function<bool(T)>>& callbacks, const T& event)
+{
+	for (auto& func : callbacks)
 	{
 		if (func(event))
 		{
@@ -201,26 +235,15 @@ static void callKeyboardCallbacks(key_input_event event)
 	}
 }
 
-static void callMouseCallbacks(mouse_input_event event)
-{
-	for (auto func : mouseCallbacks)
-	{
-		if (func(event))
-		{
-			break; // Event handled.
-		}
-	}
-}
-
-static kb_key mapVKCodeToKey(uint32 vkCode)
+static keyboard_key mapVKCodeToKey(uint32 vkCode)
 {
 	if (vkCode >= '0' && vkCode <= '9')
 	{
-		return (kb_key)(vkCode - 48);
+		return (keyboard_key)(vkCode - 48);
 	}
 	else if (vkCode >= 'A' && vkCode <= 'Z')
 	{
-		return (kb_key)(vkCode - 55);
+		return (keyboard_key)(vkCode - 55);
 	}
 	else
 	{
@@ -250,13 +273,20 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 
 	if (window && window->initialized)
 	{
-		bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-		bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-		bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-		uint32 modifiers = (alt ? key_alt : 0) | (shift ? key_shift : 0) | (ctrl ? key_ctrl : 0);
+		static bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+		static bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+		static bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+		static bool left = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+		static bool right = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+		static bool middle = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
+
+		static float lastRelMouseX = 0.f;
+		static float lastRelMouseY = 0.f;
 
 		uint32 mouseX = GET_X_LPARAM(lParam); // Relative to client area. This is only valid, if the message is mouse related.
 		uint32 mouseY = GET_Y_LPARAM(lParam);
+		float relMouseX = (float)mouseX / (window->clientWidth - 1);
+		float relMouseY = (float)mouseY / (window->clientHeight - 1);
 
 		switch (msg)
 		{
@@ -271,15 +301,19 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 		case WM_SYSKEYDOWN:
 		case WM_KEYDOWN:
 		{
-			switch (wParam)
+			bool wasDown = ((lParam & (1 << 30)) != 0);
+
+			if (!wasDown)
 			{
+				switch (wParam)
+				{
 				case 'V':
 					window->vSync = !window->vSync;
 					break;
 				case VK_ESCAPE:
 					PostQuitMessage(0);
 					break;
-				
+
 				case VK_RETURN:
 					if (alt)
 					{
@@ -289,146 +323,150 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 
 				default:
 				{
-					key_input_event event;
-					event.key = mapVKCodeToKey((uint32)wParam);
+					keyboard_event event = { mapVKCodeToKey((uint32)wParam), shift, ctrl, alt };
 					if (event.key != key_unknown)
 					{
-						event.type = event_type_down;
-						event.modifiers = modifiers;
-						callKeyboardCallbacks(event);
+						callCallback(keyDownCallbacks, event);
+					}
+					if (event.key == key_shift)
+					{
+						shift = true;
+					}
+					else if (event.key == key_ctrl)
+					{
+						ctrl = true;
+					}
+					else if (event.key == key_alt)
+					{
+						alt = true;
 					}
 				} break;
+				}
 			}
 		} break;
 
 		case WM_SYSKEYUP:
 		case WM_KEYUP:
 		{
-			key_input_event event;
-			event.key = mapVKCodeToKey((uint32)wParam);
+			keyboard_event event = { mapVKCodeToKey((uint32)wParam), shift, ctrl, alt };
 			if (event.key != key_unknown)
 			{
-				event.type = event_type_up;
-				event.modifiers = modifiers;
-				callKeyboardCallbacks(event);
+				callCallback(keyUpCallbacks, event);
 			}
+			if (event.key == key_shift)
+			{
+				shift = false;
+			}
+			else if (event.key == key_ctrl)
+			{
+				ctrl = false;
+			}
+			else if (event.key == key_alt)
+			{
+				alt = false;
+			}
+		} break;
+
+		case WM_UNICHAR:
+		{
+			character_event event = { (uint32)wParam };
+			callCallback(characterCallbacks, event);
 		} break;
 
 		case WM_LBUTTONDOWN:
 		{
-			mouse_input_event event;
-			event.button = mouse_left;
-			event.type = event_type_down;
-			event.modifiers = modifiers;
-			event.x = mouseX;
-			event.y = mouseY;
-			callMouseCallbacks(event);
+			mouse_button_event event = { mouse_left, mouseX, mouseY, relMouseX, relMouseY, shift, ctrl, alt };
+			callCallback(mouseButtonDownCallbacks, event);
+			left = true;
 		} break;
 
 		case WM_LBUTTONUP:
 		{
-			mouse_input_event event;
-			event.button = mouse_left;
-			event.type = event_type_up;
-			event.modifiers = modifiers;
-			event.x = mouseX;
-			event.y = mouseY;
-			callMouseCallbacks(event);
+			mouse_button_event event = { mouse_left, mouseX, mouseY, relMouseX, relMouseY, shift, ctrl, alt };
+			callCallback(mouseButtonUpCallbacks, event);
+			left = false;
 		} break;
 
 		case WM_RBUTTONDOWN:
 		{
-			mouse_input_event event;
-			event.button = mouse_right;
-			event.type = event_type_down;
-			event.modifiers = modifiers;
-			event.x = mouseX;
-			event.y = mouseY;
-			callMouseCallbacks(event);
+			mouse_button_event event = { mouse_right, mouseX, mouseY, relMouseX, relMouseY, shift, ctrl, alt };
+			callCallback(mouseButtonDownCallbacks, event);
+			right = true;
 		} break;
 
 		case WM_RBUTTONUP:
 		{
-			mouse_input_event event;
-			event.button = mouse_right;
-			event.type = event_type_up;
-			event.modifiers = modifiers;
-			event.x = mouseX;
-			event.y = mouseY;
-			callMouseCallbacks(event);
+			mouse_button_event event = { mouse_right, mouseX, mouseY, relMouseX, relMouseY, shift, ctrl, alt };
+			callCallback(mouseButtonUpCallbacks, event);
+			right = false;
 		} break;
 
 		case WM_MBUTTONDOWN:
 		{
-			mouse_input_event event;
-			event.button = mouse_middle;
-			event.type = event_type_down;
-			event.modifiers = modifiers;
-			event.x = mouseX;
-			event.y = mouseY;
-			callMouseCallbacks(event);
+			mouse_button_event event = { mouse_middle, mouseX, mouseY, relMouseX, relMouseY, shift, ctrl, alt };
+			callCallback(mouseButtonDownCallbacks, event);
+			middle = true;
 		} break;
 
 		case WM_MBUTTONUP:
 		{
-			mouse_input_event event;
-			event.button = mouse_middle;
-			event.type = event_type_up;
-			event.modifiers = modifiers;
-			event.x = mouseX;
-			event.y = mouseY;
-			callMouseCallbacks(event);
+			mouse_button_event event = { mouse_middle, mouseX, mouseY, relMouseX, relMouseY, shift, ctrl, alt };
+			callCallback(mouseButtonUpCallbacks, event);
+			middle = false;
 		} break;
 
 		case WM_MOUSEWHEEL:
 		{
-			mouse_input_event event;
-			event.type = event_type_scroll;
-			event.modifiers = modifiers;
-			event.x = mouseX;
-			event.y = mouseY;
-			event.scroll = GET_WHEEL_DELTA_WPARAM(wParam) / 120.f;
-			callMouseCallbacks(event);
+			mouse_scroll_event event = { GET_WHEEL_DELTA_WPARAM(wParam) / 120.f, mouseX, mouseY, relMouseX, relMouseY, left, right, middle, shift, ctrl, alt };
+			callCallback(mouseScrollCallbacks, event);
 		} break;
 
 		case WM_MOUSEMOVE:
 		{
-			mouse_input_event event;
-			event.type = event_type_move;
-			event.modifiers = modifiers;
-			event.x = mouseX;
-			event.y = mouseY;
-
+			float relDX = relMouseX - lastRelMouseX;
+			float relDY = relMouseY - lastRelMouseY;
+			mouse_move_event event = { mouseX, mouseY, relMouseX, relMouseY, relDX, relDY, left, right, middle, shift, ctrl, alt };
+			
 			if (currentHoverHWND != hwnd)
 			{
+				// Mouse has entered window.
 				TRACKMOUSEEVENT mouseEvent = { sizeof(TRACKMOUSEEVENT) };
 				mouseEvent.dwFlags = TME_LEAVE;
 				mouseEvent.hwndTrack = hwnd;
 				TrackMouseEvent(&mouseEvent);
 
 				currentHoverHWND = hwnd;
-
-				event.type = event_type_enter_window;
 			}
 
-			callMouseCallbacks(event);
+			callCallback(mouseMoveCallbacks, event);
+
+			lastRelMouseX = relMouseX;
+			lastRelMouseY = relMouseY;
 
 		} break;
 
 		case WM_NCMOUSELEAVE:
 		case WM_MOUSELEAVE:
 		{
+			// Mouse has left window.
 			if (currentHoverHWND == hwnd)
 			{
 				currentHoverHWND = 0;
-
-				mouse_input_event event;
-				event.type = event_type_leave_window;
-				event.modifiers = modifiers;
-				callMouseCallbacks(event);
 			}
 		} break;
 
+		case WM_ACTIVATEAPP:
+		{
+			if (wParam == TRUE) // App is reactivated. Get all the key states again.
+			{
+				alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+				shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+				ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+				left = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+				right = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+				middle = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
+			}
+		} break;
 
 
 		// The default window procedure will play a system notification sound 

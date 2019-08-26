@@ -89,7 +89,9 @@ void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* comman
 	};
 	checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&pipelineState)));
 
-	registerMouseCallback(BIND(mouseCallback));
+	registerMouseButtonDownCallback(BIND(mouseDownCallback));
+	registerMouseButtonUpCallback(BIND(mouseUpCallback));
+	registerMouseMoveCallback(BIND(mouseMoveCallback));
 }
 
 void debug_gui::resizeIndexBuffer(dx_command_list* commandList, uint32 numQuads)
@@ -308,13 +310,23 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 	allTabsSeenThisFrame.clear();
 }
 
-bool debug_gui::mouseCallback(mouse_input_event event)
+bool debug_gui::mouseDownCallback(mouse_button_event event)
 {
 	mousePosition = vec2((float)event.x, (float)event.y);
-	if (event.type == event_type_down || event.type == event_type_up)
-	{
-		lastEventType = event.type;
-	}
+	lastEventType = event_type_down;
+	return false;
+}
+
+bool debug_gui::mouseUpCallback(mouse_button_event event)
+{
+	mousePosition = vec2((float)event.x, (float)event.y);
+	lastEventType = event_type_up;
+	return false;
+}
+
+bool debug_gui::mouseMoveCallback(mouse_move_event event)
+{
+	mousePosition = vec2((float)event.x, (float)event.y);
 	return false;
 }
 

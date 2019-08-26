@@ -710,8 +710,12 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	camera.rotation = quat::identity;
 	camera.updateMatrices(width, height);
 
-	registerKeyboardCallback(BIND(keyboardCallback));
-	registerMouseCallback(BIND(mouseCallback));
+	inputMovement = vec3(0.f, 0.f, 0.f);
+	inputSpeedModifier = 1.f;
+
+	registerKeyDownCallback(BIND(keyDownCallback));
+	registerKeyUpCallback(BIND(keyUpCallback));
+	registerMouseMoveCallback(BIND(mouseMoveCallback));
 }
 
 void dx_game::resize(uint32 width, uint32 height)
@@ -734,23 +738,21 @@ void dx_game::resize(uint32 width, uint32 height)
 
 void dx_game::updateMatrices(float dt)
 {
-	static float totalTime = 0.f;
-	totalTime += dt;
-	float angle = totalTime * 45.f;
-	vec3 rotationAxis(0, 1, 0);
-	//modelMatrix = createScale(0.1f) * mat4::CreateRotationX(DirectX::XMConvertToRadians(-90.f))* mat4::CreateTranslation(0.f, 0.f, -4.f);// mat4::CreateFromAxisAngle(rotationAxis, DirectX::XMConvertToRadians(angle));
+	camera.rotation = createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw) 
+		* createQuaternionFromAxisAngle(comp_vec(1.f, 0.f, 0.f), camera.pitch);
 
+	camera.position = camera.position + camera.rotation * inputMovement * dt * CAMERA_MOVEMENT_SPEED * inputSpeedModifier;
 	camera.updateMatrices(width, height);
 
 	this->dt = dt;
 
-	
 	DEBUG_TAB(gui, "Stats")
 	{
 		gui.textF("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
 		DEBUG_GROUP(gui, "Camera")
 		{
 			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
+			gui.textF("Input movement: %.2f, %.2f, %.2f", inputMovement.x, inputMovement.y, inputMovement.z);
 		}
 	}
 }
@@ -946,13 +948,43 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 }
 
-bool dx_game::keyboardCallback(key_input_event event)
+bool dx_game::keyDownCallback(keyboard_event event)
 {
+	switch (event.key)
+	{
+	case key_w: inputMovement.z -= 1.f; break;
+	case key_s: inputMovement.z += 1.f; break;
+	case key_a: inputMovement.x -= 1.f; break;
+	case key_d: inputMovement.x += 1.f; break;
+	case key_q: inputMovement.y -= 1.f; break;
+	case key_e: inputMovement.y += 1.f; break;
+	case key_shift: inputSpeedModifier = 3.f; break;
+	}
 	return true;
 }
 
-bool dx_game::mouseCallback(mouse_input_event event)
+bool dx_game::keyUpCallback(keyboard_event event)
 {
+	switch (event.key)
+	{
+	case key_w: inputMovement.z += 1.f; break;
+	case key_s: inputMovement.z -= 1.f; break;
+	case key_a: inputMovement.x += 1.f; break;
+	case key_d: inputMovement.x -= 1.f; break;
+	case key_q: inputMovement.y += 1.f; break;
+	case key_e: inputMovement.y -= 1.f; break;
+	case key_shift: inputSpeedModifier = 1.f; break;
+	}
+	return true;
+}
+
+bool dx_game::mouseMoveCallback(mouse_move_event event)
+{
+	if (event.leftDown)
+	{
+		camera.pitch = camera.pitch - event.relDY * CAMERA_SENSITIVITY;
+		camera.yaw = camera.yaw - event.relDX * CAMERA_SENSITIVITY;
+	}
 	return true;
 }
 

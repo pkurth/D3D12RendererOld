@@ -1,6 +1,7 @@
 #pragma once
 
-enum kb_key
+
+enum keyboard_key
 {
 	key_0, key_1, key_2, key_3, key_4, key_5, key_6, key_7, key_8, key_9,
 	key_a, key_b, key_c, key_d, key_e, key_f, key_g, key_h, key_i, key_j,
@@ -10,9 +11,9 @@ enum kb_key
 	key_up, key_down, key_left, key_right,
 	key_backspace, key_delete,
 
-	key_shift = (1 << 28), key_alt = (1 << 29), key_ctrl = (1 << 30),
+	key_shift, key_alt, key_ctrl,
 
-	key_count = key_delete + 3, key_unknown
+	key_count, key_unknown
 };
 
 enum mouse_button
@@ -24,32 +25,40 @@ enum mouse_button
 	mouse_5,
 };
 
-enum event_type
+struct keyboard_event
 {
-	event_type_down,
-	event_type_up,
-
-	// Mouse only.
-	event_type_scroll,
-	event_type_move,
-	event_type_enter_window,
-	event_type_leave_window,
-
-	event_type_none,
+	keyboard_key key;
+	bool shiftDown, ctrlDown, altDown;
 };
 
-struct key_input_event
+struct character_event
 {
-	kb_key key;
-	event_type type;
-	uint32 modifiers; // Shift, alt oder ctrl.
+	uint32 codePoint;
 };
 
-struct mouse_input_event
+struct mouse_button_event
 {
 	mouse_button button;
-	event_type type;
-	uint32 modifiers;
 	uint32 x, y;
-	float scroll;
+	float relX, relY;
+	bool shiftDown, ctrlDown, altDown;
 };
+
+struct mouse_move_event
+{
+	uint32 x, y;
+	float relX, relY;
+	float relDX, relDY;
+	bool leftDown, rightDown, middleDown;
+	bool shiftDown, ctrlDown, altDown;
+};
+
+struct mouse_scroll_event
+{
+	float scroll;
+	uint32 x, y;
+	float relX, relY;
+	bool leftDown, rightDown, middleDown;
+	bool shiftDown, ctrlDown, altDown;
+};
+

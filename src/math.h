@@ -161,7 +161,7 @@ struct alignas(16) comp_mat
 	inline comp_mat transpose() { return DirectX::XMMatrixTranspose(dxmatrix); }
 	inline void transposeInPlace() { dxmatrix = DirectX::XMMatrixTranspose(dxmatrix); }
 
-	inline comp_mat invert() { DirectX::XMMatrixInverse(nullptr, dxmatrix); }
+	inline comp_mat invert() { return DirectX::XMMatrixInverse(nullptr, dxmatrix); }
 };
 
 struct alignas(16) comp_vec
@@ -176,6 +176,9 @@ struct alignas(16) comp_vec
 	inline comp_vec(const vec2 & v) { dxvector = v; }
 
 	inline operator const DirectX::XMVECTOR& () const { return dxvector; }
+	inline operator vec2() const { return dxvector; }
+	inline operator vec3() const { return dxvector; }
+	inline operator vec4() const { return dxvector; }
 };
 
 struct alignas(16) comp_quat
@@ -189,6 +192,7 @@ struct alignas(16) comp_quat
 	inline comp_quat(const quat & v) { dxquat = v; }
 
 	inline operator const DirectX::XMVECTOR& () const { return dxquat; }
+	inline operator quat() const { return dxquat; }
 
 	inline comp_quat normalize() { return DirectX::XMQuaternionNormalize(dxquat); }
 	inline void normalizeInPlace() { dxquat = DirectX::XMQuaternionNormalize(dxquat); }
@@ -204,9 +208,58 @@ inline comp_vec operator*(const comp_mat& m, const comp_vec& v)
 	return DirectX::XMVector4Transform(v, m);
 }
 
+inline comp_vec operator*(comp_vec v, float s)
+{
+	return DirectX::XMVectorScale(v, s);
+}
+
+inline comp_vec& operator*=(comp_vec v, float s)
+{
+	v = v * s;
+	return v;
+}
+
+inline comp_vec operator/(comp_vec v, float s)
+{
+	return DirectX::XMVectorScale(v, 1.f / s);
+}
+
+inline comp_vec& operator/=(comp_vec v, float s)
+{
+	v = v / s;
+	return v;
+}
+
+inline comp_vec operator*(float s, comp_vec v)
+{
+	return DirectX::XMVectorScale(v, s);
+}
+
+inline comp_vec operator+(comp_vec a, comp_vec b)
+{
+	return DirectX::XMVectorAdd(a, b);
+}
+
+inline comp_vec& operator+=(comp_vec& a, comp_vec b)
+{
+	a = a + b;
+	return a;
+}
+
+inline comp_vec operator-(comp_vec a, comp_vec b)
+{
+	return DirectX::XMVectorSubtract(a, b);
+}
+
+inline comp_vec& operator-=(comp_vec& a, comp_vec b)
+{
+	a = a - b;
+	return a;
+}
+
 inline comp_quat operator*(const comp_quat& q1, const comp_quat& q2)
 {
-	return DirectX::XMQuaternionMultiply(q1, q2); // TODO: Check if order is correct here.
+	return DirectX::XMQuaternionMultiply(q2, q1);
 }
 
 inline comp_vec operator*(const comp_quat& q, const comp_vec& v)
@@ -252,6 +305,11 @@ inline comp_mat createTranslationMatrix(comp_vec trans)
 inline comp_mat createModelMatrix(comp_vec trans, comp_quat rot, float scale = 1.f)
 {
 	return DirectX::XMMatrixAffineTransformation(comp_vec(scale, scale, scale), comp_vec(0.f, 0.f, 0.f), rot, trans);
+}
+
+inline comp_quat createQuaternionFromAxisAngle(comp_vec axis, float angle)
+{
+	return DirectX::XMQuaternionRotationAxis(axis, angle);
 }
 
 

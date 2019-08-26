@@ -43,9 +43,18 @@ public:
 
 	void render(dx_command_list* commandList, const D3D12_VIEWPORT& viewport);
 
-	bool mouseCallback(mouse_input_event event);
+	bool mouseDownCallback(mouse_button_event event);
+	bool mouseUpCallback(mouse_button_event event);
+	bool mouseMoveCallback(mouse_move_event event);
 
 private:
+	enum event_type
+	{
+		event_type_none,
+		event_type_down,
+		event_type_up
+	};
+
 	friend struct debug_group_internal;
 
 	void resizeIndexBuffer(dx_command_list* commandList, uint32 numQuads);

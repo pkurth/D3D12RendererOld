@@ -34,6 +34,11 @@
 #define PRESENT_ROOTPARAM_TONEMAP	2
 #define PRESENT_ROOTPARAM_TEXTURE	3
 
+
+#define CAMERA_SENSITIVITY 4.f
+#define CAMERA_MOVEMENT_SPEED 10.f
+
+
 class dx_game
 {
 
@@ -44,8 +49,9 @@ public:
 	void updateMatrices(float dt);
 	void render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV);
 
-	bool keyboardCallback(key_input_event event);
-	bool mouseCallback(mouse_input_event event);
+	bool keyDownCallback(keyboard_event event);
+	bool keyUpCallback(keyboard_event event);
+	bool mouseMoveCallback(mouse_move_event event);
 
 private:
 
@@ -95,6 +101,8 @@ private:
 	dx_texture brdf;
 
 
+	vec3 inputMovement;
+	float inputSpeedModifier;
 
 	uint32 width;
 	uint32 height;
