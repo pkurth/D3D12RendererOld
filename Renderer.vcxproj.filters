@@ -205,4 +205,7 @@
     <FxCompile Include="shaders\azdo_vs.hlsl" />
     <FxCompile Include="shaders\azdo_ps.hlsl" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
 </Project>

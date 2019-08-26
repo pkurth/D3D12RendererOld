@@ -27,6 +27,8 @@ struct material_cb
 	float metallicOverride;
 
 	vec4 albedoTint;
+
+	uint32 drawID;
 };
 
 

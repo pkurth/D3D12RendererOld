@@ -113,6 +113,8 @@ struct cpu_mesh
 private:
 	submesh_info loadAssimpMesh(const aiMesh* mesh);
 	submesh_material_info loadAssimpMaterial(const aiMaterial* material, const fs::path& parent);
+
+	std::vector<submesh_info> splitSubmesh(submesh_info submesh, float maxDim, uint32 maxNumTriangles);
 };
 
 template<typename vertex_t>
@@ -141,9 +143,12 @@ inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> 
 		importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, aiPrimitiveType_POINT | aiPrimitiveType_LINE);
 		importer.SetPropertyInteger(AI_CONFIG_PP_SLM_VERTEX_LIMIT, UINT16_MAX);
 
-		uint32 preprocessFlags = aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_OptimizeGraph;
+		//importer.SetPropertyInteger(AI_CONFIG_PP_SLM_TRIANGLE_LIMIT, 2000);
 
-		scene = importer.ReadFile(path.string(), preprocessFlags | aiProcess_FlipUVs);
+		uint32 importFlags = aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_OptimizeGraph | aiProcess_FlipUVs;
+		uint32 exportFlags = 0;
+
+		scene = importer.ReadFile(path.string(), importFlags);
 		if (!scene)
 		{
 			std::cerr << importer.GetErrorString() << std::endl;
@@ -153,7 +158,7 @@ inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> 
 		{
 			// Export the preprocessed scene file for faster loading next time.
 			Assimp::Exporter exporter;
-			exporter.Export(scene, "assbin", exportPath.string(), preprocessFlags);
+			exporter.Export(scene, "assbin", exportPath.string(), exportFlags);
 		}
 	}
 
@@ -162,10 +167,14 @@ inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> 
 
 	if (scene)
 	{
-		submeshes.resize(scene->mNumMeshes);
 		for (uint32 i = 0; i < scene->mNumMeshes; ++i)
 		{
-			submeshes[i] = loadAssimpMesh(scene->mMeshes[i]);
+			submesh_info sub = loadAssimpMesh(scene->mMeshes[i]);
+#if 1
+			submeshes.push_back(sub);
+#else
+			append(submeshes, splitSubmesh(sub, 500000.f, 2000));
+#endif
 		}
 
 		submeshMaterials.resize(scene->mNumMaterials);
@@ -635,4 +644,95 @@ inline submesh_info cpu_mesh<vertex_t>::pushCapsule(uint32 slices, uint32 rows, 
 	delete[] triangles;
 
 	return submesh_info{ firstTriangle, numTriangles, baseVertex };
+}
+
+template<typename vertex_t>
+static bounding_box computeBoundingBox(submesh_info submesh, const std::vector<vertex_t>& vertices, std::vector<indexed_triangle16>& triangles)
+{
+	bounding_box result = bounding_box::negativeInfinity();
+	for (uint32 i = submesh.firstTriangle; i < submesh.firstTriangle + submesh.numTriangles; ++i)
+	{
+		result.grow(vertices[submesh.baseVertex + triangles[i].a].position);
+		result.grow(vertices[submesh.baseVertex + triangles[i].b].position);
+		result.grow(vertices[submesh.baseVertex + triangles[i].c].position);
+	}
+
+	return result;
+}
+
+template<typename vertex_t>
+static void splitSubmeshHelper(submesh_info submesh, const std::vector<vertex_t>& vertices, std::vector<indexed_triangle16>& triangles, 
+	float maxDim, uint32 maxNumTriangles, std::vector<submesh_info>& result)
+{
+	bool split = false;
+
+	if (submesh.numTriangles >= 200)
+	{
+		bounding_box bb = computeBoundingBox(submesh, vertices, triangles);
+
+		vec3 dim = bb.max - bb.min;
+
+		float largest = dim.x;
+		uint32 largestDim = 0;
+
+		if (dim.y > largest)
+		{
+			largest = dim.y;
+			largestDim = 1;
+		}
+
+		if (dim.z > largest)
+		{
+			largest = dim.z;
+			largestDim = 2;
+		}
+
+		if (largest > maxDim || submesh.numTriangles > maxNumTriangles)
+		{
+			uint32 baseVertex = submesh.baseVertex;
+
+			std::sort(triangles.begin() + submesh.firstTriangle, triangles.begin() + submesh.firstTriangle + submesh.numTriangles,
+				[&vertices, largestDim, baseVertex](indexed_triangle16 a, indexed_triangle16 b)
+				{
+					float centerA = (vertices[baseVertex + a.a].position.data[largestDim]
+								   + vertices[baseVertex + a.b].position.data[largestDim]
+								   + vertices[baseVertex + a.c].position.data[largestDim]) / 3.f;
+					float centerB = (vertices[baseVertex + b.a].position.data[largestDim]
+								   + vertices[baseVertex + b.b].position.data[largestDim]
+								   + vertices[baseVertex + b.c].position.data[largestDim]) / 3.f;
+					return centerA < centerB;
+				});
+
+			submesh_info subA, subB;
+
+			subA.firstTriangle = submesh.firstTriangle;
+			subA.numTriangles = submesh.numTriangles / 2; // Mean split.
+			subA.baseVertex = submesh.baseVertex;
+			subA.materialIndex = submesh.materialIndex;
+
+			subB.firstTriangle = submesh.firstTriangle + subA.numTriangles;
+			subB.numTriangles = submesh.numTriangles - subA.numTriangles;
+			subB.baseVertex = submesh.baseVertex;
+			subB.materialIndex = submesh.materialIndex;
+
+			splitSubmeshHelper(subA, vertices, triangles, maxDim, maxNumTriangles, result);
+			splitSubmeshHelper(subB, vertices, triangles, maxDim, maxNumTriangles, result);
+
+			split = true;
+		}
+	}
+
+	if (!split)
+	{
+		result.push_back(submesh);
+	}
+}
+
+template<typename vertex_t>
+inline std::vector<submesh_info> cpu_mesh<vertex_t>::splitSubmesh(submesh_info submesh, float maxDim, uint32 maxNumTriangles)
+{
+	std::vector<submesh_info> result;
+	result.reserve(1000);
+	splitSubmeshHelper(submesh, vertices, triangles, maxDim, maxNumTriangles, result);
+	return result;
 }

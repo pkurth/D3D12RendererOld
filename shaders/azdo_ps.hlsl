@@ -18,10 +18,20 @@ struct ps_output
 ConstantBuffer<material_cb> material : register(b2);
 
 SamplerState linearWrapSampler			: register(s0);
-Texture2D<float4> albedoTextures[]		: register(t0, space0);
-Texture2D<float4> normalTextures[]		: register(t0, space1);
-Texture2D<float> roughnessTextures[]	: register(t0, space2);
-Texture2D<float> metallicTextures[]		: register(t0, space3);
+Texture2D<float4> albedoTextures[64]	: register(t0, space0);
+Texture2D<float4> normalTextures[64]	: register(t0, space1);
+Texture2D<float> roughnessTextures[64]	: register(t0, space2);
+Texture2D<float> metallicTextures[64]	: register(t0, space3);
+
+uint wang_hash(uint seed)
+{
+	seed = (seed ^ 61) ^ (seed >> 16);
+	seed *= 9;
+	seed = seed ^ (seed >> 4);
+	seed *= 0x27d4eb2d;
+	seed = seed ^ (seed >> 15);
+	return seed;
+}
 
 ps_output main(ps_input IN)
 {
@@ -31,6 +41,15 @@ ps_output main(ps_input IN)
 		? albedoTextures[material.textureID].Sample(linearWrapSampler, IN.uv)
 		: float4(1.f, 1.f, 1.f, 1.f))
 		* material.albedoTint;
+
+	/*float4 color;
+	uint a = wang_hash(material.drawID);
+	uint b = wang_hash(a);
+	uint c = wang_hash(b);
+	color.x = a / 4294967296.f;
+	color.y = b / 4294967296.f;
+	color.z = c / 4294967296.f;*/
+
 
 	float3 N = quatRotate((material.usageFlags & USE_NORMAL_TEXTURE)
 		? normalize(normalTextures[material.textureID].Sample(linearWrapSampler, IN.uv).xyz * 2.f - float3(1.f, 1.f, 1.f))

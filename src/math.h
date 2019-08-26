@@ -40,6 +40,8 @@ union mat4
 		float m33;
 	};
 
+	float data[16];
+
 	inline mat4() {}
 	inline mat4(const DirectX::XMFLOAT4X4A& m) { dxmatrix = m; }
 	inline mat4(const DirectX::XMMATRIX& m) { DirectX::XMStoreFloat4x4(&dxmatrix, m); }
@@ -74,6 +76,8 @@ union vec4
 		float w;
 	};
 
+	float data[4];
+
 	inline vec4() {}
 	inline vec4(float x, float y, float z, float w) { this->x = x; this->y = y; this->z = z; this->w = w; }
 	inline vec4(const DirectX::XMFLOAT4& v) { dxvector = v; }
@@ -94,6 +98,8 @@ union vec3
 		float z;
 	};
 
+	float data[3];
+
 	inline vec3() {}
 	inline vec3(float x, float y, float z) { this->x = x; this->y = y; this->z = z; }
 	inline vec3(const DirectX::XMFLOAT3& v) { dxvector = v; }
@@ -112,6 +118,8 @@ union vec2
 		float x;
 		float y;
 	};
+
+	float data[2];
 
 	inline vec2() {}
 	inline vec2(float x, float y) { this->x = x; this->y = y; }
@@ -133,6 +141,8 @@ union quat
 		float z;
 		float w;
 	};
+
+	float data[4];
 
 	inline quat() {}
 	inline quat(const DirectX::XMFLOAT4A& v) { dxquat = v; }
@@ -344,6 +354,28 @@ inline uint32 randomUint(uint32 lowerBound, uint32 upperBound)
 {
 	return (rand() % (upperBound - lowerBound)) + lowerBound;
 }
+
+struct bounding_box
+{
+	vec3 min;
+	vec3 max;
+
+	static bounding_box negativeInfinity()
+	{
+		bounding_box result = { vec3(FLT_MAX, FLT_MAX, FLT_MAX), vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX) };
+		return result;
+	}
+
+	void grow(vec3 a)
+	{
+		min.x = ::min(min.x, a.x);
+		min.y = ::min(min.y, a.y);
+		min.z = ::min(min.z, a.z);
+		max.x = ::max(max.x, a.x);
+		max.y = ::max(max.y, a.y);
+		max.z = ::max(max.z, a.z);
+	}
+};
 
 #define padded_sizeof(str, paddedTo) ((sizeof(str) + (paddedTo - 1))& ~(paddedTo - 1))
 

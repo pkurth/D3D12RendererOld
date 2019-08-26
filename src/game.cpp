@@ -4,13 +4,15 @@
 #include "model.h"
 #include "graphics.h"
 
+#include <pix3.h>
+
 #pragma pack(push, 1)
 struct indirect_command
 {
 	mat4 modelMatrix;
 	material_cb material;
 	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
-	uint32 padding[3];
+	uint32 padding[2];
 };
 #pragma pack(pop)
 
@@ -90,7 +92,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		{
 			DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D24_UNORM_S8_UINT; // We need stencil for deferred lighting.
 			CD3DX12_RESOURCE_DESC depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, width, height);
-			depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL; // Allows creation of depth-stencil-view (so that we can write to it).
+			depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL |  // Allows creation of depth-stencil-view (so that we can write to it).
+				D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
 			D3D12_CLEAR_VALUE depthClearValue;
 			depthClearValue.Format = depthDesc.Format;
@@ -179,8 +182,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			sizeof(pipeline_state_stream), &pipelineStateStream
 		};
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&azdoGeometryPipelineState)));
-
-
+		
 
 		D3D12_INDIRECT_ARGUMENT_DESC argumentDescs[3];
 		argumentDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
@@ -202,6 +204,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		checkResult(device->CreateCommandSignature(&commandSignatureDesc, azdoGeometryRootSignature.rootSignature.Get(), 
 			IID_PPV_ARGS(&azdoCommandSignature)));
+
+		SET_NAME(azdoGeometryRootSignature.rootSignature, "AZDO Root Signature");
+		SET_NAME(azdoGeometryPipelineState, "AZDO Pipeline");
+		SET_NAME(azdoCommandSignature, "AZDO Command Signature");
 	}
 
 	// Geometry. This writes to the GBuffer.
@@ -273,6 +279,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			sizeof(pipeline_state_stream), &pipelineStateStream
 		};
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&opaqueGeometryPipelineState)));
+
+		SET_NAME(opaqueGeometryRootSignature.rootSignature, "Opaque Root Signature");
+		SET_NAME(opaqueGeometryPipelineState, "Opaque Pipeline");
 	}
 
 	// Sky. This writes to the lighting RT.
@@ -338,6 +347,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			sizeof(pipeline_state_stream), &pipelineStateStream
 		};
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&skyPipelineState)));
+
+		SET_NAME(skyRootSignature.rootSignature, "Sky Root Signature");
+		SET_NAME(skyPipelineState, "Sky Pipeline");
 	}
 
 	ComPtr<ID3DBlob> fullscreenTriangleVertexShaderBlob;
@@ -473,6 +485,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			sizeof(pipeline_state_stream), &pipelineStateStream
 		};
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&ambientLightPipelineState)));
+
+		SET_NAME(ambientLightRootSignature.rootSignature, "Lighting Root Signature");
+		SET_NAME(ambientLightPipelineState, "Lighting Pipeline");
 	}
 
 	// Present.
@@ -540,6 +555,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			sizeof(pipeline_state_stream), &pipelineStateStream
 		};
 		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&presentPipelineState)));
+
+		SET_NAME(presentRootSignature.rootSignature, "Present Root Signature");
+		SET_NAME(presentPipelineState, "Present Pipeline");
 	}
 
 
@@ -657,6 +675,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		azdoCommands[i].material.textureID = mesh.materialIndex;
 		azdoCommands[i].material.usageFlags = (USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
 		azdoCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
+		azdoCommands[i].material.drawID = i;
 
 		azdoCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
 		azdoCommands[i].drawArguments.InstanceCount = 1;
@@ -736,7 +755,7 @@ void dx_game::resize(uint32 width, uint32 height)
 	}
 }
 
-void dx_game::updateMatrices(float dt)
+void dx_game::update(float dt)
 {
 	camera.rotation = createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw) 
 		* createQuaternionFromAxisAngle(comp_vec(1.f, 0.f, 0.f), camera.pitch);
@@ -754,6 +773,7 @@ void dx_game::updateMatrices(float dt)
 			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
 			gui.textF("Input movement: %.2f, %.2f, %.2f", inputMovement.x, inputMovement.y, inputMovement.z);
 		}
+		gui.textF("%u draw calls", (uint32)azdoSubmeshes.size());
 	}
 }
 
@@ -761,6 +781,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 {
 	// Currently not needed, since we don't use a depth buffer for the screen.
 	//D3D12_CPU_DESCRIPTOR_HANDLE dsv = dsvHeap->GetCPUDescriptorHandleForHeapStart();
+
+	PIXSetMarker(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 0, 0), "Frame start.");
 
 	camera_cb cameraCB;
 	camera.fillConstantBuffer(cameraCB);
@@ -770,6 +792,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	commandList->setViewport(viewport);
 	commandList->setScissor(scissorRect);
 
+	PIXBeginEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "GBuffer.");
 
 	// Render to GBuffer.
 	commandList->setRenderTarget(gbufferRT);
@@ -833,6 +856,10 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	}
 #endif
 
+	PIXEndEvent(commandList->getD3D12CommandList().Get());
+
+	PIXBeginEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Lighting pass.");
+
 
 	// Accumulate lighting.
 	commandList->setRenderTarget(lightingRT);
@@ -871,8 +898,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->bindCubemap(AMBIENT_ROOTPARAM_TEXTURES, 0, irradiance, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->bindCubemap(AMBIENT_ROOTPARAM_TEXTURES, 1, prefilteredEnvironment, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 2, brdf, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 3, *gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 4, *gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 3, albedoAOTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(AMBIENT_ROOTPARAM_TEXTURES, 4, normalRoughnessMetalnessTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->draw(3, 1, 0, 0);
 	}
@@ -885,13 +912,14 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		commandList->setShaderResourceView(0, 0, *gbufferRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(0, 1, *gbufferRT.colorAttachments[2], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(0, 0, albedoAOTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(0, 1, normalRoughnessMetalnessTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->draw(3, 1, 0, 0);
 	}
 #endif
 
+	PIXEndEvent(commandList->getD3D12CommandList().Get());
 
 	// Resolve to screen.
 	// No need to clear RTV (or for a depth buffer), since we are blitting the whole lighting buffer.

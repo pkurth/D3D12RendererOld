@@ -149,7 +149,7 @@ static void updateMatrices()
 
 	float dt = deltaTime.count() * 1e-9f;
 
-	game.updateMatrices(dt);
+	game.update(dt);
 }
 
 void render(dx_window* window)
