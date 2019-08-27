@@ -21,6 +21,7 @@ vs_output main(vs_input IN)
 	vs_output OUT;
 
 	OUT.uv = IN.position;
+	//OUT.uv.z *= -1.f;
 	OUT.position = mul(viewProjectionCB.vp, float4(IN.position, 1.f));
 
 	return OUT;
