@@ -62,9 +62,10 @@ private:
 
 	ComPtr<ID3D12PipelineState> azdoGeometryPipelineState;
 	dx_root_signature azdoGeometryRootSignature;
-	//ComPtr<ID3D12PipelineState> azdoShadowPipelineState;
-	//dx_root_signature azdoShadowRootSignature;
-	ComPtr<ID3D12CommandSignature> azdoCommandSignature;
+	ComPtr<ID3D12CommandSignature> azdoGeometryCommandSignature;
+	ComPtr<ID3D12PipelineState> azdoShadowPipelineState;
+	dx_root_signature azdoShadowRootSignature;
+	ComPtr<ID3D12CommandSignature> azdoShadowCommandSignature;
 
 	ComPtr<ID3D12PipelineState> opaqueGeometryPipelineState;
 	dx_root_signature opaqueGeometryRootSignature;
@@ -83,6 +84,7 @@ private:
 	std::vector<submesh_info> azdoSubmeshes;
 	std::vector<dx_material> azdoMaterials;
 	dx_buffer azdoCommandBuffer;
+	dx_buffer azdoShadowCommandBuffer;
 	ComPtr<ID3D12DescriptorHeap> azdoDescriptorHeap;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE albedosOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;
@@ -120,11 +122,14 @@ private:
 
 	dx_render_target gbufferRT;
 	dx_render_target lightingRT;
+	dx_render_target sunShadowMapRT;
 
 	// Render target textures.
 	dx_texture albedoAOTexture;
 	dx_texture hdrTexture;
 	dx_texture normalRoughnessMetalnessTexture;
 	dx_texture depthTexture;
+
+	dx_texture sunShadowMapTexture;
 };
 

@@ -14,6 +14,13 @@ struct indirect_command
 	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
 	uint32 padding[2];
 };
+
+struct indirect_shadow_command
+{
+	mat4 modelMatrix;
+	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
+	uint32 padding[3];
+};
 #pragma pack(pop)
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
@@ -104,6 +111,22 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			gbufferRT.attachDepthStencilTexture(depthTexture);
 			lightingRT.attachDepthStencilTexture(depthTexture);
 		}
+
+		// Sun shadow map.
+		{
+			DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
+			CD3DX12_RESOURCE_DESC depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, 2048, 2048);
+			depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+			depthDesc.MipLevels = 1;
+
+			D3D12_CLEAR_VALUE depthClearValue;
+			depthClearValue.Format = depthBufferFormat;
+			depthClearValue.DepthStencil = { 1.f, 0 };
+
+			sunShadowMapTexture.initialize(device, depthDesc, &depthClearValue);
+
+			sunShadowMapRT.attachDepthStencilTexture(sunShadowMapTexture);
+		}
 	}
 
 	// AZDO.
@@ -134,6 +157,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		CD3DX12_DESCRIPTOR_RANGE1 roughnesses(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 2);
 		CD3DX12_DESCRIPTOR_RANGE1 metallics(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 3);
 
+
 		CD3DX12_ROOT_PARAMETER1 rootParameters[7];
 		rootParameters[AZDO_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
 		rootParameters[AZDO_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
@@ -153,40 +177,79 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		rootSignatureDesc.NumStaticSamplers = 1;
 		azdoGeometryRootSignature.initialize(device, rootSignatureDesc);
 
-
-
-		struct pipeline_state_stream
-		{
-			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
-			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
-			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
-			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
-			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
-			CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
-			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
-		} pipelineStateStream;
-
-		pipelineStateStream.rootSignature = azdoGeometryRootSignature.rootSignature.Get();
-		pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
-		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
-		pipelineStateStream.dsvFormat = gbufferRT.depthStencilFormat;
-		pipelineStateStream.rtvFormats = gbufferRT.renderTargetFormat;
-		pipelineStateStream.rasterizer = defaultRasterizerDesc;
-		pipelineStateStream.depthStencilDesc = alwaysReplaceStencilDesc;
-
-		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
-			sizeof(pipeline_state_stream), &pipelineStateStream
-		};
-		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&azdoGeometryPipelineState)));
 		
+		{
+			struct pipeline_state_stream
+			{
+				CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+				CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+				CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+				CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+				CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+				CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
+				CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
+				CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
+				CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
+			} pipelineStateStream;
+
+			pipelineStateStream.rootSignature = azdoGeometryRootSignature.rootSignature.Get();
+			pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
+			pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+			pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+			pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+			pipelineStateStream.dsvFormat = gbufferRT.depthStencilFormat;
+			pipelineStateStream.rtvFormats = gbufferRT.renderTargetFormat;
+			pipelineStateStream.rasterizer = defaultRasterizerDesc;
+			pipelineStateStream.depthStencilDesc = alwaysReplaceStencilDesc;
+
+			D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+				sizeof(pipeline_state_stream), &pipelineStateStream
+			};
+			checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&azdoGeometryPipelineState)));
+		}
+
+		// Shadow pass.
+		rootSignatureDesc.NumParameters = 2; // Don't need the materials.
+		rootSignatureDesc.NumStaticSamplers = 0;
+		rootSignatureDesc.Flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+		azdoShadowRootSignature.initialize(device, rootSignatureDesc);
+
+		{
+			struct pipeline_state_stream
+			{
+				CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+				CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+				CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+				CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+				CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
+				CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
+			} pipelineStateStream;
+
+			pipelineStateStream.rootSignature = azdoShadowRootSignature.rootSignature.Get();
+			pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
+			pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+			pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+			pipelineStateStream.dsvFormat = sunShadowMapRT.depthStencilFormat;
+			pipelineStateStream.rasterizer = defaultRasterizerDesc;
+
+			D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+				sizeof(pipeline_state_stream), &pipelineStateStream
+			};
+			checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&azdoShadowPipelineState)));
+		}
+
+
+		SET_NAME(azdoGeometryRootSignature.rootSignature, "AZDO Root Signature");
+		SET_NAME(azdoGeometryPipelineState, "AZDO Pipeline");
+		SET_NAME(azdoShadowRootSignature.rootSignature, "AZDO Shadow Root Signature");
+		SET_NAME(azdoShadowPipelineState, "AZDO Shadow Pipeline");
+
+
+		// Command Signature.
 
 		D3D12_INDIRECT_ARGUMENT_DESC argumentDescs[3];
 		argumentDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
-		argumentDescs[0].Constant.RootParameterIndex = GEOMETRY_ROOTPARAM_MODEL;
+		argumentDescs[0].Constant.RootParameterIndex = AZDO_ROOTPARAM_MODEL;
 		argumentDescs[0].Constant.DestOffsetIn32BitValues = 0;
 		argumentDescs[0].Constant.Num32BitValuesToSet = 16;
 
@@ -202,12 +265,18 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		commandSignatureDesc.NumArgumentDescs = arraysize(argumentDescs);
 		commandSignatureDesc.ByteStride = sizeof(indirect_command);
 
-		checkResult(device->CreateCommandSignature(&commandSignatureDesc, azdoGeometryRootSignature.rootSignature.Get(), 
-			IID_PPV_ARGS(&azdoCommandSignature)));
+		checkResult(device->CreateCommandSignature(&commandSignatureDesc, azdoGeometryRootSignature.rootSignature.Get(),
+			IID_PPV_ARGS(&azdoGeometryCommandSignature)));
+		SET_NAME(azdoGeometryCommandSignature, "AZDO Command Signature");
 
-		SET_NAME(azdoGeometryRootSignature.rootSignature, "AZDO Root Signature");
-		SET_NAME(azdoGeometryPipelineState, "AZDO Pipeline");
-		SET_NAME(azdoCommandSignature, "AZDO Command Signature");
+
+		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+		commandSignatureDesc.NumArgumentDescs = 2;
+		commandSignatureDesc.ByteStride = sizeof(indirect_shadow_command);
+
+		checkResult(device->CreateCommandSignature(&commandSignatureDesc, azdoShadowRootSignature.rootSignature.Get(),
+			IID_PPV_ARGS(&azdoShadowCommandSignature)));
+		SET_NAME(azdoShadowCommandSignature, "AZDO Shadow Command Signature");
 	}
 
 	// Geometry. This writes to the GBuffer.
@@ -450,7 +519,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		rootParameters[PRESENT_ROOTPARAM_TEXTURE].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Texture.
 
 		CD3DX12_STATIC_SAMPLER_DESC sampler(0,
-			D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
+			D3D12_FILTER_MIN_MAG_MIP_POINT,
 			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
 			D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
 			D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
@@ -523,29 +592,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	auto[sponzaSubmeshes, sponzaMaterials] = azdo.pushFromFile("res/sponza/sponza.obj");
 	append(azdoSubmeshes, sponzaSubmeshes);
 
-	/*append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Coffee Sack/Coffee_Sack.FBX").first);
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Milk Churn/Milk_Churn.FBX").first);
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Chopped Wood Pile/Chopped_Wood_Pile.FBX").first);
-	append(azdoSubmeshes, azdo.pushFromFile("res/western-props-pack/Pick Axe/Pick_Axe.FBX").first);*/
 	azdoMesh.initialize(device, commandList, azdo);
-
-	/*azdoMaterials.resize(azdoSubmeshes.size());
-	commandList->loadTextureFromFile(azdoMaterials[0].albedo, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_Albedo.png", texture_type_color);
-	commandList->loadTextureFromFile(azdoMaterials[0].normal, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_Normal.png", texture_type_noncolor);
-	commandList->loadTextureFromFile(azdoMaterials[0].roughMetal, L"res/western-props-pack/Coffee Sack/Textures/Coffee_Sack_RMAO.png", texture_type_noncolor);
-
-	commandList->loadTextureFromFile(azdoMaterials[1].albedo, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_Albedo.png", texture_type_color);
-	commandList->loadTextureFromFile(azdoMaterials[1].normal, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_Normal.png", texture_type_noncolor);
-	commandList->loadTextureFromFile(azdoMaterials[1].roughMetal, L"res/western-props-pack/Milk Churn/Textures/Milk_Churn_RMAO.png", texture_type_noncolor);
-
-	commandList->loadTextureFromFile(azdoMaterials[2].albedo, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Albedo.png", texture_type_color);
-	commandList->loadTextureFromFile(azdoMaterials[2].normal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_Normal.png", texture_type_noncolor);
-	commandList->loadTextureFromFile(azdoMaterials[2].roughMetal, L"res/western-props-pack/Chopped Wood Pile/Textures/Chopped_Wood_Pile_RMAO.png", texture_type_noncolor);
-
-	commandList->loadTextureFromFile(azdoMaterials[3].albedo, L"res/western-props-pack/Pick Axe/Textures/Pick_Axe_Albedo.png", texture_type_color);
-	commandList->loadTextureFromFile(azdoMaterials[3].normal, L"res/western-props-pack/Pick Axe/Textures/Pick_Axe_Normal.png", texture_type_noncolor);
-	commandList->loadTextureFromFile(azdoMaterials[3].roughMetal, L"res/western-props-pack/Pick Axe/Textures/Pick_Axe_RMAO.png", texture_type_noncolor);
-*/
 
 	azdoMaterials.resize(sponzaMaterials.size());
 	for (uint32 i = 0; i < sponzaMaterials.size(); ++i)
@@ -597,12 +644,14 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	}
 
 	indirect_command* azdoCommands = new indirect_command[sponzaSubmeshes.size()];
+	indirect_shadow_command* azdoShadowCommands = new indirect_shadow_command[sponzaSubmeshes.size()];
 
 	mat4 model = createScaleMatrix(0.03f);
 
 	for (uint32 i = 0; i < sponzaSubmeshes.size(); ++i)
 	{
 		azdoCommands[i].modelMatrix = model;
+		azdoShadowCommands[i].modelMatrix = model;
 
 		uint32 id = i;
 
@@ -618,10 +667,14 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		azdoCommands[i].drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
 		azdoCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
 		azdoCommands[i].drawArguments.StartInstanceLocation = 0;
+
+		azdoShadowCommands[i].drawArguments = azdoCommands[i].drawArguments;
 	}
 
 	azdoCommandBuffer.initialize(device, azdoCommands, (uint32)sponzaSubmeshes.size(), commandList);
+	azdoShadowCommandBuffer.initialize(device, azdoShadowCommands, (uint32)sponzaSubmeshes.size(), commandList);
 	
+	delete[] azdoShadowCommands;
 	delete[] azdoCommands;
 
 	dx_texture equirectangular;
@@ -725,8 +778,46 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress = commandList->uploadDynamicConstantBuffer(cameraCB);
 
-	commandList->setViewport(viewport);
 	commandList->setScissor(scissorRect);
+
+
+	// Render to sun shadow map.
+
+	commandList->setViewport(sunShadowMapRT.viewport);
+
+	PIXBeginEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sun shadow map.");
+
+	commandList->setRenderTarget(sunShadowMapRT);
+	commandList->clearDepth(sunShadowMapRT.depthStencilAttachment->getDepthStencilView(), 1.f);
+
+#if 1
+	// Static scene.
+	{
+		commandList->setPipelineState(azdoShadowPipelineState);
+		commandList->setGraphicsRootSignature(azdoShadowRootSignature);
+
+		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		commandList->setGraphicsDynamicConstantBuffer(AZDO_ROOTPARAM_CAMERA, cameraCBAddress);
+
+		commandList->setVertexBuffer(0, azdoMesh.vertexBuffer);
+		commandList->setIndexBuffer(azdoMesh.indexBuffer);
+
+		commandList->getD3D12CommandList()->ExecuteIndirect(
+			azdoShadowCommandSignature.Get(),
+			(uint32)azdoSubmeshes.size(),
+			azdoShadowCommandBuffer.resource.Get(),
+			0,
+			nullptr,
+			0);
+	}
+#endif
+
+
+	PIXEndEvent(commandList->getD3D12CommandList().Get());
+
+
+	commandList->setViewport(viewport);
+
 
 	PIXBeginEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "GBuffer.");
 
@@ -736,8 +827,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	commandList->clearDepthAndStencil(gbufferRT.depthStencilAttachment->getDepthStencilView());
 	commandList->setStencilReference(1);
 
-#if 1
-	// AZDO.
+	// Static scene.
 	{
 		commandList->setPipelineState(azdoGeometryPipelineState);
 		commandList->setGraphicsRootSignature(azdoGeometryRootSignature);
@@ -755,14 +845,13 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->setIndexBuffer(azdoMesh.indexBuffer);
 		
 		commandList->getD3D12CommandList()->ExecuteIndirect(
-			azdoCommandSignature.Get(),
+			azdoGeometryCommandSignature.Get(),
 			(uint32)azdoSubmeshes.size(),
 			azdoCommandBuffer.resource.Get(),
 			0,
 			nullptr,
 			0);
 	}
-#endif
 
 #if 0
 	// Geometry.
@@ -894,7 +983,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		commandList->setGraphics32BitConstants(PRESENT_ROOTPARAM_MODE, presentCB);
 		commandList->setGraphics32BitConstants(PRESENT_ROOTPARAM_TONEMAP, tonemapCB);
-		commandList->setShaderResourceView(PRESENT_ROOTPARAM_TEXTURE, 0, *lightingRT.colorAttachments[0], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		commandList->setShaderResourceView(PRESENT_ROOTPARAM_TEXTURE, 0, hdrTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		commandList->draw(3, 1, 0, 0);
 	}

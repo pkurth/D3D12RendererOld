@@ -51,7 +51,7 @@ void dx_render_target::attachDepthStencilTexture(dx_texture& texture)
 		assert(width == desc.Width && height == desc.Height);
 	}
 
-	depthStencilFormat = desc.Format;
+	depthStencilFormat = dx_texture::getDepthFormatFromTypeless(desc.Format);
 }
 
 void dx_render_target::resize(uint32 width, uint32 height)

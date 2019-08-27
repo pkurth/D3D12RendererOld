@@ -42,7 +42,7 @@ static float3 calculateLighting(float3 albedo, float3 radiance, float3 N, float3
 	float denominator = 4.f * NdotV * NdotL;
 	float3 specular = numerator / max(denominator, 0.001f);
 
-	return (kD * albedo / pi + specular) * radiance * NdotL;
+	return (kD * albedo * oneOverPI + specular) * radiance * NdotL;
 }
 
 float4 main(ps_input IN) : SV_TARGET

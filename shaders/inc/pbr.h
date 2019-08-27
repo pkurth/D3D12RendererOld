@@ -1,5 +1,6 @@
 
 static const float pi = 3.141592653589793238462643383279f;
+static const float oneOverPI = 1.f / pi;
 
 static const float3 ironAlbedo =		float3(0.560f, 0.570f, 0.580f);
 static const float3 silverAlbedo =		float3(0.972f, 0.960f, 0.915f);

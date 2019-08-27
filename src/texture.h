@@ -10,7 +10,7 @@ enum texture_type
 
 struct dx_texture : dx_resource
 {
-	void initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue = nullptr);
+	void initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue = nullptr);
 	void initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource> resource);
 	void initialize(const dx_texture& other);
 
@@ -24,9 +24,12 @@ struct dx_texture : dx_resource
 	static bool isSRGBFormat(DXGI_FORMAT format);
 	static bool isBGRFormat(DXGI_FORMAT format);
 	static bool isDepthFormat(DXGI_FORMAT format);
+	static bool isTypelessFormat(DXGI_FORMAT format);
 	static DXGI_FORMAT getTypelessFormat(DXGI_FORMAT format);
 	static DXGI_FORMAT getSRGBFormat(DXGI_FORMAT format);
 	static DXGI_FORMAT getUAVCompatibleFormat(DXGI_FORMAT format);
+	static DXGI_FORMAT getDepthFormatFromTypeless(DXGI_FORMAT format);
+	static DXGI_FORMAT getReadFormatFromTypeless(DXGI_FORMAT format);
 	static uint32 getFormatSize(DXGI_FORMAT format);
 
 	bool checkRTVSupport()

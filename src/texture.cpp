@@ -75,10 +75,16 @@ void dx_texture::resize(uint32 width, uint32 height)
 	}
 }
 
-void dx_texture::initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue)
+void dx_texture::initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue)
 {
+	DXGI_FORMAT origFormat = resourceDesc.Format;
+	if (isDepthFormat(origFormat))
+	{
+		resourceDesc.Format = getTypelessFormat(origFormat);
+	}
+
 	dx_resource::initialize(device, resourceDesc, clearValue);
-	
+
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 &&
 		checkRTVSupport())
 	{
@@ -86,10 +92,23 @@ void dx_texture::initialize(ComPtr<ID3D12Device2> device, const D3D12_RESOURCE_D
 		device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetView);
 	}
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
-		checkDSVSupport())
+		(checkDSVSupport() || isDepthFormat(origFormat)))
 	{
 		depthStencilView = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_DSV).getDescriptorHandle(0);
-		device->CreateDepthStencilView(resource.Get(), nullptr, depthStencilView);
+
+		if (isDepthFormat(origFormat))
+		{
+			assert(resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
+
+			D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+			dsvDesc.Format = origFormat;
+			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+			device->CreateDepthStencilView(resource.Get(), &dsvDesc, depthStencilView);
+		}
+		else
+		{
+			device->CreateDepthStencilView(resource.Get(), nullptr, depthStencilView);
+		}
 	}
 }
 
@@ -198,6 +217,37 @@ bool dx_texture::isDepthFormat(DXGI_FORMAT format)
 	}
 }
 
+bool dx_texture::isTypelessFormat(DXGI_FORMAT format)
+{
+	switch (format)
+	{
+	case DXGI_FORMAT_R24G8_TYPELESS:
+	case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+	case DXGI_FORMAT_R32G32B32_TYPELESS:
+	case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+	case DXGI_FORMAT_R32G32_TYPELESS:
+	case DXGI_FORMAT_R32G8X24_TYPELESS:
+	case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+	case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+	case DXGI_FORMAT_R16G16_TYPELESS:
+	case DXGI_FORMAT_R32_TYPELESS:
+	case DXGI_FORMAT_R8G8_TYPELESS:
+	case DXGI_FORMAT_R16_TYPELESS:
+	case DXGI_FORMAT_R8_TYPELESS:
+	case DXGI_FORMAT_BC1_TYPELESS:
+	case DXGI_FORMAT_BC2_TYPELESS:
+	case DXGI_FORMAT_BC3_TYPELESS:
+	case DXGI_FORMAT_BC4_TYPELESS:
+	case DXGI_FORMAT_BC5_TYPELESS:
+	case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+	case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+	case DXGI_FORMAT_BC6H_TYPELESS:
+	case DXGI_FORMAT_BC7_TYPELESS:
+		return true;
+	}
+	return false;
+}
+
 DXGI_FORMAT dx_texture::getTypelessFormat(DXGI_FORMAT format)
 {
 	DXGI_FORMAT typelessFormat = format;
@@ -228,6 +278,9 @@ DXGI_FORMAT dx_texture::getTypelessFormat(DXGI_FORMAT format)
 		break;
 	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
 		typelessFormat = DXGI_FORMAT_R32G8X24_TYPELESS;
+		break;
+	case DXGI_FORMAT_D24_UNORM_S8_UINT:
+		typelessFormat = DXGI_FORMAT_R24G8_TYPELESS;
 		break;
 	case DXGI_FORMAT_R10G10B10A2_UNORM:
 	case DXGI_FORMAT_R10G10B10A2_UINT:
@@ -366,6 +419,32 @@ DXGI_FORMAT dx_texture::getUAVCompatibleFormat(DXGI_FORMAT format)
 	}
 
 	return uavFormat;
+}
+
+DXGI_FORMAT dx_texture::getDepthFormatFromTypeless(DXGI_FORMAT format)
+{
+	// Incomplete list.
+	switch (format)
+	{
+	case DXGI_FORMAT_R32_TYPELESS: return DXGI_FORMAT_D32_FLOAT;
+	case DXGI_FORMAT_R24G8_TYPELESS: return DXGI_FORMAT_D24_UNORM_S8_UINT;
+	case DXGI_FORMAT_R16_TYPELESS: return DXGI_FORMAT_D16_UNORM;
+	}
+	
+	return format;
+}
+
+DXGI_FORMAT dx_texture::getReadFormatFromTypeless(DXGI_FORMAT format)
+{
+	// Incomplete list.
+	switch (format)
+	{
+	case DXGI_FORMAT_R32_TYPELESS: return DXGI_FORMAT_R32_FLOAT;
+	case DXGI_FORMAT_R24G8_TYPELESS: return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+	case DXGI_FORMAT_R16_TYPELESS: return DXGI_FORMAT_R16_UNORM;
+	}
+
+	return format;
 }
 
 uint32 dx_texture::getFormatSize(DXGI_FORMAT format)

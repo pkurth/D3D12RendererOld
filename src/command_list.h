@@ -95,6 +95,17 @@ public:
 
 		setShaderResourceView(rootParameterIndex, descriptorOffset, cubemap, stateAfter, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
 	}
+	void bindDepthTextureForReading(uint32 rootParameterIndex, uint32 descriptorOffset, dx_texture& depthTexture,
+		D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format = dx_texture::getReadFormatFromTypeless(depthTexture.resource->GetDesc().Format);
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MipLevels = 1;
+
+		setShaderResourceView(rootParameterIndex, descriptorOffset, depthTexture, stateAfter, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
+	}
 
 	// Input assembly.
 	void setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology);
