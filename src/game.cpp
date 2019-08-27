@@ -713,7 +713,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	viewport = CD3DX12_VIEWPORT(0.f, 0.f, (float)width, (float)height);
 	flushApplication();
 
-	camera.fov = DirectX::XMConvertToRadians(70.f);
+	camera.fovY = DirectX::XMConvertToRadians(70.f);
 	camera.position = vec3(0.f, 5.f, 5.f);
 	camera.rotation = quat::identity;
 	camera.updateMatrices(width, height);
@@ -916,7 +916,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	// Lighting.
 	{
-		directional_light sun = { vec4(-1.f, -1.f, -1.f, 0.f).normalize(), vec4(3.f, 0.f, 0.f, 1.f) };
+		directional_light sun = { comp_vec(-1.f, -1.f, -1.f, 0.f).normalize(), vec4(3.f, 0.f, 0.f, 1.f) };
 
 		commandList->setPipelineState(lightingPipelineState);
 		commandList->setGraphicsRootSignature(lightingRootSignature);

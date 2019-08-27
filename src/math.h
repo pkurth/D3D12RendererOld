@@ -64,53 +64,6 @@ union mat4
 	static const mat4 identity;
 };
 
-union vec4
-{
-	DirectX::XMFLOAT4 dxvector;
-
-	struct
-	{
-		float x;
-		float y;
-		float z;
-		float w;
-	};
-
-	float data[4];
-
-	inline vec4() {}
-	inline vec4(float x, float y, float z, float w) { this->x = x; this->y = y; this->z = z; this->w = w; }
-	inline vec4(const DirectX::XMFLOAT4& v) { dxvector = v; }
-	inline vec4(const DirectX::XMVECTOR& v) { DirectX::XMStoreFloat4(&dxvector, v); }
-
-	inline operator const DirectX::XMFLOAT4& () const { return dxvector; }
-	inline operator DirectX::XMVECTOR() const { return DirectX::XMLoadFloat4(&dxvector); }
-
-	inline vec4 normalize() const { return DirectX::XMVector4Normalize(*this); }
-};
-
-union vec3
-{
-	DirectX::XMFLOAT3 dxvector;
-
-	struct
-	{
-		float x;
-		float y;
-		float z;
-	};
-
-	float data[3];
-
-	inline vec3() {}
-	inline vec3(float x, float y, float z) { this->x = x; this->y = y; this->z = z; }
-	inline vec3(const DirectX::XMFLOAT3& v) { dxvector = v; }
-	inline vec3(const DirectX::XMVECTOR& v) { DirectX::XMStoreFloat3(&dxvector, v); }
-
-	inline operator const DirectX::XMFLOAT3& () const { return dxvector; }
-	inline operator DirectX::XMVECTOR() const { return DirectX::XMLoadFloat3(&dxvector); } // This initializes w to 0.
-};
-
 union vec2
 {
 	DirectX::XMFLOAT2 dxvector;
@@ -130,6 +83,71 @@ union vec2
 
 	inline operator const DirectX::XMFLOAT2& () const { return dxvector; }
 	inline operator DirectX::XMVECTOR() const { return DirectX::XMLoadFloat2(&dxvector); } // This initializes z and w to 0.
+};
+
+union vec3
+{
+	DirectX::XMFLOAT3 dxvector;
+
+	struct
+	{
+		union
+		{
+			struct
+			{
+				float x;
+				float y;
+			};
+
+			vec2 xy;
+		};
+
+		float z;
+	};
+
+	float data[3];
+
+	inline vec3() {}
+	inline vec3(float x, float y, float z) { this->x = x; this->y = y; this->z = z; }
+	inline vec3(vec2 xy, float z) { this->xy = xy; this->z = z; }
+	inline vec3(const DirectX::XMFLOAT3& v) { dxvector = v; }
+	inline vec3(const DirectX::XMVECTOR& v) { DirectX::XMStoreFloat3(&dxvector, v); }
+
+	inline operator const DirectX::XMFLOAT3& () const { return dxvector; }
+	inline operator DirectX::XMVECTOR() const { return DirectX::XMLoadFloat3(&dxvector); } // This initializes w to 0.
+};
+
+union vec4
+{
+	DirectX::XMFLOAT4 dxvector;
+
+	struct
+	{
+		union
+		{
+			struct
+			{
+				float x;
+				float y;
+				float z;
+			};
+
+			vec3 xyz;
+		};
+
+		float w;
+	};
+
+	float data[4];
+
+	inline vec4() {}
+	inline vec4(float x, float y, float z, float w) { this->x = x; this->y = y; this->z = z; this->w = w; }
+	inline vec4(vec3 xyz, float w) { this->xyz = xyz; this->w = w; }
+	inline vec4(const DirectX::XMFLOAT4& v) { dxvector = v; }
+	inline vec4(const DirectX::XMVECTOR& v) { DirectX::XMStoreFloat4(&dxvector, v); }
+
+	inline operator const DirectX::XMFLOAT4& () const { return dxvector; }
+	inline operator DirectX::XMVECTOR() const { return DirectX::XMLoadFloat4(&dxvector); }
 };
 
 union quat
@@ -171,8 +189,6 @@ struct alignas(16) comp_mat
 	inline operator mat4() const { return dxmatrix; }
 
 	inline comp_mat transpose() { return DirectX::XMMatrixTranspose(dxmatrix); }
-	inline void transposeInPlace() { dxmatrix = DirectX::XMMatrixTranspose(dxmatrix); }
-
 	inline comp_mat invert() { return DirectX::XMMatrixInverse(nullptr, dxmatrix); }
 };
 
@@ -191,6 +207,8 @@ struct alignas(16) comp_vec
 	inline operator vec2() const { return dxvector; }
 	inline operator vec3() const { return dxvector; }
 	inline operator vec4() const { return dxvector; }
+
+	inline comp_vec normalize() const { return DirectX::XMVector4Normalize(dxvector); }
 };
 
 struct alignas(16) comp_quat
@@ -207,7 +225,6 @@ struct alignas(16) comp_quat
 	inline operator quat() const { return dxquat; }
 
 	inline comp_quat normalize() { return DirectX::XMQuaternionNormalize(dxquat); }
-	inline void normalizeInPlace() { dxquat = DirectX::XMQuaternionNormalize(dxquat); }
 };
 
 inline comp_mat operator*(const comp_mat& a, const comp_mat& b)
@@ -289,9 +306,14 @@ inline comp_mat createLookAt(const comp_vec& eye, const comp_vec& focus, const c
 	return DirectX::XMMatrixLookAtRH(eye, focus, up);
 }
 
-inline comp_mat createPerspectiveMatrix(float fov, float aspect, float nearPlane, float farPlane = -1.f)
+inline comp_mat createPerspectiveMatrix(float fovY, float aspect, float nearPlane, float farPlane = -1.f)
 {
-	return DirectX::XMMatrixPerspectiveFovRH(fov, aspect, nearPlane, farPlane);
+	return DirectX::XMMatrixPerspectiveFovRH(fovY, aspect, nearPlane, farPlane);
+}
+
+inline comp_mat createOrthographicMatrix(float left, float right, float top, float bottom, float nearPlane, float farPlane)
+{
+	return DirectX::XMMatrixOrthographicOffCenterRH(left, right, bottom, top, nearPlane, farPlane);
 }
 
 inline comp_mat createScaleMatrix(float scale)
