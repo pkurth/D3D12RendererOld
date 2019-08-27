@@ -12,6 +12,12 @@ static const float3 titaniumAlbedo =	float3(0.542f, 0.497f, 0.449f);
 static const float3 cobaltAlbedo =		float3(0.662f, 0.655f, 0.634f);
 static const float3 platinumAlbedo =	float3(0.672f, 0.637f, 0.585f);
 
+struct directional_light
+{
+	float4 worldSpaceDirection;
+	float4 color;
+};
+
 
 static float3 fresnelSchlick(float cosTheta, float3 F0)
 {

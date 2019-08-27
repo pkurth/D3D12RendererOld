@@ -8,31 +8,33 @@
 #include "camera.h"
 #include "render_target.h"
 #include "material.h"
+#include "light.h"
 #include "debug_gui.h"
 #include "platform.h"
 
-#define GEOMETRY_ROOTPARAM_CAMERA	0
-#define GEOMETRY_ROOTPARAM_MODEL	1
-#define GEOMETRY_ROOTPARAM_TEXTURES	2
+#define GEOMETRY_ROOTPARAM_CAMERA		0
+#define GEOMETRY_ROOTPARAM_MODEL		1
+#define GEOMETRY_ROOTPARAM_TEXTURES		2
 
-#define AZDO_ROOTPARAM_CAMERA		0
-#define AZDO_ROOTPARAM_MODEL		1
-#define AZDO_ROOTPARAM_MATERIAL		2
-#define AZDO_ROOTPARAM_ALBEDOS		3
-#define AZDO_ROOTPARAM_NORMALS		4
-#define AZDO_ROOTPARAM_ROUGHNESSES	5
-#define AZDO_ROOTPARAM_METALLICS	6
+#define AZDO_ROOTPARAM_CAMERA			0
+#define AZDO_ROOTPARAM_MODEL			1
+#define AZDO_ROOTPARAM_MATERIAL			2
+#define AZDO_ROOTPARAM_ALBEDOS			3
+#define AZDO_ROOTPARAM_NORMALS			4
+#define AZDO_ROOTPARAM_ROUGHNESSES		5
+#define AZDO_ROOTPARAM_METALLICS		6
 
-#define SKY_ROOTPARAM_VP			0
-#define SKY_ROOTPARAM_TEXTURE		1
+#define SKY_ROOTPARAM_VP				0
+#define SKY_ROOTPARAM_TEXTURE			1
 
-#define AMBIENT_ROOTPARAM_CAMERA	0
-#define AMBIENT_ROOTPARAM_TEXTURES	1
+#define LIGHTING_ROOTPARAM_CAMERA		0
+#define LIGHTING_ROOTPARAM_TEXTURES		1
+#define LIGHTING_ROOTPARAM_DIRECTIONAL	2
 
-#define PRESENT_ROOTPARAM_CAMERA	0
-#define PRESENT_ROOTPARAM_MODE		1
-#define PRESENT_ROOTPARAM_TONEMAP	2
-#define PRESENT_ROOTPARAM_TEXTURE	3
+#define PRESENT_ROOTPARAM_CAMERA		0
+#define PRESENT_ROOTPARAM_MODE			1
+#define PRESENT_ROOTPARAM_TONEMAP		2
+#define PRESENT_ROOTPARAM_TEXTURE		3
 
 
 #define CAMERA_SENSITIVITY 4.f
@@ -60,6 +62,8 @@ private:
 
 	ComPtr<ID3D12PipelineState> azdoGeometryPipelineState;
 	dx_root_signature azdoGeometryRootSignature;
+	//ComPtr<ID3D12PipelineState> azdoShadowPipelineState;
+	//dx_root_signature azdoShadowRootSignature;
 	ComPtr<ID3D12CommandSignature> azdoCommandSignature;
 
 	ComPtr<ID3D12PipelineState> opaqueGeometryPipelineState;
@@ -68,11 +72,8 @@ private:
 	ComPtr<ID3D12PipelineState> skyPipelineState;
 	dx_root_signature skyRootSignature;
 
-	ComPtr<ID3D12PipelineState> directionalLightPipelineState;
-	dx_root_signature directionalLightRootSignature;
-
-	ComPtr<ID3D12PipelineState> ambientLightPipelineState;
-	dx_root_signature ambientLightRootSignature;
+	ComPtr<ID3D12PipelineState> lightingPipelineState;
+	dx_root_signature lightingRootSignature;
 
 	ComPtr<ID3D12PipelineState> presentPipelineState;
 	dx_root_signature presentRootSignature;

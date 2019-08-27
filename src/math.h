@@ -85,6 +85,8 @@ union vec4
 
 	inline operator const DirectX::XMFLOAT4& () const { return dxvector; }
 	inline operator DirectX::XMVECTOR() const { return DirectX::XMLoadFloat4(&dxvector); }
+
+	inline vec4 normalize() const { return DirectX::XMVector4Normalize(*this); }
 };
 
 union vec3

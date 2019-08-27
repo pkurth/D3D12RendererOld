@@ -185,6 +185,7 @@
     <ClInclude Include="src\generate_mips.h" />
     <ClInclude Include="src\graphics.h" />
     <ClInclude Include="src\input.h" />
+    <ClInclude Include="src\light.h" />
     <ClInclude Include="src\material.h" />
     <ClInclude Include="src\model.h" />
     <ClInclude Include="src\pch.h" />
@@ -245,12 +246,7 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">5.1</ShaderModel>
     </FxCompile>
-    <FxCompile Include="shaders\light_ambient_ps.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Pixel</ShaderType>
-    </FxCompile>
-    <FxCompile Include="shaders\light_directional_ps.hlsl">
+    <FxCompile Include="shaders\lighting_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Pixel</ShaderType>
