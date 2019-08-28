@@ -177,6 +177,7 @@
     <ClInclude Include="shaders\inc\normals.h" />
     <ClInclude Include="shaders\inc\pbr.h" />
     <ClInclude Include="shaders\inc\quaternion.h" />
+    <ClInclude Include="src\aligned_allocator.h" />
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\camera.h" />
     <ClInclude Include="src\color.h" />

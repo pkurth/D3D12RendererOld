@@ -2,6 +2,7 @@
 #include "lighting.h"
 #include "error.h"
 #include "graphics.h"
+#include "light.h"
 
 #include <pix3.h>
 
@@ -20,7 +21,7 @@ void lighting_pipeline::initialize(ComPtr<ID3D12Device2> device, dx_command_list
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 
-	CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 7, 0);
+	CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6 + MAX_NUM_SUN_SHADOW_CASCADES, 0);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 	rootParameters[LIGHTING_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_ALL); // Camera.
@@ -83,12 +84,29 @@ void lighting_pipeline::initialize(ComPtr<ID3D12Device2> device, dx_command_list
 	SET_NAME(pipelineState, "Lighting Pipeline");
 
 	commandList->integrateBRDF(brdf);
+
+	dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, MAX_NUM_SUN_SHADOW_CASCADES);
+	defaultSRV = allocation.getDescriptorHandle(0);
+
+	for (uint32 i = 0; i < MAX_NUM_SUN_SHADOW_CASCADES; ++i)
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Texture2D.MipLevels = 0;
+
+		device->CreateShaderResourceView(
+			nullptr, &srvDesc,
+			allocation.getDescriptorHandle(i)
+		);
+	}
 }
 
 void lighting_pipeline::render(dx_command_list* commandList, 
 	dx_texture irradiance, dx_texture prefilteredEnvironment,
 	dx_texture& albedoAOTexture, dx_texture& normalRoughnessMetalnessTexture, dx_texture& depthTexture,
-	dx_texture& sunShadowMap,
+	dx_texture* sunShadowMapCascades, uint32 numSunShadowCascades,
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress)
 {
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Lighting pass.");
@@ -107,7 +125,13 @@ void lighting_pipeline::render(dx_command_list* commandList,
 	commandList->setShaderResourceView(LIGHTING_ROOTPARAM_TEXTURES, 4, normalRoughnessMetalnessTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	commandList->bindDepthTextureForReading(LIGHTING_ROOTPARAM_TEXTURES, 5, depthTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	commandList->bindDepthTextureForReading(LIGHTING_ROOTPARAM_TEXTURES, 6, sunShadowMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+	for (uint32 i = 0; i < numSunShadowCascades; ++i)
+	{
+		commandList->bindDepthTextureForReading(LIGHTING_ROOTPARAM_TEXTURES, 6 + i, sunShadowMapCascades[i], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	}
+
+	commandList->stageDescriptors(LIGHTING_ROOTPARAM_TEXTURES, 6 + numSunShadowCascades, MAX_NUM_SUN_SHADOW_CASCADES - numSunShadowCascades, defaultSRV);
 
 	commandList->setGraphicsDynamicConstantBuffer(LIGHTING_ROOTPARAM_DIRECTIONAL, sunCBAddress);
 

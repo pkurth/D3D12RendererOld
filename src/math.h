@@ -354,7 +354,7 @@ inline T bucketize(T value, size_t alignment)
 }
 
 template <typename T>
-inline T lerp(T lo, T hi, T t)
+inline T lerp(T lo, T hi, float t)
 {
 	return lo + (hi - lo) * t;
 }

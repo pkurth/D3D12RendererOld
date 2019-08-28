@@ -11,22 +11,22 @@ struct ps_input
 };
 
 
-SamplerState gbufferSampler				: register(s0);
-SamplerState brdfSampler				: register(s1);
-SamplerComparisonState shadowMapSampler	: register(s2);
+SamplerState gbufferSampler					: register(s0);
+SamplerState brdfSampler					: register(s1);
+SamplerComparisonState shadowMapSampler		: register(s2);
 
 // PBR.
-TextureCube<float4> irradianceTexture	: register(t0);
-TextureCube<float4> environmentTexture	: register(t1);
-Texture2D<float4> brdf					: register(t2);
+TextureCube<float4> irradianceTexture		: register(t0);
+TextureCube<float4> environmentTexture		: register(t1);
+Texture2D<float4> brdf						: register(t2);
 
 // GBuffer.
-Texture2D<float4> albedos				: register(t3);
-Texture2D<float4> normalsRoughMetal		: register(t4);
-Texture2D<float> depthBuffer			: register(t5);
+Texture2D<float4> albedos					: register(t3);
+Texture2D<float4> normalsRoughMetal			: register(t4);
+Texture2D<float> depthBuffer				: register(t5);
 
 // Shadow maps.
-Texture2D<float> sunShadowMap			: register(t6);
+Texture2D<float> sunShadowMapCascades[4]	: register(t6);
 
 
 ConstantBuffer<directional_light> sunLight : register(b1);
@@ -104,10 +104,43 @@ float4 main(ps_input IN) : SV_TARGET
 
 	// Sun.
 	{
+		uint numCascades = sunLight.numShadowCascades;
+		float4 cascadeRelativeDistances = pow(float4(1.f, 2.f, 3.f, 4.f) / numCascades, 2.f);
+		float nearPlane = camera.projectionParams.x;
+		float farPlane = camera.projectionParams.y;
+		float4 cascadeDistances = float4(
+			lerp(nearPlane, farPlane, cascadeRelativeDistances.x),
+			lerp(nearPlane, farPlane, cascadeRelativeDistances.y),
+			lerp(nearPlane, farPlane, cascadeRelativeDistances.z),
+			lerp(nearPlane, farPlane, cascadeRelativeDistances.w)
+		);
+
+		float4 comparison = float4(worldDepth, worldDepth, worldDepth, worldDepth) > cascadeDistances;
+		float index = dot(float4(numCascades > 0, numCascades > 1, numCascades > 2, numCascades > 3), comparison);
+
+		index = min(index, float(numCascades) - 1.f);
+		uint currentCascadeIndex = uint(index);
+		uint nextCascadeIndex = min(numCascades - 1, currentCascadeIndex + 1);
+
+		float currentPixelsBlendBandLocation = 1.f;
+		//if (numCascades > 1)
+		//{
+		//	// Calculate blend amount.
+		//	int blendIntervalBelowIndex = max(0, currentCascadeIndex - 1);
+		//	float cascade0Factor = float(currentCascadeIndex > 0); // if cascade == 0, currentPixelDepth is already relative to current cascade
+		//	float pixelDepth = worldDepth - cascadeDistances[blendIntervalBelowIndex] * cascade0Factor;
+		//	float blendInterval = cascadeDistances[currentCascadeIndex] - cascadeDistances[blendIntervalBelowIndex] * cascade0Factor;
+
+		//	// relative to current cascade. 0 means at nearplane of cascade, 1 at farplane of cascade
+		//	currentPixelsBlendBandLocation = 1.f - pixelDepth / blendInterval;
+		//}
+
+
+
 		float3 L = -sunLight.worldSpaceDirection.xyz;
 		float3 radiance = sunLight.color.xyz; // No attenuation for sun.
 
-		float4 lightProjected = mul(sunLight.vp, float4(worldPosition, 1.f));
+		float4 lightProjected = mul(sunLight.vp[currentCascadeIndex], float4(worldPosition, 1.f));
 		// Since the sun is a directional (orthographic) light source, we don't need to divide by w.
 
 		float2 lightUV = lightProjected.xy * 0.5f + float2(0.5f, 0.5f);
@@ -121,7 +154,7 @@ float4 main(ps_input IN) : SV_TARGET
 		{
 			for (int x = -2; x <= 2; ++x)
 			{
-				shadowValue += sunShadowMap.SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - 0.001f);
+				shadowValue += sunShadowMapCascades[currentCascadeIndex].SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - 0.001f);
 				++count;
 			}
 		}

@@ -124,9 +124,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			depthClearValue.Format = depthBufferFormat;
 			depthClearValue.DepthStencil = { 1.f, 0 };
 
-			sunShadowMapTexture.initialize(device, depthDesc, &depthClearValue);
-
-			sunShadowMapRT.attachDepthStencilTexture(sunShadowMapTexture);
+			for (uint32 i = 0; i < sun.numShadowCascades; ++i)
+			{
+				sunShadowMapTexture[i].initialize(device, depthDesc, &depthClearValue);
+				sunShadowMapRT[i].attachDepthStencilTexture(sunShadowMapTexture[i]);
+			}
 		}
 	}
 
@@ -210,6 +212,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		}
 
 		// Shadow pass.
+		rootParameters[INDIRECT_ROOTPARAM_CAMERA].InitAsConstants(16, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // VP matrix.
 		rootSignatureDesc.NumParameters = 2; // Don't need the materials.
 		rootSignatureDesc.NumStaticSamplers = 0;
 		rootSignatureDesc.Flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
@@ -230,7 +233,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
 			pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 			pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-			pipelineStateStream.dsvFormat = sunShadowMapRT.depthStencilFormat;
+			pipelineStateStream.dsvFormat = sunShadowMapRT[0].depthStencilFormat;
 			pipelineStateStream.rasterizer = defaultRasterizerDesc;
 
 			D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
@@ -574,26 +577,26 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	{
 		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sun shadow map.");
 
-		commandList->setViewport(sunShadowMapRT.viewport);
+		commandList->setViewport(sunShadowMapRT[0].viewport);
 
+		// If more is than the static scene is rendered here, this stuff must go in the loop.
+		commandList->setPipelineState(indirectShadowPipelineState);
+		commandList->setGraphicsRootSignature(indirectShadowRootSignature);
 
-		commandList->setRenderTarget(sunShadowMapRT);
-		commandList->clearDepth(sunShadowMapRT.depthStencilAttachment->getDepthStencilView(), 1.f);
+		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-#if 1
-		// Static scene.
+		commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);
+		commandList->setIndexBuffer(indirectMesh.indexBuffer);
+
+		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
 		{
-			commandList->setPipelineState(indirectShadowPipelineState);
-			commandList->setGraphicsRootSignature(indirectShadowRootSignature);
+			commandList->setRenderTarget(sunShadowMapRT[i]);
+			commandList->clearDepth(sunShadowMapRT[i].depthStencilAttachment->getDepthStencilView(), 1.f);
 
-			commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			// This only works, because the vertex shader expects the vp matrix as the first argument.
+			commandList->setGraphics32BitConstants(INDIRECT_ROOTPARAM_CAMERA, sun.vp[i]);
 
-			// This is a bit of a hack. The VP matrix is the first member of both camera and sun.
-			commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_CAMERA, sunCBAddress);
-
-			commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);
-			commandList->setIndexBuffer(indirectMesh.indexBuffer);
-
+			// Static scene.
 			commandList->getD3D12CommandList()->ExecuteIndirect(
 				indirectShadowCommandSignature.Get(),
 				(uint32)indirectSubmeshes.size(),
@@ -602,7 +605,6 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 				nullptr,
 				0);
 		}
-#endif
 	}
 
 
@@ -686,7 +688,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	lighting.render(commandList, 
 		irradiance, prefilteredEnvironment, 
 		albedoAOTexture, normalRoughnessMetalnessTexture, depthTextureCopy, 
-		sunShadowMapTexture, 
+		sunShadowMapTexture, sun.numShadowCascades, 
 		cameraCBAddress, sunCBAddress);
 
 

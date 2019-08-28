@@ -269,15 +269,17 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 		DirectX::TexMetadata metadata;
 		DirectX::ScratchImage scratchImage;
 
-		if (path.extension() == ".dds")
+		fs::path extension = path.extension();
+
+		if (extension == ".dds")
 		{
 			checkResult(DirectX::LoadFromDDSFile(filename.c_str(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage));
 		}
-		else if (path.extension() == ".hdr")
+		else if (extension == ".hdr")
 		{
 			checkResult(DirectX::LoadFromHDRFile(filename.c_str(), &metadata, scratchImage));
 		}
-		else if (path.extension() == ".tga")
+		else if (extension == ".tga")
 		{
 			checkResult(DirectX::LoadFromTGAFile(filename.c_str(), &metadata, scratchImage));
 		}

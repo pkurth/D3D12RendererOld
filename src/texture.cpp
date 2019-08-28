@@ -88,7 +88,7 @@ void dx_texture::resize(uint32 width, uint32 height)
 	}
 }
 
-void dx_texture::initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue)
+void dx_texture::initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC resourceDesc, D3D12_CLEAR_VALUE* clearValue)
 {
 	format = resourceDesc.Format;
 	if (isDepthFormat(format))

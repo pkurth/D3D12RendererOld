@@ -10,7 +10,7 @@ enum texture_type
 
 struct dx_texture : dx_resource
 {
-	void initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue = nullptr);
+	void initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC resourceDesc, D3D12_CLEAR_VALUE* clearValue = nullptr);
 	void initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource> resource);
 	void initialize(const dx_texture& other);
 

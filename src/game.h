@@ -32,7 +32,6 @@
 #define CAMERA_SENSITIVITY 4.f
 #define CAMERA_MOVEMENT_SPEED 10.f
 
-
 class dx_game
 {
 
@@ -106,7 +105,6 @@ private:
 
 	dx_render_target gbufferRT;
 	dx_render_target lightingRT;
-	dx_render_target sunShadowMapRT;
 
 	// Render target textures.
 	dx_texture albedoAOTexture;
@@ -115,6 +113,7 @@ private:
 	dx_texture depthTexture;
 	dx_texture depthTextureCopy;
 
-	dx_texture sunShadowMapTexture;
+	dx_render_target sunShadowMapRT[MAX_NUM_SUN_SHADOW_CASCADES];
+	dx_texture sunShadowMapTexture[MAX_NUM_SUN_SHADOW_CASCADES];
 };
 

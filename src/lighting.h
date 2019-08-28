@@ -15,11 +15,13 @@ struct lighting_pipeline
 	void render(dx_command_list* commandList, 
 		dx_texture irradiance, dx_texture prefilteredEnvironment,
 		dx_texture& albedoAOTexture, dx_texture& normalRoughnessMetalnessTexture, dx_texture& depthTexture,
-		dx_texture& sunShadowMap,
+		dx_texture* sunShadowMapCascades, uint32 numSunShadowCascades,
 		D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress);
 
 	ComPtr<ID3D12PipelineState> pipelineState;
 	dx_root_signature rootSignature;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE defaultSRV;
 
 	dx_texture brdf;
 };

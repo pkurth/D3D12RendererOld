@@ -16,6 +16,7 @@ class dx_command_list
 public:
 	void initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE commandListType);
 	
+	// Barriers.
 	void transitionBarrier(ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES afterState, uint32 subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, bool flushBarriers = false);
 	void transitionBarrier(const dx_resource& resource, D3D12_RESOURCE_STATES afterState, uint32 subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, bool flushBarriers = false);
 
@@ -25,10 +26,11 @@ public:
 	void aliasingBarrier(ComPtr<ID3D12Resource> beforeResource, ComPtr<ID3D12Resource> afterResource, bool flushBarriers = false);
 	void aliasingBarrier(const dx_resource& beforeResource, const dx_resource& afterResource, bool flushBarriers = false);
 
+
+	// Buffer copy.
 	void copyResource(ComPtr<ID3D12Resource> dstRes, ComPtr<ID3D12Resource> srcRes);
 	void copyResource(dx_resource& dstRes, const dx_resource& srcRes);
 
-	// Buffer copy.
 	void uploadBufferData(ComPtr<ID3D12Resource> destinationResource, const void* bufferData, uint32 bufferSize);
 	void updateBufferDataRange(ComPtr<ID3D12Resource> destinationResource, const void* data, uint32 offset, uint32 size);
 
@@ -38,13 +40,17 @@ public:
 	void loadTextureFromMemory(dx_texture& texture, const void* data, uint32 width, uint32 height, DXGI_FORMAT format, texture_type type, bool genMips = true);
 	void copyTextureForReadback(dx_texture& texture, ComPtr<ID3D12Resource>& readbackBuffer, uint32 numMips = 0);
 
+
+	// BRDF.
 	void convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
 	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32);
 	void prefilterEnvironmentMap(dx_texture& environment, dx_texture& prefiltered, uint32 resolution = 128);
 	void integrateBRDF(dx_texture& brdf, uint32 resolution = 512);
 
+
 	// Pipeline.
 	void setPipelineState(ComPtr<ID3D12PipelineState> pipelineState);
+
 
 	// Root signature.
 	void setGraphicsRootSignature(const dx_root_signature& rootSignature);
@@ -106,6 +112,14 @@ public:
 		srvDesc.Texture2D.MipLevels = 1;
 
 		setShaderResourceView(rootParameterIndex, descriptorOffset, depthTexture, stateAfter, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
+	}
+
+	void stageDescriptors(uint32 rootParameterIndex,
+		uint32 descriptorOffset,
+		uint32 count,
+		D3D12_CPU_DESCRIPTOR_HANDLE baseDesc)
+	{
+		dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].stageDescriptors(rootParameterIndex, descriptorOffset, count, baseDesc);
 	}
 
 	// Input assembly.
