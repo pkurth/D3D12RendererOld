@@ -12,29 +12,21 @@
 #include "debug_gui.h"
 #include "platform.h"
 
+#include "sky.h"
+#include "lighting.h"
+#include "present.h"
+
 #define GEOMETRY_ROOTPARAM_CAMERA		0
 #define GEOMETRY_ROOTPARAM_MODEL		1
 #define GEOMETRY_ROOTPARAM_TEXTURES		2
 
-#define AZDO_ROOTPARAM_CAMERA			0
-#define AZDO_ROOTPARAM_MODEL			1
-#define AZDO_ROOTPARAM_MATERIAL			2
-#define AZDO_ROOTPARAM_ALBEDOS			3
-#define AZDO_ROOTPARAM_NORMALS			4
-#define AZDO_ROOTPARAM_ROUGHNESSES		5
-#define AZDO_ROOTPARAM_METALLICS		6
-
-#define SKY_ROOTPARAM_VP				0
-#define SKY_ROOTPARAM_TEXTURE			1
-
-#define LIGHTING_ROOTPARAM_CAMERA		0
-#define LIGHTING_ROOTPARAM_TEXTURES		1
-#define LIGHTING_ROOTPARAM_DIRECTIONAL	2
-
-#define PRESENT_ROOTPARAM_CAMERA		0
-#define PRESENT_ROOTPARAM_MODE			1
-#define PRESENT_ROOTPARAM_TONEMAP		2
-#define PRESENT_ROOTPARAM_TEXTURE		3
+#define INDIRECT_ROOTPARAM_CAMERA		0
+#define INDIRECT_ROOTPARAM_MODEL		1
+#define INDIRECT_ROOTPARAM_MATERIAL		2
+#define INDIRECT_ROOTPARAM_ALBEDOS		3
+#define INDIRECT_ROOTPARAM_NORMALS		4
+#define INDIRECT_ROOTPARAM_ROUGHNESSES	5
+#define INDIRECT_ROOTPARAM_METALLICS	6
 
 
 #define CAMERA_SENSITIVITY 4.f
@@ -60,51 +52,41 @@ private:
 	bool contentLoaded = false;
 	ComPtr<ID3D12Device2> device;
 
-	ComPtr<ID3D12PipelineState> azdoGeometryPipelineState;
-	dx_root_signature azdoGeometryRootSignature;
-	ComPtr<ID3D12CommandSignature> azdoGeometryCommandSignature;
-	ComPtr<ID3D12PipelineState> azdoShadowPipelineState;
-	dx_root_signature azdoShadowRootSignature;
-	ComPtr<ID3D12CommandSignature> azdoShadowCommandSignature;
+	ComPtr<ID3D12PipelineState> indirectGeometryPipelineState;
+	dx_root_signature indirectGeometryRootSignature;
+	ComPtr<ID3D12CommandSignature> indirectGeometryCommandSignature;
+	ComPtr<ID3D12PipelineState> indirectShadowPipelineState;
+	dx_root_signature indirectShadowRootSignature;
+	ComPtr<ID3D12CommandSignature> indirectShadowCommandSignature;
 
 	ComPtr<ID3D12PipelineState> opaqueGeometryPipelineState;
 	dx_root_signature opaqueGeometryRootSignature;
 
-	ComPtr<ID3D12PipelineState> skyPipelineState;
-	dx_root_signature skyRootSignature;
-
-	ComPtr<ID3D12PipelineState> lightingPipelineState;
-	dx_root_signature lightingRootSignature;
-
-	ComPtr<ID3D12PipelineState> presentPipelineState;
-	dx_root_signature presentRootSignature;
+	
+	sky_pipeline sky;
+	lighting_pipeline lighting;
+	present_pipeline present;
 
 
-	dx_mesh azdoMesh;
-	std::vector<submesh_info> azdoSubmeshes;
-	std::vector<dx_material> azdoMaterials;
-	dx_buffer azdoCommandBuffer;
-	dx_buffer azdoShadowCommandBuffer;
-	ComPtr<ID3D12DescriptorHeap> azdoDescriptorHeap;
+	dx_mesh indirectMesh;
+	std::vector<submesh_info> indirectSubmeshes;
+	std::vector<dx_material> indirectMaterials;
+	dx_buffer indirectCommandBuffer;
+	dx_buffer indirectShadowCommandBuffer;
+	ComPtr<ID3D12DescriptorHeap> indirectDescriptorHeap;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE albedosOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE roughnessesOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE metallicsOffset;
 
-	dx_material cerberusMaterial;
 	dx_mesh sceneMesh;
 	std::vector<submesh_info> sceneSubmeshes;
-
-	dx_mesh skyMesh;
-	submesh_info skySubmesh;
 
 	directional_light sun;
 
 	dx_texture cubemap;
 	dx_texture irradiance;
 	dx_texture prefilteredEnvironment;
-	dx_texture brdf;
-
 
 	vec3 inputMovement;
 	float inputSpeedModifier;

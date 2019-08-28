@@ -54,12 +54,6 @@ static float3 calculateLighting(float3 albedo, float3 radiance, float3 N, float3
 	return (kD * albedo * oneOverPI + specular) * radiance * NdotL;
 }
 
-//static float sampleShadowMap(Texture2D<float> shadowMap, float2 lightUV, float depth)
-//{
-//	float4 shadowValue = shadowMap.SampleCmpLevelZero(shadowMapSampler, lightUV, depth - 0.001f);
-//
-//}
-
 float4 main(ps_input IN) : SV_TARGET
 {
 	float depthBufferDepth = depthBuffer.Sample(gbufferSampler, IN.uv);
@@ -111,7 +105,7 @@ float4 main(ps_input IN) : SV_TARGET
 	// Sun.
 	{
 		float3 L = -sunLight.worldSpaceDirection.xyz;
-		float3 radiance = sunLight.color.xyz;
+		float3 radiance = sunLight.color.xyz; // No attenuation for sun.
 
 		float4 lightProjected = mul(sunLight.vp, float4(worldPosition, 1.f));
 		// Since the sun is a directional (orthographic) light source, we don't need to divide by w.

@@ -78,6 +78,15 @@
     <ClCompile Include="src\buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\sky.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\present.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lighting.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\common.h">
@@ -188,6 +197,15 @@
     <ClInclude Include="src\light.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\sky.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\present.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lighting.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\generate_mips.hlsl" />
@@ -203,9 +221,9 @@
     <FxCompile Include="shaders\fullscreen_triangle_vs.hlsl" />
     <FxCompile Include="shaders\font_ps.hlsl" />
     <FxCompile Include="shaders\font_vs.hlsl" />
-    <FxCompile Include="shaders\azdo_vs.hlsl" />
-    <FxCompile Include="shaders\azdo_ps.hlsl" />
     <FxCompile Include="shaders\lighting_ps.hlsl" />
+    <FxCompile Include="shaders\geometry_indirect_ps.hlsl" />
+    <FxCompile Include="shaders\geometry_indirect_vs.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
