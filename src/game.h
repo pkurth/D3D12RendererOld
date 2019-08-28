@@ -98,6 +98,8 @@ private:
 	dx_mesh skyMesh;
 	submesh_info skySubmesh;
 
+	directional_light sun;
+
 	dx_texture cubemap;
 	dx_texture irradiance;
 	dx_texture prefilteredEnvironment;
@@ -129,6 +131,7 @@ private:
 	dx_texture hdrTexture;
 	dx_texture normalRoughnessMetalnessTexture;
 	dx_texture depthTexture;
+	dx_texture depthTextureCopy;
 
 	dx_texture sunShadowMapTexture;
 };

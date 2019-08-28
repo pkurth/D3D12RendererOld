@@ -14,6 +14,8 @@ struct dx_texture : dx_resource
 	void initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource> resource);
 	void initialize(const dx_texture& other);
 
+	DXGI_FORMAT format;
+
 	dx_texture() {}
 	dx_texture(const dx_texture& other);
 	dx_texture& operator=(const dx_texture& other);

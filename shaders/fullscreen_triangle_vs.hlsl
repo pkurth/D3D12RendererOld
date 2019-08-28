@@ -24,7 +24,7 @@ vs_output main(vs_input IN)
 	float v = 1.f - (y * 0.5f + 0.5f);
 	OUT.position = float4(x, y, 0.f, 1.f);
 	OUT.uv = float2(u, v);
-	OUT.V = restoreWorldDirection(camera.invVP, OUT.uv, camera.position.xyz);
+	OUT.V = restoreWorldDirection(camera.invVP, OUT.uv, camera.position.xyz, camera.projectionParams.y);
 
 	return OUT;
 }

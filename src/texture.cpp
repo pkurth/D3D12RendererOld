@@ -67,20 +67,33 @@ void dx_texture::resize(uint32 width, uint32 height)
 			device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetView);
 		}
 		if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
-			checkDSVSupport())
+			(checkDSVSupport() || isDepthFormat(format)))
 		{
 			depthStencilView = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_DSV).getDescriptorHandle(0);
-			device->CreateDepthStencilView(resource.Get(), nullptr, depthStencilView);
+
+			if (isDepthFormat(format))
+			{
+				assert(resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
+
+				D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+				dsvDesc.Format = format;
+				dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+				device->CreateDepthStencilView(resource.Get(), &dsvDesc, depthStencilView);
+			}
+			else
+			{
+				device->CreateDepthStencilView(resource.Get(), nullptr, depthStencilView);
+			}
 		}
 	}
 }
 
 void dx_texture::initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC& resourceDesc, D3D12_CLEAR_VALUE* clearValue)
 {
-	DXGI_FORMAT origFormat = resourceDesc.Format;
-	if (isDepthFormat(origFormat))
+	format = resourceDesc.Format;
+	if (isDepthFormat(format))
 	{
-		resourceDesc.Format = getTypelessFormat(origFormat);
+		resourceDesc.Format = getTypelessFormat(format);
 	}
 
 	dx_resource::initialize(device, resourceDesc, clearValue);
@@ -92,16 +105,16 @@ void dx_texture::initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC& r
 		device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetView);
 	}
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
-		(checkDSVSupport() || isDepthFormat(origFormat)))
+		(checkDSVSupport() || isDepthFormat(format)))
 	{
 		depthStencilView = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_DSV).getDescriptorHandle(0);
 
-		if (isDepthFormat(origFormat))
+		if (isDepthFormat(format))
 		{
 			assert(resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
 
 			D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-			dsvDesc.Format = origFormat;
+			dsvDesc.Format = format;
 			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 			device->CreateDepthStencilView(resource.Get(), &dsvDesc, depthStencilView);
 		}
@@ -118,6 +131,8 @@ void dx_texture::initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource>
 
 	D3D12_RESOURCE_DESC resourceDesc(resource->GetDesc());
 
+	format = getDepthFormatFromTypeless(resourceDesc.Format);
+
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 &&
 		checkRTVSupport())
 	{
@@ -125,10 +140,21 @@ void dx_texture::initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource>
 		device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetView);
 	}
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
-		checkDSVSupport())
+		(checkDSVSupport() || isDepthFormat(format)))
 	{
-		depthStencilView = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_DSV).getDescriptorHandle(0);
-		device->CreateDepthStencilView(resource.Get(), nullptr, depthStencilView);
+		if (isDepthFormat(format))
+		{
+			assert(resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
+
+			D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+			dsvDesc.Format = format;
+			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+			device->CreateDepthStencilView(resource.Get(), &dsvDesc, depthStencilView);
+		}
+		else
+		{
+			device->CreateDepthStencilView(resource.Get(), nullptr, depthStencilView);
+		}
 	}
 }
 

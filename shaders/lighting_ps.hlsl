@@ -1,5 +1,8 @@
 #include "pbr.h"
 #include "normals.h"
+#include "camera.h"
+
+ConstantBuffer<camera_cb> camera : register(b0);
 
 struct ps_input
 {
@@ -8,7 +11,9 @@ struct ps_input
 };
 
 
-SamplerState linearClampSampler			: register(s0);	
+SamplerState gbufferSampler				: register(s0);
+SamplerState brdfSampler				: register(s1);
+SamplerComparisonState shadowMapSampler	: register(s2);
 
 // PBR.
 TextureCube<float4> irradianceTexture	: register(t0);
@@ -18,9 +23,13 @@ Texture2D<float4> brdf					: register(t2);
 // GBuffer.
 Texture2D<float4> albedos				: register(t3);
 Texture2D<float4> normalsRoughMetal		: register(t4);
+Texture2D<float> depthBuffer			: register(t5);
+
+// Shadow maps.
+Texture2D<float> sunShadowMap			: register(t6);
 
 
-ConstantBuffer<directional_light> directionalLight : register(b1);
+ConstantBuffer<directional_light> sunLight : register(b1);
 
 
 static float3 calculateLighting(float3 albedo, float3 radiance, float3 N, float3 L, float3 V, float3 F0, float roughness, float metallic)
@@ -45,12 +54,23 @@ static float3 calculateLighting(float3 albedo, float3 radiance, float3 N, float3
 	return (kD * albedo * oneOverPI + specular) * radiance * NdotL;
 }
 
+//static float sampleShadowMap(Texture2D<float> shadowMap, float2 lightUV, float depth)
+//{
+//	float4 shadowValue = shadowMap.SampleCmpLevelZero(shadowMapSampler, lightUV, depth - 0.001f);
+//
+//}
+
 float4 main(ps_input IN) : SV_TARGET
 {
-	float4 NRM = normalsRoughMetal.Sample(linearClampSampler, IN.uv);
+	float depthBufferDepth = depthBuffer.Sample(gbufferSampler, IN.uv);
+	float worldDepth = depthBufferDepthToLinearWorldDepthEyeToFarPlane(depthBufferDepth, camera.projectionParams);
+
+	float3 worldPosition = IN.V * worldDepth + camera.position.xyz;
+
+	float4 NRM = normalsRoughMetal.Sample(gbufferSampler, IN.uv);
 	float3 N = decodeNormal(NRM.xy);
 	float3 V = normalize(-IN.V);
-	float4 albedoAO = albedos.Sample(linearClampSampler, IN.uv);
+	float4 albedoAO = albedos.Sample(gbufferSampler, IN.uv);
 	float3 albedo = albedoAO.rgb;
 	float ao = albedoAO.w;
 	float roughness = clamp(NRM.z, 0.01f, 0.99f);
@@ -70,7 +90,7 @@ float4 main(ps_input IN) : SV_TARGET
 		kD *= 1.f - metallic;
 
 		// Diffuse.
-		float3 irradiance = irradianceTexture.Sample(linearClampSampler, N).rgb;
+		float3 irradiance = irradianceTexture.Sample(brdfSampler, N).rgb;
 		float3 diffuse = irradiance * albedo;
 
 		// Specular.
@@ -79,8 +99,8 @@ float4 main(ps_input IN) : SV_TARGET
 		environmentTexture.GetDimensions(0, width, height, numMipLevels);
 		float lod = roughness * float(numMipLevels - 1);
 
-		float3 prefilteredColor = environmentTexture.SampleLevel(linearClampSampler, R, lod).rgb;
-		float2 envBRDF = brdf.Sample(linearClampSampler, float2(roughness, NdotV)).rg;
+		float3 prefilteredColor = environmentTexture.SampleLevel(brdfSampler, R, lod).rgb;
+		float2 envBRDF = brdf.Sample(brdfSampler, float2(roughness, NdotV)).rg;
 		float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
 
 		float3 ambient = (kD * diffuse + specular) * ao;
@@ -88,12 +108,32 @@ float4 main(ps_input IN) : SV_TARGET
 		totalLighting.xyz += ambient;
 	}
 
-	// Directional.
+	// Sun.
 	{
-		float3 L = -directionalLight.worldSpaceDirection.xyz;
-		float3 radiance = directionalLight.color.xyz;
+		float3 L = -sunLight.worldSpaceDirection.xyz;
+		float3 radiance = sunLight.color.xyz;
 
-		totalLighting.xyz += calculateLighting(albedo, radiance, N, L, V, F0, roughness, metallic);
+		float4 lightProjected = mul(sunLight.vp, float4(worldPosition, 1.f));
+		// Since the sun is a directional (orthographic) light source, we don't need to divide by w.
+
+		float2 lightUV = lightProjected.xy * 0.5f + float2(0.5f, 0.5f);
+		lightUV.y = 1.f - lightUV.y;
+
+		float shadowValue = 0.f;
+		uint count = 0;
+		
+		float texelSize = 1.f / 2048.f;
+		for (int y = -2; y <= 2; ++y)
+		{
+			for (int x = -2; x <= 2; ++x)
+			{
+				shadowValue += sunShadowMap.SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - 0.001f);
+				++count;
+			}
+		}
+		shadowValue /= count;
+
+		totalLighting.xyz += calculateLighting(albedo, radiance, N, L, V, F0, roughness, metallic) * shadowValue;
 	}
 
 	return totalLighting;

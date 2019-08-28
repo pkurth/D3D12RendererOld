@@ -3,7 +3,7 @@
 #include "common.h"
 #include "math.h"
 
-struct camera_frustum
+union camera_frustum
 {
 	struct
 	{
@@ -20,6 +20,8 @@ struct camera_frustum
 	{
 		vec3 corners[8];
 	};
+
+	camera_frustum() {}
 };
 
 struct camera_cb
@@ -31,6 +33,7 @@ struct camera_cb
 	mat4 invV;
 	mat4 invP;
 	vec4 pos;
+	vec4 projectionParams; // nearPlane, farPlane, farPlane / nearPlane, 1 - farPlane / nearPlane
 };
 
 struct render_camera
@@ -38,6 +41,9 @@ struct render_camera
 	quat rotation;
 	vec3 position;
 	float fovY;
+
+	float nearPlane;
+	float farPlane;
 
 	float pitch;
 	float yaw;
@@ -53,7 +59,7 @@ struct render_camera
 	void updateMatrices(uint32 width, uint32 height)
 	{
 		float aspectRatio = (float)width / (float)height;
-		projectionMatrix = createPerspectiveMatrix(fovY, aspectRatio, 0.1f, 100.0f);
+		projectionMatrix = createPerspectiveMatrix(fovY, aspectRatio, nearPlane, farPlane);
 		invProjectionMatrix = projectionMatrix.invert();
 
 		viewMatrix = createModelMatrix(position, rotation).invert();
@@ -71,24 +77,32 @@ struct render_camera
 		cb.invP = invProjectionMatrix;
 		cb.invVP = invViewProjectionMatrix;
 		cb.pos = vec4(position.x, position.y, position.z, 1.f);
+		cb.projectionParams = vec4(nearPlane, farPlane, farPlane / nearPlane, 1.f - farPlane / nearPlane);
 	}
 
-	comp_vec restoreViewSpacePosition(vec2 uv, float depth)
+	comp_vec restoreViewSpacePosition(vec2 uv, float depthBufferDepth)
 	{
 		uv.y = 1.f - uv.y; // Screen uvs start at the top left, so flip y.
-		vec3 ndc = vec3(uv * 2.f - vec2(1.f, 1.f), depth);
+		vec3 ndc = vec3(uv * 2.f - vec2(1.f, 1.f), depthBufferDepth);
 		comp_vec homPosition = invProjectionMatrix * vec4(ndc, 1.f);
 		comp_vec position = homPosition / homPosition.dxvector.m128_f32[3];
 		return position;
 	}
 
-	comp_vec restoreWorldSpacePosition(vec2 uv, float depth)
+	comp_vec restoreWorldSpacePosition(vec2 uv, float depthBufferDepth)
 	{
 		uv.y = 1.f - uv.y; // Screen uvs start at the top left, so flip y.
-		vec3 ndc = vec3(uv * 2.f - vec2(1.f, 1.f), depth);
+		vec3 ndc = vec3(uv * 2.f - vec2(1.f, 1.f), depthBufferDepth);
 		comp_vec homPosition = invViewProjectionMatrix * vec4(ndc, 1.f);
 		comp_vec position = homPosition / homPosition.dxvector.m128_f32[3];
 		return position;
+	}
+
+	float depthBufferDepthToLinearNormalizedDepthEyeToFarPlane(float depthBufferDepth)
+	{
+		float c1 = farPlane / nearPlane;
+		float c0 = 1.f - c1;
+		return 1.f / (c0 * depthBufferDepth + c1);
 	}
 
 	camera_frustum getWorldSpaceFrustum()

@@ -9,6 +9,7 @@ struct camera_cb
 	float4x4 invV;
 	float4x4 invP;
 	float4 position;
+	float4 projectionParams; // nearPlane, farPlane, farPlane / nearPlane, 1 - farPlane / nearPlane
 };
 
 static float3 restoreViewSpacePosition(float4x4 invProj, float2 uv, float depth)
@@ -34,7 +35,21 @@ static float3 restoreViewDirection(float4x4 invProj, float2 uv)
 	return restoreViewSpacePosition(invProj, uv, 1.f);
 }
 
-static float3 restoreWorldDirection(float4x4 invViewProj, float2 uv, float3 cameraPos)
+static float3 restoreWorldDirection(float4x4 invViewProj, float2 uv, float3 cameraPos, float farPlane)
 {
-	return restoreWorldSpacePosition(invViewProj, uv, 1.f) - cameraPos;
+	float3 direction = restoreWorldSpacePosition(invViewProj, uv, 1.f) - cameraPos; // At this point, the result should be on a plane 'farPlane' units away from the camera.
+	direction /= farPlane;
+	return direction;
+}
+
+static float depthBufferDepthToLinearNormalizedDepthEyeToFarPlane(float depthBufferDepth, float4 projectionParams)
+{
+	const float c1 = projectionParams.z;
+	const float c0 = projectionParams.w;
+	return 1.f / (c0 * depthBufferDepth + c1);
+}
+
+static float depthBufferDepthToLinearWorldDepthEyeToFarPlane(float depthBufferDepth, float4 projectionParams)
+{
+	return depthBufferDepthToLinearNormalizedDepthEyeToFarPlane(depthBufferDepth, projectionParams) * projectionParams.y;
 }

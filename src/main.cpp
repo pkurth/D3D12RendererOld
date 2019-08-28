@@ -38,6 +38,8 @@ static std::vector<std::function<bool(mouse_move_event event)>> mouseMoveCallbac
 static std::vector<std::function<bool(mouse_scroll_event event)>> mouseScrollCallbacks;
 
 
+static bool initialized = false;
+
 static HWND currentHoverHWND = 0;
 
 static void enableDebugLayer()
@@ -484,7 +486,11 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 			int height = clientRect.bottom - clientRect.top;
 
 			window->resize(width, height);
-			game.resize(width, height);
+
+			if (initialized)
+			{
+				game.resize(width, height);
+			}
 		} break;
 
 		case WM_DESTROY:
@@ -551,6 +557,8 @@ int main()
 	window.initialize(windowClass.lpszClassName, device, initialWidth, initialHeight, colorDepth, exclusiveFullscreen);
 	game.initialize(device, initialWidth, initialHeight, colorDepth);
 
+
+	initialized = true;
 
 	MSG msg = {};
 	while (msg.message != WM_QUIT)

@@ -99,14 +99,15 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		{
 			DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D24_UNORM_S8_UINT; // We need stencil for deferred lighting.
 			CD3DX12_RESOURCE_DESC depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, width, height);
-			depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL |  // Allows creation of depth-stencil-view (so that we can write to it).
-				D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+			depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+			depthDesc.MipLevels = 1;
 
 			D3D12_CLEAR_VALUE depthClearValue;
 			depthClearValue.Format = depthDesc.Format;
 			depthClearValue.DepthStencil = { 1.f, 0 };
 
 			depthTexture.initialize(device, depthDesc, &depthClearValue);
+			depthTextureCopy.initialize(device, depthDesc, &depthClearValue);
 
 			gbufferRT.attachDepthStencilTexture(depthTexture);
 			lightingRT.attachDepthStencilTexture(depthTexture);
@@ -353,7 +354,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		SET_NAME(opaqueGeometryPipelineState, "Opaque Pipeline");
 	}
 
-	// Sky. This writes to the lighting RT.
+	// Sky.
 	{
 		ComPtr<ID3DBlob> vertexShaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/sky_vs.cso", &vertexShaderBlob));
@@ -438,21 +439,26 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 
-		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 5, 0);
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 7, 0);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
-		rootParameters[LIGHTING_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
+		rootParameters[LIGHTING_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_ALL); // Camera.
 		rootParameters[LIGHTING_ROOTPARAM_TEXTURES].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
-		rootParameters[LIGHTING_ROOTPARAM_DIRECTIONAL].InitAsConstants(sizeof(directional_light) / sizeof(float), 1, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[LIGHTING_ROOTPARAM_DIRECTIONAL].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
 
-		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
+		CD3DX12_STATIC_SAMPLER_DESC samplers[] =
+		{
+			staticPointClampSampler(0),
+			staticLinearClampSampler(1),
+			staticPointBorderComparisonSampler(2),
+		};
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.Flags = rootSignatureFlags;
 		rootSignatureDesc.pParameters = rootParameters;
 		rootSignatureDesc.NumParameters = arraysize(rootParameters);
-		rootSignatureDesc.pStaticSamplers = &sampler;
-		rootSignatureDesc.NumStaticSamplers = 1;
+		rootSignatureDesc.pStaticSamplers = samplers;
+		rootSignatureDesc.NumStaticSamplers = arraysize(samplers);
 		lightingRootSignature.initialize(device, rootSignatureDesc);
 
 		struct pipeline_state_stream
@@ -482,6 +488,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		depthStencilDesc.StencilEnable = true;
 		depthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL; // Write where geometry is.
 		depthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP; // Don't modify stencil.
+		depthStencilDesc.StencilWriteMask = 0;
 		pipelineStateStream.depthStencilDesc = depthStencilDesc;
 
 		pipelineStateStream.blend = additiveBlendDesc;
@@ -570,23 +577,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
 	gui.initialize(device, commandList, screenRTVFormats);
-
-
-	// Load scene.
-	/*cpu_mesh<vertex_3PUNT> scene;
-	append(sceneSubmeshes, scene.pushFromFile("res/cerberus/Cerberus_LP.FBX").first);
-	
-	sceneMesh.initialize(device, commandList, scene);
-
-	commandList->loadTextureFromFile(cerberusMaterial.albedo, L"res/cerberus/Cerberus_A.tga", texture_type_color);
-	commandList->loadTextureFromFile(cerberusMaterial.normal, L"res/cerberus/Cerberus_N.tga", texture_type_noncolor);
-	commandList->loadTextureFromFile(cerberusMaterial.roughMetal, L"res/cerberus/Cerberus_RMAO.png", texture_type_noncolor);*/
-
-
-	cpu_mesh<vertex_3P> skybox;
-	skySubmesh = skybox.pushCube(1.f, true);
-	skyMesh.initialize(device, commandList, skybox);
-
 
 	cpu_mesh<vertex_3PUNT> azdo;
 	auto[sponzaSubmeshes, sponzaMaterials] = azdo.pushFromFile("res/sponza/sponza.obj");
@@ -677,8 +667,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	delete[] azdoShadowCommands;
 	delete[] azdoCommands;
 
+
+	cpu_mesh<vertex_3P> skybox;
+	skySubmesh = skybox.pushCube(1.f, true);
+	skyMesh.initialize(device, commandList, skybox);
+
+	sun.worldSpaceDirection = comp_vec(-0.6f, -1.f, -0.3f, 0.f).normalize();
+	sun.color = vec4(1.f, 0.93f, 0.76f, 0.f) * 3.f;
+	//sun.color = vec4(1.f, 0, 0, 1.f) * 8.f;
+
 	dx_texture equirectangular;
-	commandList->loadTextureFromFile(equirectangular, L"res/leadenhall_market_4k.hdr", texture_type_color);
+	commandList->loadTextureFromFile(equirectangular, L"res/hdris/sunset_in_the_chalk_quarry_4k.hdr", texture_type_noncolor);
 	commandList->convertEquirectangularToCubemap(equirectangular, cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
 	commandList->createIrradianceMap(cubemap, irradiance);
 	commandList->prefilterEnvironmentMap(cubemap, prefilteredEnvironment, 256);
@@ -714,6 +713,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	flushApplication();
 
 	camera.fovY = DirectX::XMConvertToRadians(70.f);
+	camera.nearPlane = 0.1f;
+	camera.farPlane = 100.f;
 	camera.position = vec3(0.f, 5.f, 5.f);
 	camera.rotation = quat::identity;
 	camera.updateMatrices(width, height);
@@ -741,6 +742,8 @@ void dx_game::resize(uint32 width, uint32 height)
 
 		gbufferRT.resize(width, height);
 		lightingRT.resize(width, height);
+
+		depthTextureCopy.resize(width, height);
 	}
 }
 
@@ -751,6 +754,8 @@ void dx_game::update(float dt)
 
 	camera.position = camera.position + camera.rotation * inputMovement * dt * CAMERA_MOVEMENT_SPEED * inputSpeedModifier;
 	camera.updateMatrices(width, height);
+
+	sun.updateMatrices(camera.getWorldSpaceFrustum());
 
 	this->dt = dt;
 
@@ -768,129 +773,128 @@ void dx_game::update(float dt)
 
 void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
 {
-	// Currently not needed, since we don't use a depth buffer for the screen.
-	//D3D12_CPU_DESCRIPTOR_HANDLE dsv = dsvHeap->GetCPUDescriptorHandleForHeapStart();
-
 	PIXSetMarker(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 0, 0), "Frame start.");
 
 	camera_cb cameraCB;
 	camera.fillConstantBuffer(cameraCB);
 
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress = commandList->uploadDynamicConstantBuffer(cameraCB);
+	D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress = commandList->uploadDynamicConstantBuffer(sun);
+
 
 	commandList->setScissor(scissorRect);
 
 
 	// Render to sun shadow map.
+	{
+		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sun shadow map.");
 
-	commandList->setViewport(sunShadowMapRT.viewport);
+		commandList->setViewport(sunShadowMapRT.viewport);
 
-	PIXBeginEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sun shadow map.");
 
-	commandList->setRenderTarget(sunShadowMapRT);
-	commandList->clearDepth(sunShadowMapRT.depthStencilAttachment->getDepthStencilView(), 1.f);
+		commandList->setRenderTarget(sunShadowMapRT);
+		commandList->clearDepth(sunShadowMapRT.depthStencilAttachment->getDepthStencilView(), 1.f);
 
 #if 1
-	// Static scene.
-	{
-		commandList->setPipelineState(azdoShadowPipelineState);
-		commandList->setGraphicsRootSignature(azdoShadowRootSignature);
+		// Static scene.
+		{
+			commandList->setPipelineState(azdoShadowPipelineState);
+			commandList->setGraphicsRootSignature(azdoShadowRootSignature);
 
-		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		commandList->setGraphicsDynamicConstantBuffer(AZDO_ROOTPARAM_CAMERA, cameraCBAddress);
+			commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		commandList->setVertexBuffer(0, azdoMesh.vertexBuffer);
-		commandList->setIndexBuffer(azdoMesh.indexBuffer);
+			// This is a bit of a hack. The VP matrix is the first member of both camera and sun.
+			commandList->setGraphicsDynamicConstantBuffer(AZDO_ROOTPARAM_CAMERA, sunCBAddress);
 
-		commandList->getD3D12CommandList()->ExecuteIndirect(
-			azdoShadowCommandSignature.Get(),
-			(uint32)azdoSubmeshes.size(),
-			azdoShadowCommandBuffer.resource.Get(),
-			0,
-			nullptr,
-			0);
-	}
+			commandList->setVertexBuffer(0, azdoMesh.vertexBuffer);
+			commandList->setIndexBuffer(azdoMesh.indexBuffer);
+
+			commandList->getD3D12CommandList()->ExecuteIndirect(
+				azdoShadowCommandSignature.Get(),
+				(uint32)azdoSubmeshes.size(),
+				azdoShadowCommandBuffer.resource.Get(),
+				0,
+				nullptr,
+				0);
+		}
 #endif
+	}
 
-
-	PIXEndEvent(commandList->getD3D12CommandList().Get());
 
 
 	commandList->setViewport(viewport);
 
-
-	PIXBeginEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "GBuffer.");
-
 	// Render to GBuffer.
-	commandList->setRenderTarget(gbufferRT);
-	// No need to clear color, since we mark valid pixels with the stencil.
-	commandList->clearDepthAndStencil(gbufferRT.depthStencilAttachment->getDepthStencilView());
-	commandList->setStencilReference(1);
-
-	// Static scene.
 	{
-		commandList->setPipelineState(azdoGeometryPipelineState);
-		commandList->setGraphicsRootSignature(azdoGeometryRootSignature);
+		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "GBuffer.");
 
-		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		commandList->setRenderTarget(gbufferRT);
+		// No need to clear color, since we mark valid pixels with the stencil.
+		commandList->clearDepthAndStencil(gbufferRT.depthStencilAttachment->getDepthStencilView());
+		commandList->setStencilReference(1);
 
-		commandList->setGraphicsDynamicConstantBuffer(AZDO_ROOTPARAM_CAMERA, cameraCBAddress);
+		// Static scene.
+		{
+			commandList->setPipelineState(azdoGeometryPipelineState);
+			commandList->setGraphicsRootSignature(azdoGeometryRootSignature);
 
-		commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, azdoDescriptorHeap);
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_ALBEDOS, albedosOffset);
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_NORMALS, normalsOffset);
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_ROUGHNESSES, roughnessesOffset);
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_METALLICS, metallicsOffset);
-		commandList->setVertexBuffer(0, azdoMesh.vertexBuffer);
-		commandList->setIndexBuffer(azdoMesh.indexBuffer);
-		
-		commandList->getD3D12CommandList()->ExecuteIndirect(
-			azdoGeometryCommandSignature.Get(),
-			(uint32)azdoSubmeshes.size(),
-			azdoCommandBuffer.resource.Get(),
-			0,
-			nullptr,
-			0);
-	}
+			commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+			commandList->setGraphicsDynamicConstantBuffer(AZDO_ROOTPARAM_CAMERA, cameraCBAddress);
+
+			commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, azdoDescriptorHeap);
+			commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_ALBEDOS, albedosOffset);
+			commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_NORMALS, normalsOffset);
+			commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_ROUGHNESSES, roughnessesOffset);
+			commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(AZDO_ROOTPARAM_METALLICS, metallicsOffset);
+			commandList->setVertexBuffer(0, azdoMesh.vertexBuffer);
+			commandList->setIndexBuffer(azdoMesh.indexBuffer);
+
+			commandList->getD3D12CommandList()->ExecuteIndirect(
+				azdoGeometryCommandSignature.Get(),
+				(uint32)azdoSubmeshes.size(),
+				azdoCommandBuffer.resource.Get(),
+				0,
+				nullptr,
+				0);
+		}
 
 #if 0
-	// Geometry.
-	{
-		commandList->setPipelineState(opaqueGeometryPipelineState);
-		commandList->setGraphicsRootSignature(opaqueGeometryRootSignature);
-
-		// This sets the adjacency information (list, strip, strip with adjacency, ...), 
-		// while the pipeline state stores the input assembly type (points, lines, triangles, patches).
-		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		commandList->setGraphicsDynamicConstantBuffer(GEOMETRY_ROOTPARAM_CAMERA, cameraCBAddress);
-		commandList->setGraphics32BitConstants(GEOMETRY_ROOTPARAM_MODEL, modelMatrix);
-
-		commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 0, cerberusMaterial.albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 1, cerberusMaterial.normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 2, cerberusMaterial.roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-		commandList->setVertexBuffer(0, sceneMesh.vertexBuffer);
-		commandList->setIndexBuffer(sceneMesh.indexBuffer);
-
-		for (uint32 i = 0; i < sceneSubmeshes.size(); ++i)
+		// Geometry.
 		{
-			submesh_info submesh = sceneSubmeshes[i];
-			commandList->drawIndexed(submesh.numTriangles * 3, 1, submesh.firstTriangle * 3, submesh.baseVertex, 0);
+			commandList->setPipelineState(opaqueGeometryPipelineState);
+			commandList->setGraphicsRootSignature(opaqueGeometryRootSignature);
+
+			// This sets the adjacency information (list, strip, strip with adjacency, ...), 
+			// while the pipeline state stores the input assembly type (points, lines, triangles, patches).
+			commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+			commandList->setGraphicsDynamicConstantBuffer(GEOMETRY_ROOTPARAM_CAMERA, cameraCBAddress);
+			commandList->setGraphics32BitConstants(GEOMETRY_ROOTPARAM_MODEL, modelMatrix);
+
+			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 0, cerberusMaterial.albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 1, cerberusMaterial.normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->setShaderResourceView(GEOMETRY_ROOTPARAM_TEXTURES, 2, cerberusMaterial.roughMetal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+			commandList->setVertexBuffer(0, sceneMesh.vertexBuffer);
+			commandList->setIndexBuffer(sceneMesh.indexBuffer);
+
+			for (uint32 i = 0; i < sceneSubmeshes.size(); ++i)
+			{
+				submesh_info submesh = sceneSubmeshes[i];
+				commandList->drawIndexed(submesh.numTriangles * 3, 1, submesh.firstTriangle * 3, submesh.baseVertex, 0);
 		}
 	}
 #endif
-
-	PIXEndEvent(commandList->getD3D12CommandList().Get());
-
-	PIXBeginEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sky.");
-
+	}
 
 	// Accumulate lighting.
 	commandList->setRenderTarget(lightingRT);
 
 	// Sky.
 	{
+		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sky.");
+
 		commandList->setPipelineState(skyPipelineState);
 		commandList->setGraphicsRootSignature(skyRootSignature);
 
@@ -910,13 +914,12 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->drawIndexed(skyMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 	}
 
-	PIXEndEvent(commandList->getD3D12CommandList().Get());
-
-	PIXBeginEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Lighting pass.");
+	commandList->copyResource(depthTextureCopy, depthTexture);
+	commandList->transitionBarrier(depthTexture, D3D12_RESOURCE_STATE_DEPTH_READ);
 
 	// Lighting.
 	{
-		directional_light sun = { comp_vec(-1.f, -1.f, -1.f, 0.f).normalize(), vec4(3.f, 0.f, 0.f, 1.f) };
+		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Lighting pass.");
 
 		commandList->setPipelineState(lightingPipelineState);
 		commandList->setGraphicsRootSignature(lightingRootSignature);
@@ -931,12 +934,16 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		commandList->setShaderResourceView(LIGHTING_ROOTPARAM_TEXTURES, 3, albedoAOTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->setShaderResourceView(LIGHTING_ROOTPARAM_TEXTURES, 4, normalRoughnessMetalnessTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-		commandList->setGraphics32BitConstants(LIGHTING_ROOTPARAM_DIRECTIONAL, sun);
+		commandList->bindDepthTextureForReading(LIGHTING_ROOTPARAM_TEXTURES, 5, depthTextureCopy, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->bindDepthTextureForReading(LIGHTING_ROOTPARAM_TEXTURES, 6, sunShadowMapTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		commandList->setGraphicsDynamicConstantBuffer(LIGHTING_ROOTPARAM_DIRECTIONAL, sunCBAddress);
 
 		commandList->draw(3, 1, 0, 0);
 	}
 
-	PIXEndEvent(commandList->getD3D12CommandList().Get());
+
+
 
 	// Resolve to screen.
 	// No need to clear RTV (or for a depth buffer), since we are blitting the whole lighting buffer.
@@ -944,6 +951,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	// Present.
 	{
+		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Tonemap and present.");
+
 		commandList->setPipelineState(presentPipelineState);
 		commandList->setGraphicsRootSignature(presentRootSignature);
 
@@ -972,7 +981,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		};
 
 		tonemap_cb tonemapCB;
-		tonemapCB.exposure = 1.f;
+		tonemapCB.exposure = 0.2f;
 		tonemapCB.A = 0.22f;
 		tonemapCB.B = 0.3f;
 		tonemapCB.C = 0.1f;
