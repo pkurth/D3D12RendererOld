@@ -21,6 +21,9 @@ struct directional_light
 	float4 color;
 
 	uint numShadowCascades;
+	uint shadowMapDimensions;
+	float shadowMapCascadeDistancePower;
+	float cascadeBlendArea;
 };
 
 

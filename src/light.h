@@ -16,7 +16,10 @@ struct directional_light
 	vec4 worldSpaceDirection;
 	vec4 color;
 
-	uint32 numShadowCascades = 2;
+	uint32 numShadowCascades = 3;
+	uint32 shadowMapDimensions = 2048;
+	float shadowMapCascadeDistancePower = 2.f;
+	float cascadeBlendArea = 0.1f;
 
 	void updateMatrices(const camera_frustum& cameraWorldSpaceFrustum)
 	{
@@ -39,7 +42,7 @@ struct directional_light
 
 		for (uint32 i = 0; i < numShadowCascades; ++i)
 		{
-			float distance = powf((float)(i + 1) / numShadowCascades, 2.f);
+			float distance = powf((float)(i + 1) / numShadowCascades, shadowMapCascadeDistancePower);
 
 			bb.grow(lerp(nearBottomLeft, farBottomLeft, distance));
 			bb.grow(lerp(nearBottomRight, farBottomRight, distance));

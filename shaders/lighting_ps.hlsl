@@ -104,63 +104,59 @@ float4 main(ps_input IN) : SV_TARGET
 
 	// Sun.
 	{
+		float visibility = 1.f;
 		uint numCascades = sunLight.numShadowCascades;
-		float4 cascadeRelativeDistances = pow(float4(1.f, 2.f, 3.f, 4.f) / numCascades, 2.f);
-		float nearPlane = camera.projectionParams.x;
-		float farPlane = camera.projectionParams.y;
-		float4 cascadeDistances = float4(
-			lerp(nearPlane, farPlane, cascadeRelativeDistances.x),
-			lerp(nearPlane, farPlane, cascadeRelativeDistances.y),
-			lerp(nearPlane, farPlane, cascadeRelativeDistances.z),
-			lerp(nearPlane, farPlane, cascadeRelativeDistances.w)
-		);
 
-		float4 comparison = float4(worldDepth, worldDepth, worldDepth, worldDepth) > cascadeDistances;
-		float index = dot(float4(numCascades > 0, numCascades > 1, numCascades > 2, numCascades > 3), comparison);
+		if (numCascades > 0)
+		{
+			int currentCascadeIndex = 0;
+			int nextCascadeIndex = currentCascadeIndex;
+			float currentPixelsBlendBandLocation = 1.f;
 
-		index = min(index, float(numCascades) - 1.f);
-		uint currentCascadeIndex = uint(index);
-		uint nextCascadeIndex = min(numCascades - 1, currentCascadeIndex + 1);
+			if (numCascades > 1)
+			{
+				float4 cascadeRelativeDistances = pow(float4(1.f, 2.f, 3.f, 4.f) / numCascades, sunLight.shadowMapCascadeDistancePower);
+				float nearPlane = camera.projectionParams.x;
+				float farPlane = camera.projectionParams.y;
+				float4 cascadeDistances = float4(
+					lerp(nearPlane, farPlane, cascadeRelativeDistances.x),
+					lerp(nearPlane, farPlane, cascadeRelativeDistances.y),
+					lerp(nearPlane, farPlane, cascadeRelativeDistances.z),
+					lerp(nearPlane, farPlane, cascadeRelativeDistances.w)
+				);
 
-		float currentPixelsBlendBandLocation = 1.f;
-		//if (numCascades > 1)
-		//{
-		//	// Calculate blend amount.
-		//	int blendIntervalBelowIndex = max(0, currentCascadeIndex - 1);
-		//	float cascade0Factor = float(currentCascadeIndex > 0); // if cascade == 0, currentPixelDepth is already relative to current cascade
-		//	float pixelDepth = worldDepth - cascadeDistances[blendIntervalBelowIndex] * cascade0Factor;
-		//	float blendInterval = cascadeDistances[currentCascadeIndex] - cascadeDistances[blendIntervalBelowIndex] * cascade0Factor;
+				float4 comparison = float4(worldDepth, worldDepth, worldDepth, worldDepth) > cascadeDistances;
+				float index = dot(float4(numCascades > 0, numCascades > 1, numCascades > 2, numCascades > 3), comparison);
 
-		//	// relative to current cascade. 0 means at nearplane of cascade, 1 at farplane of cascade
-		//	currentPixelsBlendBandLocation = 1.f - pixelDepth / blendInterval;
-		//}
+				index = min(index, float(numCascades) - 1.f);
+				currentCascadeIndex = uint(index);
+			}
 
+			float4 lightProjected = mul(sunLight.vp[currentCascadeIndex], float4(worldPosition, 1.f));
+			// Since the sun is a directional (orthographic) light source, we don't need to divide by w.
 
+			float2 lightUV = lightProjected.xy * 0.5f + float2(0.5f, 0.5f);
+			lightUV.y = 1.f - lightUV.y;
+
+			visibility = 0.f;
+			uint count = 0;
+
+			float texelSize = 1.f / (float)sunLight.shadowMapDimensions;
+			for (int y = -2; y <= 2; ++y)
+			{
+				for (int x = -2; x <= 2; ++x)
+				{
+					visibility += sunShadowMapCascades[currentCascadeIndex].SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - 0.001f);
+					++count;
+				}
+			}
+			visibility /= count;
+		}
 
 		float3 L = -sunLight.worldSpaceDirection.xyz;
 		float3 radiance = sunLight.color.xyz; // No attenuation for sun.
 
-		float4 lightProjected = mul(sunLight.vp[currentCascadeIndex], float4(worldPosition, 1.f));
-		// Since the sun is a directional (orthographic) light source, we don't need to divide by w.
-
-		float2 lightUV = lightProjected.xy * 0.5f + float2(0.5f, 0.5f);
-		lightUV.y = 1.f - lightUV.y;
-
-		float shadowValue = 0.f;
-		uint count = 0;
-		
-		float texelSize = 1.f / 2048.f;
-		for (int y = -2; y <= 2; ++y)
-		{
-			for (int x = -2; x <= 2; ++x)
-			{
-				shadowValue += sunShadowMapCascades[currentCascadeIndex].SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - 0.001f);
-				++count;
-			}
-		}
-		shadowValue /= count;
-
-		totalLighting.xyz += calculateLighting(albedo, radiance, N, L, V, F0, roughness, metallic) * shadowValue;
+		totalLighting.xyz += calculateLighting(albedo, radiance, N, L, V, F0, roughness, metallic) * visibility;
 	}
 
 	return totalLighting;
