@@ -85,9 +85,9 @@ public:
 	bool quadHover(float left, float right, float top, float bottom, uint32 color);
 	float quadScroll(float left, float right, float top, float bottom, uint32 color);
 	debug_gui_interaction interactableQuad(uint64 guid, float left, float right, float top, float bottom, uint32 color);
-	void textAt(float x, float y, const char* text);
-	void textAtF(float x, float y, const char* format, ...);
-	void textAtV(float x, float y, const char* format, va_list arg);
+	void textAt(float x, float y, uint32 color, const char* text);
+	void textAtF(float x, float y, uint32 color, const char* format, ...);
+	void textAtV(float x, float y, uint32 color, const char* format, va_list arg);
 
 	void textAtMouse(const char* text);
 	void textAtMouseF(const char* format, ...);
@@ -101,6 +101,7 @@ public:
 	bool mouseMoveCallback(mouse_move_event event);
 	bool mouseScrollCallback(mouse_scroll_event event);
 
+	vec2 mousePosition;
 private:
 	enum event_type
 	{
@@ -167,7 +168,6 @@ private:
 	dx_root_signature shapeRootSignature;
 
 
-	vec2 mousePosition;
 	float mouseScroll;
 	event_type lastEventType;
 

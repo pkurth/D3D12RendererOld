@@ -329,24 +329,24 @@ void debug_gui::textF(const char* format, ...)
 	va_end(arg);
 }
 
-void debug_gui::textAt(float x, float y, const char* text)
+void debug_gui::textAt(float x, float y, uint32 color, const char* text)
 {
-	textInternalAt(x, y, text);
+	textInternalAt(x, y, text, color);
 }
 
-void debug_gui::textAtF(float x, float y, const char* format, ...)
+void debug_gui::textAtF(float x, float y, uint32 color, const char* format, ...)
 {
 	va_list arg;
 	va_start(arg, format);
-	textAtV(x, y, format, arg);
+	textAtV(x, y, color, format, arg);
 	va_end(arg);
 }
 
-void debug_gui::textAtV(float x, float y, const char* format, va_list arg)
+void debug_gui::textAtV(float x, float y, uint32 color, const char* format, va_list arg)
 {
 	char text[MAX_TEXT_LENGTH];
 	vsnprintf(text, sizeof(text), format, arg);
-	textInternalAt(x, y, text);
+	textInternalAt(x, y, text, color);
 }
 
 void debug_gui::textAtMouse(const char* text)
@@ -358,7 +358,7 @@ void debug_gui::textAtMouseF(const char* format, ...)
 {
 	va_list arg;
 	va_start(arg, format);
-	textAtV(mousePosition.x, mousePosition.y, format, arg);
+	textAtV(mousePosition.x, mousePosition.y, DEBUG_GUI_TEXT_COLOR, format, arg);
 	va_end(arg);
 }
 
@@ -366,7 +366,7 @@ void debug_gui::textAtMouseV(const char* format, va_list arg)
 {
 	char text[MAX_TEXT_LENGTH];
 	vsnprintf(text, sizeof(text), format, arg);
-	textInternalAt(mousePosition.x, mousePosition.y, text);
+	textInternalAt(mousePosition.x, mousePosition.y, text, DEBUG_GUI_TEXT_COLOR);
 }
 
 void debug_gui::value(const char* name, bool v)
@@ -409,7 +409,7 @@ bool debug_gui::quadButton(uint64 guid, float left, float right, float top, floa
 		{
 			va_list arg;
 			va_start(arg, formatOnHover);
-			textAtV(mousePosition.x, mousePosition.y, formatOnHover, arg);
+			textAtV(mousePosition.x, mousePosition.y, DEBUG_GUI_TEXT_COLOR, formatOnHover, arg);
 			va_end(arg);
 		}
 	}

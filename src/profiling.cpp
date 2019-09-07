@@ -231,6 +231,7 @@ struct profile_display_state
 	float bottom;
 	uint32 colorIndex;
 	uint32 callDepth;
+	float mouseHoverX;
 };
 
 static void displayProfileBlock(profile_display_state& state, debug_gui& gui, profile_frame* frame, 
@@ -253,6 +254,7 @@ static void displayProfileBlock(profile_display_state& state, debug_gui& gui, pr
 			if (gui.quadHover(left, right, state.top, state.bottom, colorTable[state.colorIndex]))
 			{
 				gui.textAtMouseF("%s: %f ms", block->info, (relEndTime - relStartTime) * 1000.f);
+				state.mouseHoverX = gui.mousePosition.x;
 			}
 
 			++state.colorIndex;
@@ -316,8 +318,8 @@ static void displayProfileInfo(debug_gui& gui)
 		gui.quad(leftOffset, MAX_NUM_RECORDED_FRAMES * barSpacing, bottom - chartHeight30FPS - 1, bottom - chartHeight30FPS, 0xFFFFFFFF);
 		gui.quad(leftOffset, MAX_NUM_RECORDED_FRAMES * barSpacing, bottom - chartHeight60FPS - 1, bottom - chartHeight60FPS, 0xFFFFFFFF);
 
-		gui.textAt(MAX_NUM_RECORDED_FRAMES * barSpacing + 3.f, bottom - chartHeight30FPS - 1, "33.3 ms");
-		gui.textAt(MAX_NUM_RECORDED_FRAMES * barSpacing + 3.f, bottom - chartHeight60FPS - 1, "16.7 ms");
+		gui.textAt(MAX_NUM_RECORDED_FRAMES * barSpacing + 3.f, bottom - chartHeight30FPS - 1, 0xFFFFFFFF, "33.3 ms");
+		gui.textAt(MAX_NUM_RECORDED_FRAMES * barSpacing + 3.f, bottom - chartHeight60FPS - 1, 0xFFFFFFFF, "16.7 ms");
 
 		if (highlightFrameIndex != -1)
 		{
@@ -331,7 +333,14 @@ static void displayProfileInfo(debug_gui& gui)
 			profile_frame* frame = recordedProfileFrames + highlightFrameIndex;
 			if (frame->endClock != 0)
 			{
-				gui.textAtF(leftOffset, topOffset - 60, "Frame %u", frame->globalFrameID);
+				gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %u", frame->globalFrameID);
+
+				profile_display_state state;
+				state.colorIndex = 0;
+				state.frameWidth60FPS = frameWidth60FPS;
+				state.leftOffset = leftOffset;
+				state.callDepth = currentDisplayCallDepth;
+				state.mouseHoverX = -1.f;
 
 				uint32 highestThreadIndex = 0;
 				for (uint32 threadIndex = 0; threadIndex < MAX_NUM_RECORDED_THREADS; ++threadIndex)
@@ -339,13 +348,8 @@ static void displayProfileInfo(debug_gui& gui)
 					float top = threadIndex * barSpacing + topOffset;
 					float bottom = top + barHeight;
 
-					profile_display_state state;
 					state.top = top;
 					state.bottom = bottom;
-					state.colorIndex = 0;
-					state.frameWidth60FPS = frameWidth60FPS;
-					state.leftOffset = leftOffset;
-					state.callDepth = currentDisplayCallDepth;
 
 					displayProfileBlock(state, gui, frame, frame->firstTopLevelBlockPerThread[threadIndex]);
 				}
@@ -356,9 +360,23 @@ static void displayProfileInfo(debug_gui& gui)
 				gui.quad(leftOffset + frameWidth60FPS, leftOffset + frameWidth60FPS + 1, top, bottom, 0xFFFFFFFF);
 				gui.quad(leftOffset + frameWidth30FPS, leftOffset + frameWidth30FPS + 1, top, bottom, 0xFFFFFFFF);
 
-				gui.textAt(leftOffset, top, "0 ms");
-				gui.textAt(leftOffset + frameWidth60FPS, top, "16.7 ms");
-				gui.textAt(leftOffset + frameWidth30FPS, top, "33.3 ms");
+				gui.textAt(leftOffset, top, 0xFFFFFFFF, "0 ms");
+				gui.textAt(leftOffset + frameWidth60FPS, top, 0xFFFFFFFF, "16.7 ms");
+				gui.textAt(leftOffset + frameWidth30FPS, top, 0xFFFFFFFF, "33.3 ms");
+
+				float millisecondSpacing = frameWidth30FPS / 33.3f;
+				for (uint32 i = 1; i <= 33; ++i)
+				{
+					uint32 color = (i % 5 == 0) ? 0xEAFFFFFF : 0x7AFFFFFF;
+					gui.quad(leftOffset + i * millisecondSpacing, leftOffset + i * millisecondSpacing + 1.f, top, bottom, color);
+				}
+
+				if (state.mouseHoverX > 0.f)
+				{
+					gui.quad(state.mouseHoverX, state.mouseHoverX + 1.f, top, bottom, color_32(255, 255, 0, 255));
+					float time = (state.mouseHoverX - leftOffset) / frameWidth30FPS * 33.3f;
+					gui.textAtF(state.mouseHoverX, top, color_32(255, 255, 0, 255), "%.3f ms", time);
+				}
 
 				if (gui.button("Call depth up"))
 				{
