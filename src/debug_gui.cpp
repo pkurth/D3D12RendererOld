@@ -26,73 +26,142 @@ void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* comman
 
 	mousePosition = vec2(0.f, 0.f);
 
-	ComPtr<ID3DBlob> vertexShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/font_vs.cso", &vertexShaderBlob));
-	ComPtr<ID3DBlob> pixelShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/font_ps.cso", &pixelShaderBlob));
-
-	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-		{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	};
-
-
-	// Root signature.
-	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-
-	CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-
-	CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-	rootParameters[0].InitAsConstants(2, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Inv screen dimensions.
-	rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Texture.
-
-	CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
-
-	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
-	rootSignatureDesc.Flags = rootSignatureFlags;
-	rootSignatureDesc.pParameters = rootParameters;
-	rootSignatureDesc.NumParameters = arraysize(rootParameters);
-	rootSignatureDesc.pStaticSamplers = &sampler;
-	rootSignatureDesc.NumStaticSamplers = 1;
-	rootSignature.initialize(device, rootSignatureDesc);
-
-
-	struct pipeline_state_stream
 	{
-		CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
-		CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
-		CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
-		CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-		CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-		CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
-		CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
-		CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC blend;
-	} pipelineStateStream;
+		ComPtr<ID3DBlob> vertexShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/font_vs.cso", &vertexShaderBlob));
+		ComPtr<ID3DBlob> pixelShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/font_ps.cso", &pixelShaderBlob));
 
-	pipelineStateStream.rootSignature = rootSignature.rootSignature.Get();
-	pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
-	pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-	pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
-	pipelineStateStream.rtvFormats = rtvFormats;
+		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
+			{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
 
-	CD3DX12_DEPTH_STENCIL_DESC1 depthDesc(D3D12_DEFAULT);
-	depthDesc.DepthEnable = false; // Don't do depth-check.
-	depthDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Don't write to depth (or stencil) buffer.
-	pipelineStateStream.depthStencilDesc = depthDesc;
 
-	pipelineStateStream.blend = alphaBlendDesc;
+		// Root signature.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-	D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
-		sizeof(pipeline_state_stream), &pipelineStateStream
-	};
-	checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&pipelineState)));
+
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		rootParameters[0].InitAsConstants(2, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Inv screen dimensions.
+		rootParameters[1].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL); // Texture.
+
+		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.pParameters = rootParameters;
+		rootSignatureDesc.NumParameters = arraysize(rootParameters);
+		rootSignatureDesc.pStaticSamplers = &sampler;
+		rootSignatureDesc.NumStaticSamplers = 1;
+		fontRootSignature.initialize(device, rootSignatureDesc);
+
+
+		struct pipeline_state_stream
+		{
+			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
+			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
+			CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC blend;
+		} pipelineStateStream;
+
+		pipelineStateStream.rootSignature = fontRootSignature.rootSignature.Get();
+		pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
+		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+		pipelineStateStream.rtvFormats = rtvFormats;
+
+		CD3DX12_DEPTH_STENCIL_DESC1 depthDesc(D3D12_DEFAULT);
+		depthDesc.DepthEnable = false; // Don't do depth-check.
+		depthDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Don't write to depth (or stencil) buffer.
+		pipelineStateStream.depthStencilDesc = depthDesc;
+
+		pipelineStateStream.blend = alphaBlendDesc;
+
+		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+			sizeof(pipeline_state_stream), &pipelineStateStream
+		};
+		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&fontPipelineState)));
+	}
+
+	{
+		ComPtr<ID3DBlob> vertexShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/flat_2d_vs.cso", &vertexShaderBlob));
+		ComPtr<ID3DBlob> pixelShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/flat_2d_ps.cso", &pixelShaderBlob));
+
+		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
+			{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+
+		// Root signature.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+
+		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+		rootParameters[0].InitAsConstants(2, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Inv screen dimensions.
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.pParameters = rootParameters;
+		rootSignatureDesc.NumParameters = arraysize(rootParameters);
+		rootSignatureDesc.pStaticSamplers = nullptr;
+		rootSignatureDesc.NumStaticSamplers = 0;
+		shapeRootSignature.initialize(device, rootSignatureDesc);
+
+
+		struct pipeline_state_stream
+		{
+			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
+			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
+			CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC blend;
+		} pipelineStateStream;
+
+		pipelineStateStream.rootSignature = shapeRootSignature.rootSignature.Get();
+		pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
+		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+		pipelineStateStream.rtvFormats = rtvFormats;
+
+		CD3DX12_DEPTH_STENCIL_DESC1 depthDesc(D3D12_DEFAULT);
+		depthDesc.DepthEnable = false; // Don't do depth-check.
+		depthDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Don't write to depth (or stencil) buffer.
+		pipelineStateStream.depthStencilDesc = depthDesc;
+
+		pipelineStateStream.blend = alphaBlendDesc;
+
+		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+			sizeof(pipeline_state_stream), &pipelineStateStream
+		};
+		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&shapePipelineState)));
+	}
 
 	registerMouseButtonDownCallback(BIND(mouseDownCallback));
 	registerMouseButtonUpCallback(BIND(mouseUpCallback));
@@ -172,7 +241,7 @@ debug_gui::text_analysis debug_gui::analyzeText(const char* text, float size)
 
 void debug_gui::textInternalAt(float x, float y, const char* text, uint32 color, float size)
 {
-	currentVertices.reserve(currentVertices.size() + MAX_TEXT_LENGTH * 4);
+	currentFontVertices.reserve(currentFontVertices.size() + MAX_TEXT_LENGTH * 4);
 
 	float cursorX = x;
 	float scale = textHeight / font.height * size;
@@ -203,10 +272,10 @@ void debug_gui::textInternalAt(float x, float y, const char* text, uint32 color,
 		float gWidth = glyph.width * scale;
 		float gHeight = glyph.height * scale;
 
-		currentVertices.push_back({ vec2(xStart, yStart), vec2(glyph.left, glyph.top), color });
-		currentVertices.push_back({ vec2(xStart + gWidth, yStart), vec2(glyph.right, glyph.top), color });
-		currentVertices.push_back({ vec2(xStart, yStart + gHeight), vec2(glyph.left, glyph.bottom), color });
-		currentVertices.push_back({ vec2(xStart + gWidth, yStart + gHeight), vec2(glyph.right, glyph.bottom), color });
+		currentFontVertices.push_back({ vec2(xStart, yStart), vec2(glyph.left, glyph.top), color });
+		currentFontVertices.push_back({ vec2(xStart + gWidth, yStart), vec2(glyph.right, glyph.top), color });
+		currentFontVertices.push_back({ vec2(xStart, yStart + gHeight), vec2(glyph.left, glyph.bottom), color });
+		currentFontVertices.push_back({ vec2(xStart + gWidth, yStart + gHeight), vec2(glyph.right, glyph.bottom), color });
 
 		char nextC = *text;
 		cursorX += font.getAdvance(c, nextC) * scale;
@@ -323,10 +392,10 @@ void debug_gui::value(const char* name, float v)
 
 void debug_gui::quad(float left, float right, float top, float bottom, uint32 color)
 {
-	currentVertices.push_back({ vec2(left, top), vec2(0.f, 0.f), color });
-	currentVertices.push_back({ vec2(right, top), vec2(0.f, 0.f), color });
-	currentVertices.push_back({ vec2(left, bottom), vec2(0.f, 0.f), color });
-	currentVertices.push_back({ vec2(right, bottom), vec2(0.f, 0.f), color });
+	currentShapeVertices.push_back({ vec2(left, top), color });
+	currentShapeVertices.push_back({ vec2(right, top), color });
+	currentShapeVertices.push_back({ vec2(left, bottom), color });
+	currentShapeVertices.push_back({ vec2(right, bottom), color });
 }
 
 bool debug_gui::quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color)
@@ -386,22 +455,44 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 {
 	assert(level == 0);
 
-	if (currentVertices.size() > 0)
+	uint32 numFontIndices = (uint32)currentFontVertices.size() / 4 * 6;
+	uint32 numShapeIndices = (uint32)currentShapeVertices.size() / 4 * 6;
+
+	if (numFontIndices > indexBuffer.numIndices || numShapeIndices >indexBuffer.numIndices)
 	{
-		uint32 numIndices = (uint32)currentVertices.size() / 4 * 6;
-		if (numIndices > indexBuffer.numIndices)
-		{
-			resizeIndexBuffer(commandList, numIndices);
-		}
+		resizeIndexBuffer(commandList, max(numFontIndices, numShapeIndices));
+	}
 
-		D3D12_VERTEX_BUFFER_VIEW tmpVertexBuffer = commandList->createDynamicVertexBuffer(currentVertices.data(), (uint32)currentVertices.size());
+	vec2 invScreenDim = { 1.f / viewport.Width, 1.f / viewport.Height };
 
-		commandList->setPipelineState(pipelineState);
-		commandList->setGraphicsRootSignature(rootSignature);
+	if (currentShapeVertices.size() > 0)
+	{
+		D3D12_VERTEX_BUFFER_VIEW tmpVertexBuffer = commandList->createDynamicVertexBuffer(currentShapeVertices.data(), (uint32)currentShapeVertices.size());
+
+		commandList->setPipelineState(shapePipelineState);
+		commandList->setGraphicsRootSignature(shapeRootSignature);
 
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		vec2 invScreenDim = { 1.f / viewport.Width, 1.f / viewport.Height };
+		commandList->setGraphics32BitConstants(0, invScreenDim);
+
+		commandList->setVertexBuffer(0, tmpVertexBuffer);
+		commandList->setIndexBuffer(indexBuffer);
+
+		commandList->drawIndexed(numShapeIndices, 1, 0, 0, 0);
+
+		currentShapeVertices.clear();
+	}
+
+	if (currentFontVertices.size() > 0)
+	{
+		D3D12_VERTEX_BUFFER_VIEW tmpVertexBuffer = commandList->createDynamicVertexBuffer(currentFontVertices.data(), (uint32)currentFontVertices.size());
+
+		commandList->setPipelineState(fontPipelineState);
+		commandList->setGraphicsRootSignature(fontRootSignature);
+
+		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
 		commandList->setGraphics32BitConstants(0, invScreenDim);
 
 		commandList->setShaderResourceView(1, 0, font.atlas, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -410,9 +501,9 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 		commandList->setVertexBuffer(0, tmpVertexBuffer);
 		commandList->setIndexBuffer(indexBuffer);
 
-		commandList->drawIndexed(numIndices, 1, 0, 0, 0);
+		commandList->drawIndexed(numFontIndices, 1, 0, 0, 0);
 		
-		currentVertices.clear();
+		currentFontVertices.clear();
 	}
 
 	cursorY = 0.00001f;

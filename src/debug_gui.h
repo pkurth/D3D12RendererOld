@@ -6,10 +6,16 @@
 #include "command_list.h"
 #include "platform.h"
 
-struct gui_vertex
+struct gui_font_vertex
 {
 	vec2 position;
 	vec2 uv;
+	uint32 color;
+};
+
+struct gui_shape_vertex
+{
+	vec2 position;
 	uint32 color;
 };
 
@@ -148,13 +154,17 @@ private:
 	uint64 firstTab;
 	bool openTabSeenThisFrame;
 
-	std::vector<gui_vertex> currentVertices;
+	std::vector<gui_font_vertex> currentFontVertices;
+	std::vector<gui_shape_vertex> currentShapeVertices;
 
 	ComPtr<ID3D12Device2> device;
 	dx_index_buffer indexBuffer;
 
-	ComPtr<ID3D12PipelineState> pipelineState;
-	dx_root_signature rootSignature;
+	ComPtr<ID3D12PipelineState> fontPipelineState;
+	dx_root_signature fontRootSignature;
+
+	ComPtr<ID3D12PipelineState> shapePipelineState;
+	dx_root_signature shapeRootSignature;
 
 
 	vec2 mousePosition;

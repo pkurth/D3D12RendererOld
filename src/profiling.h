@@ -1,7 +1,6 @@
 #pragma once
 
 #include "common.h"
-#include "debug_gui.h"
 
 #include <intrin.h>
 
@@ -69,11 +68,12 @@ struct profile_block_recorder
 #define PROFILE_BLOCK(name) PROFILE_BLOCK_(__COUNTER__, name ": ")
 #define PROFILE_FRAME_MARKER(frameNum) { recordProfileEvent(profile_event_frame_marker, frameNum); }
 
-void processAndDisplayProfileEvents(uint64 currentFrameID, debug_gui& gui);
+void processAndDisplayProfileEvents(uint64 currentFrameID, class debug_gui& gui);
 
 #else
 #define PROFILE_FUNCTION()
 #define PROFILE_BLOCK(name)
+#define PROFILE_FRAME_MARKER(frameNum)
 
 #define processAndDisplayProfileEvents(...)
 

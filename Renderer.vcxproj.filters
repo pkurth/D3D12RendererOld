@@ -233,6 +233,8 @@
     <FxCompile Include="shaders\lighting_ps.hlsl" />
     <FxCompile Include="shaders\geometry_indirect_ps.hlsl" />
     <FxCompile Include="shaders\geometry_indirect_vs.hlsl" />
+    <FxCompile Include="shaders\flat_2d_ps.hlsl" />
+    <FxCompile Include="shaders\flat_2d_vs.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -191,7 +191,6 @@ bool dx_font::initialize(dx_command_list* commandList, const char* fontname, int
 					copyGlyphToAtlas(bitmap, currentPackSize, currentPackSize, cpBitmaps[i], packRects[i].x, packRects[i].y, g.width, g.height);
 				}
 
-				bitmap[0] = 255;
 				commandList->loadTextureFromMemory(atlas, bitmap, currentPackSize, currentPackSize, DXGI_FORMAT_R8_UNORM, texture_type_noncolor, true);
 				delete[] bitmap;
 			}
