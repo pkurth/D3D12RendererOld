@@ -3,6 +3,7 @@
 #include "error.h"
 #include "graphics.h"
 #include "light.h"
+#include "profiling.h"
 
 #include <pix3.h>
 
@@ -109,6 +110,8 @@ void lighting_pipeline::render(dx_command_list* commandList,
 	dx_texture* sunShadowMapCascades, uint32 numSunShadowCascades,
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress)
 {
+	PROFILE_FUNCTION();
+
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Lighting pass.");
 
 	commandList->setPipelineState(pipelineState);

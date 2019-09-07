@@ -10,6 +10,7 @@
 #include "descriptor_allocator.h"
 #include "graphics.h"
 #include "platform.h"
+#include "profiling.h"
 
 #include <windowsx.h>
 
@@ -22,11 +23,6 @@ static dx_window window;
 static dx_game game;
 
 static ComPtr<ID3D12Device2> device;
-
-static uint64 fenceValues[dx_window::numFrames] = {};
-static uint64 frameValues[dx_window::numFrames] = {};
-
-static uint64 frameCount = 0;
 
 static std::vector<std::function<bool(keyboard_event event)>> keyDownCallbacks;
 static std::vector<std::function<bool(keyboard_event event)>> keyUpCallbacks;
@@ -138,51 +134,6 @@ static ComPtr<ID3D12Device2> createDevice(ComPtr<IDXGIAdapter4> adapter)
 	return d3d12Device2;
 }
 
-static void updateMatrices()
-{
-	static uint64 frameCounter = 0;
-	static std::chrono::high_resolution_clock clock;
-	static auto t0 = clock.now();
-
-	frameCounter++;
-	auto t1 = clock.now();
-	auto deltaTime = t1 - t0;
-	t0 = t1;
-
-	float dt = deltaTime.count() * 1e-9f;
-
-	game.update(dt);
-}
-
-void render(dx_window* window)
-{
-	ComPtr<ID3D12Resource> backBuffer = window->getCurrentBackBuffer();
-
-	dx_command_queue& renderCommandQueue = dx_command_queue::renderCommandQueue;
-	dx_command_list* commandList = renderCommandQueue.getAvailableCommandList();
-
-	// Transition backbuffer from "Present" to "Render Target", so we can render to it.
-	commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-	uint32 currentBackBufferIndex = window->getCurrentBackBufferIndex();
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = window->getCurrentRenderTargetView();
-
-	game.render(commandList, rtv);
-
-	// Transition back to "Present".
-	commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
-
-	// Run command list and wait for next one to become free.
-	fenceValues[currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);
-	frameValues[currentBackBufferIndex] = frameCount;
-	uint32 newCurrentBackbufferIndex = window->present();
-
-	// Make sure, that command queue is finished.
-	renderCommandQueue.waitForFenceValue(fenceValues[newCurrentBackbufferIndex]);
-
-	dx_descriptor_allocator::releaseStaleDescriptors(frameValues[newCurrentBackbufferIndex]);
-}
-
 void flushApplication()
 {
 	dx_command_queue::renderCommandQueue.flush();
@@ -292,14 +243,6 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 
 		switch (msg)
 		{
-		case WM_PAINT:
-		{
-			++frameCount;
-
-			updateMatrices();
-			render(window);
-		} break;
-
 		case WM_SYSKEYDOWN:
 		case WM_KEYDOWN:
 		{
@@ -558,16 +501,82 @@ int main()
 	game.initialize(device, initialWidth, initialHeight, colorDepth);
 
 
+	uint64 fenceValues[dx_window::numFrames] = {};
+	uint64 frameValues[dx_window::numFrames] = {};
+
+	uint64 frameID = 0;
+
+
 	initialized = true;
 
-	MSG msg = {};
-	while (msg.message != WM_QUIT)
+
+	// Main loop.
+
+	dx_command_queue& renderCommandQueue = dx_command_queue::renderCommandQueue;
+
+	std::chrono::high_resolution_clock clock;
+	std::chrono::time_point now = clock.now();
+	std::chrono::time_point lastBeforeUpdate = now;
+
+	uint32 currentBackBufferIndex = window.getCurrentBackBufferIndex();;
+
+	bool running = true;
+	while (running)
 	{
-		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+		PROFILE_FRAME(frameID);
+
+		// Input and message processing.
+		MSG msg = {};
+		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
+			if (msg.message == WM_QUIT)
+			{
+				running = false;
+			}
+
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
+
+
+		// Update.
+		now = clock.now();
+		float dt = (now - lastBeforeUpdate).count() * 1e-9f;
+		lastBeforeUpdate = now;
+
+		game.update(frameID, dt);
+
+
+
+		// Render.
+
+		// Make sure, that the backbuffer to use in this frame is actually ready for use again.
+		renderCommandQueue.waitForFenceValue(fenceValues[currentBackBufferIndex]);
+		dx_descriptor_allocator::releaseStaleDescriptors(frameValues[currentBackBufferIndex]);
+
+
+		ComPtr<ID3D12Resource> backBuffer = window.getCurrentBackBuffer();
+		dx_command_list* commandList = renderCommandQueue.getAvailableCommandList();
+
+		// Transition backbuffer from "Present" to "Render Target", so we can render to it.
+		commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = window.getCurrentRenderTargetView();
+
+		game.render(commandList, rtv);
+
+		// Transition back to "Present".
+		commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
+
+		// Run command list.
+		fenceValues[currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);
+
+
+
+		frameValues[currentBackBufferIndex] = frameID;
+		currentBackBufferIndex = window.present();
+
+		++frameID;
 	}
 
 	flushApplication();

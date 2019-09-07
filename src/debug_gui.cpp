@@ -160,20 +160,14 @@ debug_gui::text_analysis debug_gui::analyzeText(const char* text, float size)
 
 #define MAX_TEXT_LENGTH 2048
 
-void debug_gui::textInternal(const char* text, uint32 color, float size)
+void debug_gui::textInternalAt(float x, float y, const char* text, uint32 color, float size)
 {
-	if (numActiveTabs == 0)
-	{
-		assert(!"No open tab in GUI.");
-	}
-
 	currentVertices.reserve(currentVertices.size() + MAX_TEXT_LENGTH * 4);
 
-	float cursorX = getCursorX();
+	float cursorX = x;
 	float scale = textHeight / font.height * size;
 
-	float cursorY = this->cursorY + textHeight * size;
-	this->cursorY = cursorY;
+	float cursorY = y;
 
 	while (*text)
 	{
@@ -209,6 +203,20 @@ void debug_gui::textInternal(const char* text, uint32 color, float size)
 	}
 }
 
+void debug_gui::textInternal(const char* text, uint32 color, float size)
+{
+	if (numActiveTabs == 0)
+	{
+		assert(!"No open tab in GUI.");
+	}
+
+	float x = getCursorX();
+	float y = this->cursorY + textHeight * size;
+	cursorY = y;
+
+	textInternalAt(x, y, text, color, size);
+}
+
 void debug_gui::textInternalF(const char* text, uint32 color, float size, ...)
 {
 	va_list arg;
@@ -242,6 +250,26 @@ void debug_gui::textF(const char* format, ...)
 	va_end(arg);
 }
 
+void debug_gui::textAt(float x, float y, const char* text)
+{
+	textInternalAt(x, y, text);
+}
+
+void debug_gui::textAtF(float x, float y, const char* format, ...)
+{
+	va_list arg;
+	va_start(arg, format);
+	textAtV(x, y, format, arg);
+	va_end(arg);
+}
+
+void debug_gui::textAtV(float x, float y, const char* format, va_list arg)
+{
+	char text[MAX_TEXT_LENGTH];
+	vsnprintf(text, sizeof(text), format, arg);
+	textInternalAt(x, y, text);
+}
+
 void debug_gui::value(const char* name, bool v)
 {
 	if (v) { textF("%s: true", name); }
@@ -261,6 +289,14 @@ void debug_gui::value(const char* name, uint32 v)
 void debug_gui::value(const char* name, float v)
 {
 	textF("%s: %f", name, v);
+}
+
+void debug_gui::quad(float left, float right, float top, float bottom, color_32 color)
+{
+	currentVertices.push_back({ vec2(left, top), vec2(0.f, 0.f), color });
+	currentVertices.push_back({ vec2(right, top), vec2(0.f, 0.f), color });
+	currentVertices.push_back({ vec2(left, bottom), vec2(0.f, 0.f), color });
+	currentVertices.push_back({ vec2(right, bottom), vec2(0.f, 0.f), color });
 }
 
 void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewport)

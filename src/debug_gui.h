@@ -22,6 +22,30 @@ struct gui_vertex
 #define DEBUG_GUI_TOGGLE_COLOR 0xFFFF7a7a
 
 
+union color_32
+{
+	uint32 val;
+	struct
+	{
+		uint8 r, g, b, a;
+	};
+
+	color_32(uint32 v)
+	{
+		val = v;
+	}
+
+	color_32(uint8 r, uint8 g, uint8 b, uint8 a)
+	{
+		val = (a << 24) | (b << 16) | (g << 8) | r;
+	}
+
+	operator uint32()
+	{
+		return val;
+	}
+};
+
 class debug_gui
 {
 public:
@@ -40,6 +64,14 @@ public:
 
 	void toggle(const char* name, bool& v);
 	bool button(const char* name);
+
+
+
+	void quad(float left, float right, float top, float bottom, color_32 color);
+	void textAt(float x, float y, const char* text);
+	void textAtF(float x, float y, const char* format, ...);
+	void textAtV(float x, float y, const char* format, va_list arg);
+
 
 	void render(dx_command_list* commandList, const D3D12_VIEWPORT& viewport);
 
@@ -74,6 +106,7 @@ private:
 	void textInternal(const char* text, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f);
 	void textInternalF(const char* format, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f, ...);
 	void textInternalV(const char* format, va_list arg, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f);
+	void textInternalAt(float x, float y, const char* text, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f);
 
 	uint32 handleButtonPress(uint64 id, const char* name, float size);
 	bool buttonInternal(uint64 id, const char* name, uint32 color, float size = 1.f, bool isTab = false);
@@ -140,15 +173,12 @@ struct debug_group_internal
 	debug_gui* gui = 0;
 };
 
-#define DEBUG_GROUP_VARNAME_(c) isOpen##c
-#define DEBUG_GROUP_VARNAME(c) DEBUG_GROUP_VARNAME_(c)
-
 // This for loop will never run more than once. The loop makes the group variable live until the end of the block.
 #define DEBUG_GROUP_(gui, name, boolname) \
 	static bool boolname = true; \
 	for (debug_group_internal group; group.initialize(gui, name, boolname);)
 
-#define DEBUG_GROUP(gui, name) DEBUG_GROUP_(gui, name, DEBUG_GROUP_VARNAME(__COUNTER__))
+#define DEBUG_GROUP(gui, name) DEBUG_GROUP_(gui, name, COMPOSITE_VARNAME(isOpen, __LINE__))
 
 
 #define DEBUG_TAB(gui, name) if (gui.tab(name))

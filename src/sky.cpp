@@ -2,6 +2,7 @@
 #include "sky.h"
 #include "error.h"
 #include "graphics.h"
+#include "profiling.h"
 
 #include <pix3.h>
 
@@ -80,6 +81,8 @@ void sky_pipeline::initialize(ComPtr<ID3D12Device2> device, dx_command_list* com
 
 void sky_pipeline::render(dx_command_list* commandList, const render_camera& camera, dx_texture& cubemap)
 {
+	PROFILE_FUNCTION();
+
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sky.");
 
 	commandList->setPipelineState(pipelineState);

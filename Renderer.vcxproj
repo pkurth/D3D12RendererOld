@@ -161,6 +161,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\present.cpp" />
+    <ClCompile Include="src\profiling.cpp" />
     <ClCompile Include="src\render_target.cpp" />
     <ClCompile Include="src\resource.cpp" />
     <ClCompile Include="src\resource_state_tracker.cpp" />
@@ -195,6 +196,7 @@
     <ClInclude Include="src\model.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\present.h" />
+    <ClInclude Include="src\profiling.h" />
     <ClInclude Include="src\render_target.h" />
     <ClInclude Include="src\resource.h" />
     <ClInclude Include="src\platform.h" />

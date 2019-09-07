@@ -2,6 +2,7 @@
 #include "present.h"
 #include "error.h"
 #include "graphics.h"
+#include "profiling.h"
 
 #include <pix3.h>
 
@@ -77,6 +78,8 @@ void present_pipeline::initialize(ComPtr<ID3D12Device2> device, const D3D12_RT_F
 
 void present_pipeline::render(dx_command_list* commandList, dx_texture& hdrTexture)
 {
+	PROFILE_FUNCTION();
+
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Tonemap and present.");
 
 	commandList->setPipelineState(pipelineState);

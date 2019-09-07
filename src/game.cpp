@@ -3,6 +3,7 @@
 #include "error.h"
 #include "model.h"
 #include "graphics.h"
+#include "profiling.h"
 
 #include <pix3.h>
 
@@ -535,8 +536,10 @@ void dx_game::resize(uint32 width, uint32 height)
 	}
 }
 
-void dx_game::update(float dt)
+void dx_game::update(uint64 currentFrameID, float dt)
 {
+	PROFILE_FUNCTION();
+
 	camera.rotation = createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw) 
 		* createQuaternionFromAxisAngle(comp_vec(1.f, 0.f, 0.f), camera.pitch);
 
@@ -546,6 +549,7 @@ void dx_game::update(float dt)
 	sun.updateMatrices(camera.getWorldSpaceFrustum());
 
 	this->dt = dt;
+	this->currentFrameID = currentFrameID;
 
 	DEBUG_TAB(gui, "Stats")
 	{
@@ -575,6 +579,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	// Render to sun shadow map.
 	{
+		PROFILE_BLOCK("Record shadow map commands");
+
 		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sun shadow map.");
 
 		commandList->setViewport(sunShadowMapRT[0].viewport);
@@ -613,6 +619,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	// Render to GBuffer.
 	{
+		PROFILE_BLOCK("Record GBuffer commands");
+
 		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "GBuffer.");
 
 		commandList->setRenderTarget(gbufferRT);
@@ -700,8 +708,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	present.render(commandList, hdrTexture);
 
 	// GUI.
+	processAndDisplayProfileEvents(currentFrameID, gui);
 	gui.render(commandList, viewport); // Probably not completely correct here, since alpha blending assumes linear colors?
-
 }
 
 bool dx_game::keyDownCallback(keyboard_event event)

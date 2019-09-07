@@ -101,3 +101,8 @@ inline std::wstring stringToWString(const std::string& s)
     }
 
 #define hasMember(class_, member_name)  has_member_##member_name<class_>::value
+
+
+#define COMPOSITE_VARNAME_(a, b) a##b
+#define COMPOSITE_VARNAME(a, b) COMPOSITE_VARNAME_(a, b)
+
