@@ -62,12 +62,14 @@ public:
 	void value(const char* name, uint32 v);
 	void value(const char* name, float v);
 
-	void toggle(const char* name, bool& v);
+	bool toggle(const char* name, bool& v);
 	bool button(const char* name);
 
 
 
-	void quad(float left, float right, float top, float bottom, color_32 color);
+	void quad(float left, float right, float top, float bottom, uint32 color);
+	bool quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color);
+	bool quadHover(float left, float right, float top, float bottom, uint32 color);
 	void textAt(float x, float y, const char* text);
 	void textAtF(float x, float y, const char* format, ...);
 	void textAtV(float x, float y, const char* format, va_list arg);
@@ -108,6 +110,7 @@ private:
 	void textInternalV(const char* format, va_list arg, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f);
 	void textInternalAt(float x, float y, const char* text, uint32 color = DEBUG_GUI_TEXT_COLOR, float size = 1.f);
 
+	uint32 handleButtonPress(uint64 id, vec2 topLeft, vec2 bottomRight);
 	uint32 handleButtonPress(uint64 id, const char* name, float size);
 	bool buttonInternal(uint64 id, const char* name, uint32 color, float size = 1.f, bool isTab = false);
 	bool buttonInternalF(uint64 id, const char* name, uint32 color, float size = 1.f, ...);

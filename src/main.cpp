@@ -523,7 +523,7 @@ int main()
 	bool running = true;
 	while (running)
 	{
-		PROFILE_FRAME(frameID);
+		PROFILE_FRAME_MARKER(frameID);
 
 		// Input and message processing.
 		MSG msg = {};

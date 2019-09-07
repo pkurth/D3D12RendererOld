@@ -3,6 +3,11 @@
 #include "error.h"
 #include "graphics.h"
 
+static bool pointInRectangle(vec2 p, vec2 topLeft, vec2 bottomRight)
+{
+	return p.x >= topLeft.x && p.y >= topLeft.y && p.x <= bottomRight.x && p.y <= bottomRight.y;
+}
+
 void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, D3D12_RT_FORMAT_ARRAY rtvFormats)
 {
 	this->device = device;
@@ -291,12 +296,36 @@ void debug_gui::value(const char* name, float v)
 	textF("%s: %f", name, v);
 }
 
-void debug_gui::quad(float left, float right, float top, float bottom, color_32 color)
+void debug_gui::quad(float left, float right, float top, float bottom, uint32 color)
 {
 	currentVertices.push_back({ vec2(left, top), vec2(0.f, 0.f), color });
 	currentVertices.push_back({ vec2(right, top), vec2(0.f, 0.f), color });
 	currentVertices.push_back({ vec2(left, bottom), vec2(0.f, 0.f), color });
 	currentVertices.push_back({ vec2(right, bottom), vec2(0.f, 0.f), color });
+}
+
+bool debug_gui::quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color)
+{
+	uint32 button = handleButtonPress(guid, vec2(left, top), vec2(right, bottom));
+	if (button & 1)
+	{
+		color = DEBUG_GUI_HOVERED_COLOR;
+	}
+	quad(left, right, top, bottom, color);
+
+	return button & 2;
+}
+
+bool debug_gui::quadHover(float left, float right, float top, float bottom, uint32 color)
+{
+	bool result = false;
+	if (pointInRectangle(mousePosition, vec2(left, top), vec2(right, bottom)))
+	{
+		result = true;
+		color = DEBUG_GUI_HOVERED_COLOR;
+	}
+	quad(left, right, top, bottom, color);
+	return result;
 }
 
 void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewport)
@@ -366,23 +395,16 @@ bool debug_gui::mouseMoveCallback(mouse_move_event event)
 	return false;
 }
 
-static bool pointInRectangle(vec2 p, vec2 topLeft, vec2 bottomRight)
-{
-	return p.x >= topLeft.x && p.y >= topLeft.y && p.x <= bottomRight.x && p.y <= bottomRight.y;
-}
-
 uint64 debug_gui::hashLabel(const char* name)
 {
 	return std::hash<const char*>()(name);
 }
 
 // Returns bitmask. 1 is set if hovered, 2 is set if pressed.
-uint32 debug_gui::handleButtonPress(uint64 id, const char* name, float size)
+uint32 debug_gui::handleButtonPress(uint64 id, vec2 topLeft, vec2 bottomRight)
 {
-	text_analysis info = analyzeText(name, size);
-
 	uint32 result = 0;
-	if (pointInRectangle(mousePosition, info.topLeft, info.bottomRight))
+	if (pointInRectangle(mousePosition, topLeft, bottomRight))
 	{
 		result |= 1;
 
@@ -399,6 +421,14 @@ uint32 debug_gui::handleButtonPress(uint64 id, const char* name, float size)
 			activeID = 0;
 		}
 	}
+	return result;
+}
+
+uint32 debug_gui::handleButtonPress(uint64 id, const char* name, float size)
+{
+	text_analysis info = analyzeText(name, size);
+
+	uint32 result = handleButtonPress(id, info.topLeft, info.bottomRight);
 
 	uint32 right = (uint32)info.bottomRight.x;
 	result |= right << 2;
@@ -438,12 +468,14 @@ bool debug_gui::buttonInternalF(uint64 id, const char* name, uint32 color, float
 	return button & 2;
 }
 
-void debug_gui::toggle(const char* name, bool& v)
+bool debug_gui::toggle(const char* name, bool& v)
 {
 	if (buttonInternalF(hashLabel(name), "%s: %d", DEBUG_GUI_TOGGLE_COLOR, 1.f, name, (int32)v))
 	{
 		v = !v;
+		return true;
 	}
+	return false;
 }
 
 bool debug_gui::button(const char* name)
