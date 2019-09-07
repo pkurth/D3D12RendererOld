@@ -81,7 +81,7 @@ public:
 
 
 	void quad(float left, float right, float top, float bottom, uint32 color);
-	bool quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color);
+	bool quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color, const char* formatOnHover = nullptr, ...);
 	bool quadHover(float left, float right, float top, float bottom, uint32 color);
 	float quadScroll(float left, float right, float top, float bottom, uint32 color);
 	debug_gui_interaction interactableQuad(uint64 guid, float left, float right, float top, float bottom, uint32 color);

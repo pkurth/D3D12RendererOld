@@ -202,7 +202,7 @@ static float measureSignedTime(uint64 frameStart, uint64 clock)
 	}
 }
 
-static uint32 currentDisplayCallDepth[MAX_NUM_RECORDED_THREADS];
+static uint32 currentDisplayCallDepth;
 
 static uint32 colorTable[] =
 {
@@ -223,6 +223,47 @@ static uint32 colorTable[] =
 	color_32(255, 0, 128, 255),
 };
 
+struct profile_display_state
+{
+	float leftOffset;
+	float frameWidth60FPS;
+	float top;
+	float bottom;
+	uint32 colorIndex;
+	uint32 callDepth;
+};
+
+static void displayProfileBlock(profile_display_state& state, debug_gui& gui, profile_frame* frame, 
+	profile_block* topLevelBlock, uint32 currentCallDepth = 0)
+{
+	for (profile_block* block = topLevelBlock; block; block = block->nextSibling)
+	{
+		if (currentCallDepth < state.callDepth && block->firstChild)
+		{
+			displayProfileBlock(state, gui, frame, block->firstChild, currentCallDepth + 1);
+		}
+		else
+		{
+			float relStartTime = measureSignedTime(frame->startClock, block->startClock);
+			float relEndTime = measureSignedTime(frame->startClock, block->endClock);
+
+			float left = state.leftOffset + relStartTime / 0.0167f * state.frameWidth60FPS;
+			float right = state.leftOffset + relEndTime / 0.0167f * state.frameWidth60FPS;
+
+			if (gui.quadHover(left, right, state.top, state.bottom, colorTable[state.colorIndex]))
+			{
+				gui.textAtMouseF("%s: %f ms", block->info, (relEndTime - relStartTime) * 1000.f);
+			}
+
+			++state.colorIndex;
+			if (state.colorIndex >= arraysize(colorTable))
+			{
+				state.colorIndex = 0;
+			}
+		}
+	}
+}
+
 static void displayProfileInfo(debug_gui& gui)
 {
 	PROFILE_FUNCTION();
@@ -232,7 +273,7 @@ static void displayProfileInfo(debug_gui& gui)
 
 	const float barWidth = 3.f;
 	const float barSpacing = 4.f;
-	const float bottom = 300.f;
+	const float bottom = 400.f;
 	const float leftOffset = 5.f;
 
 	DEBUG_TAB(gui, "Profiling")
@@ -266,7 +307,7 @@ static void displayProfileInfo(debug_gui& gui)
 
 			uint32 color = (frameIndex == highlightFrameIndex) ? highlightFrameColor : frameColor;
 
-			if (gui.quadButton((uint64)frame, left, right, top, bottom, color))
+			if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Frame %u", frame->globalFrameID))
 			{
 				highlightFrameIndex = frameIndex;
 			}
@@ -280,83 +321,33 @@ static void displayProfileInfo(debug_gui& gui)
 
 		if (highlightFrameIndex != -1)
 		{
-			const float topOffset = 400.f;
+			const float topOffset = 520.f;
 			const float barHeight = 25.f;
 			const float barSpacing = 30.f;
-			const float frameWidth60FPS = 400.f;
+			const float frameWidth60FPS = 500.f;
 			const float frameWidth30FPS = frameWidth60FPS * 2.f;
 			const float leftOffset = 100.f;
-
-			bool scrollHandled = false;
 
 			profile_frame* frame = recordedProfileFrames + highlightFrameIndex;
 			if (frame->endClock != 0)
 			{
+				gui.textAtF(leftOffset, topOffset - 60, "Frame %u", frame->globalFrameID);
+
 				uint32 highestThreadIndex = 0;
 				for (uint32 threadIndex = 0; threadIndex < MAX_NUM_RECORDED_THREADS; ++threadIndex)
 				{
 					float top = threadIndex * barSpacing + topOffset;
 					float bottom = top + barHeight;
 
-					uint32 callDepth = currentDisplayCallDepth[threadIndex];
-					uint32 colorIndex = 0;
+					profile_display_state state;
+					state.top = top;
+					state.bottom = bottom;
+					state.colorIndex = 0;
+					state.frameWidth60FPS = frameWidth60FPS;
+					state.leftOffset = leftOffset;
+					state.callDepth = currentDisplayCallDepth;
 
-					for (profile_block* block = frame->firstTopLevelBlockPerThread[threadIndex]; 
-						block && block->startClock < frame->endClock; 
-						block = block->nextSibling)
-					{
-						profile_block* displayBlock = block;
-						uint32 displayedCallDepth = 0;
-						for (; displayedCallDepth < callDepth && displayBlock->firstChild; ++displayedCallDepth)
-						{
-							displayBlock = displayBlock->firstChild;
-						}
-
-						for (; displayBlock && displayBlock->startClock < frame->endClock; displayBlock = displayBlock->nextSibling)
-						{
-							float relStartTime = measureSignedTime(frame->startClock, displayBlock->startClock);
-							float relEndTime = measureSignedTime(frame->startClock, displayBlock->endClock);
-
-							float left = leftOffset + relStartTime / 0.0167f * frameWidth60FPS;
-							float right = leftOffset + relEndTime / 0.0167f * frameWidth60FPS;
-
-
-							auto [click, hover, scroll] = gui.interactableQuad((uint64)displayBlock, left, right, top, bottom, colorTable[colorIndex]);
-							if (hover)
-							{
-								gui.textAtMouseF("%s: %f ms", displayBlock->info, (relEndTime - relStartTime) * 1000.f);
-							}
-							if (!scrollHandled)
-							{
-								if (scroll > 0.f && callDepth < MAX_RECORDED_CALLSTACK_DEPTH)
-								{
-									++callDepth;
-									scrollHandled = true;
-									break;
-								}
-								if (scroll < 0.f && callDepth > 0)
-								{
-									--callDepth;
-									scrollHandled = true;
-									break;
-								}
-							}
-
-							++colorIndex;
-							if (colorIndex >= arraysize(colorTable))
-							{
-								colorIndex = 0;
-							}
-
-							if (displayedCallDepth == 0)
-							{
-								break;
-							}
-						}
-						highestThreadIndex = threadIndex;
-					}
-
-					currentDisplayCallDepth[threadIndex] = callDepth;
+					displayProfileBlock(state, gui, frame, frame->firstTopLevelBlockPerThread[threadIndex]);
 				}
 
 				float top = topOffset - 30.f;
@@ -368,6 +359,20 @@ static void displayProfileInfo(debug_gui& gui)
 				gui.textAt(leftOffset, top, "0 ms");
 				gui.textAt(leftOffset + frameWidth60FPS, top, "16.7 ms");
 				gui.textAt(leftOffset + frameWidth30FPS, top, "33.3 ms");
+
+				if (gui.button("Call depth up"))
+				{
+					++currentDisplayCallDepth;
+				}
+				if (gui.button("Call depth down"))
+				{
+					if (currentDisplayCallDepth > 0)
+					{
+						--currentDisplayCallDepth;
+					}
+				}
+
+				gui.value("Call depth", currentDisplayCallDepth);
 			}
 		}
 	}

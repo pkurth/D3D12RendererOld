@@ -398,12 +398,20 @@ void debug_gui::quad(float left, float right, float top, float bottom, uint32 co
 	currentShapeVertices.push_back({ vec2(right, bottom), color });
 }
 
-bool debug_gui::quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color)
+bool debug_gui::quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color, const char* formatOnHover, ...)
 {
 	uint32 button = handleButtonPress(guid, vec2(left, top), vec2(right, bottom));
 	if (button & 1)
 	{
 		color = DEBUG_GUI_HOVERED_COLOR;
+		
+		if (formatOnHover)
+		{
+			va_list arg;
+			va_start(arg, formatOnHover);
+			textAtV(mousePosition.x, mousePosition.y, formatOnHover, arg);
+			va_end(arg);
+		}
 	}
 	quad(left, right, top, bottom, color);
 
