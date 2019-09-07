@@ -61,7 +61,7 @@ struct profile_block_recorder
 
 #define PROFILE_INFO__(a, b, c, d) a b " | " c "[" #d "]"
 #define PROFILE_INFO_(a, b, c, d) PROFILE_INFO__(a, b, c, d)
-#define PROFILE_INFO(prefix) PROFILE_INFO_(prefix, __FUNCTION__, __FILE__, __LINE__)
+#define PROFILE_INFO(prefix) PROFILE_INFO_(prefix, __FUNCTION__, "", __LINE__)
 
 #define PROFILE_BLOCK_(counter, prefix) profile_block_recorder COMPOSITE_VARNAME(PROFILE_BLOCK, counter)(PROFILE_INFO(prefix))
 

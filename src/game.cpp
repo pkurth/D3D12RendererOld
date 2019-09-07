@@ -538,8 +538,6 @@ void dx_game::resize(uint32 width, uint32 height)
 
 void dx_game::update(uint64 currentFrameID, float dt)
 {
-	PROFILE_FUNCTION();
-
 	camera.rotation = createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw) 
 		* createQuaternionFromAxisAngle(comp_vec(1.f, 0.f, 0.f), camera.pitch);
 

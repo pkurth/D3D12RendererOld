@@ -46,6 +46,13 @@ union color_32
 	}
 };
 
+struct debug_gui_interaction
+{
+	bool click;
+	bool hover;
+	float scroll;
+};
+
 class debug_gui
 {
 public:
@@ -70,9 +77,15 @@ public:
 	void quad(float left, float right, float top, float bottom, uint32 color);
 	bool quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color);
 	bool quadHover(float left, float right, float top, float bottom, uint32 color);
+	float quadScroll(float left, float right, float top, float bottom, uint32 color);
+	debug_gui_interaction interactableQuad(uint64 guid, float left, float right, float top, float bottom, uint32 color);
 	void textAt(float x, float y, const char* text);
 	void textAtF(float x, float y, const char* format, ...);
 	void textAtV(float x, float y, const char* format, va_list arg);
+
+	void textAtMouse(const char* text);
+	void textAtMouseF(const char* format, ...);
+	void textAtMouseV(const char* format, va_list arg);
 
 
 	void render(dx_command_list* commandList, const D3D12_VIEWPORT& viewport);
@@ -80,6 +93,7 @@ public:
 	bool mouseDownCallback(mouse_button_event event);
 	bool mouseUpCallback(mouse_button_event event);
 	bool mouseMoveCallback(mouse_move_event event);
+	bool mouseScrollCallback(mouse_scroll_event event);
 
 private:
 	enum event_type
@@ -144,6 +158,7 @@ private:
 
 
 	vec2 mousePosition;
+	float mouseScroll;
 	event_type lastEventType;
 
 	uint64 activeID;

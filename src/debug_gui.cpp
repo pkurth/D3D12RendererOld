@@ -97,6 +97,7 @@ void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* comman
 	registerMouseButtonDownCallback(BIND(mouseDownCallback));
 	registerMouseButtonUpCallback(BIND(mouseUpCallback));
 	registerMouseMoveCallback(BIND(mouseMoveCallback));
+	registerMouseScrollCallback(BIND(mouseScrollCallback));
 }
 
 void debug_gui::resizeIndexBuffer(dx_command_list* commandList, uint32 numQuads)
@@ -157,6 +158,10 @@ debug_gui::text_analysis debug_gui::analyzeText(const char* text, float size)
 
 			char nextC = *text;
 			cursorX += font.getAdvance(c, nextC) * scale;
+		}
+		else
+		{
+			cursorX += font.spaceWidth * scale;
 		}
 	}
 
@@ -275,6 +280,26 @@ void debug_gui::textAtV(float x, float y, const char* format, va_list arg)
 	textInternalAt(x, y, text);
 }
 
+void debug_gui::textAtMouse(const char* text)
+{
+	textInternalAt(mousePosition.x, mousePosition.y, text);
+}
+
+void debug_gui::textAtMouseF(const char* format, ...)
+{
+	va_list arg;
+	va_start(arg, format);
+	textAtV(mousePosition.x, mousePosition.y, format, arg);
+	va_end(arg);
+}
+
+void debug_gui::textAtMouseV(const char* format, va_list arg)
+{
+	char text[MAX_TEXT_LENGTH];
+	vsnprintf(text, sizeof(text), format, arg);
+	textInternalAt(mousePosition.x, mousePosition.y, text);
+}
+
 void debug_gui::value(const char* name, bool v)
 {
 	if (v) { textF("%s: true", name); }
@@ -328,6 +353,35 @@ bool debug_gui::quadHover(float left, float right, float top, float bottom, uint
 	return result;
 }
 
+float debug_gui::quadScroll(float left, float right, float top, float bottom, uint32 color)
+{
+	float result = 0.f;
+	if (pointInRectangle(mousePosition, vec2(left, top), vec2(right, bottom)))
+	{
+		result = mouseScroll;
+		color = DEBUG_GUI_HOVERED_COLOR;
+	}
+	quad(left, right, top, bottom, color);
+	return result;
+}
+
+debug_gui_interaction debug_gui::interactableQuad(uint64 guid, float left, float right, float top, float bottom, uint32 color)
+{
+	debug_gui_interaction result = {};
+
+	uint32 button = handleButtonPress(guid, vec2(left, top), vec2(right, bottom));
+	if (button & 1)
+	{
+		color = DEBUG_GUI_HOVERED_COLOR;
+		result.hover = true;
+		result.scroll = mouseScroll;
+	}
+	quad(left, right, top, bottom, color);
+
+	result.click = button & 2;
+	return result;
+}
+
 void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewport)
 {
 	assert(level == 0);
@@ -372,6 +426,7 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 	firstTab = 0;
 	openTabSeenThisFrame = false;
 	lastEventType = event_type_none;
+	mouseScroll = 0.f;
 	allTabsSeenThisFrame.clear();
 }
 
@@ -392,6 +447,12 @@ bool debug_gui::mouseUpCallback(mouse_button_event event)
 bool debug_gui::mouseMoveCallback(mouse_move_event event)
 {
 	mousePosition = vec2((float)event.x, (float)event.y);
+	return false;
+}
+
+bool debug_gui::mouseScrollCallback(mouse_scroll_event event)
+{
+	mouseScroll += event.scroll;
 	return false;
 }
 
@@ -456,15 +517,18 @@ bool debug_gui::buttonInternal(uint64 id, const char* name, uint32 color, float 
 
 bool debug_gui::buttonInternalF(uint64 id, const char* name, uint32 color, float size, ...)
 {
-	uint32 button = handleButtonPress(id, name, size);
+	va_list arg;
+	va_start(arg, size); // Must be last argument before '...' .
+	char text[MAX_TEXT_LENGTH];
+	vsnprintf(text, sizeof(text), name, arg);
+	va_end(arg);
+
+	uint32 button = handleButtonPress(id, text, size);
 	if (button & 1)
 	{
 		color = DEBUG_GUI_HOVERED_COLOR;
 	}
-	va_list arg;
-	va_start(arg, size); // Must be last argument before '...' .
-	textInternalV(name, arg, color, size);
-	va_end(arg);
+	textInternal(text, color, size);
 	return button & 2;
 }
 

@@ -526,56 +526,80 @@ int main()
 		PROFILE_FRAME_MARKER(frameID);
 
 		// Input and message processing.
-		MSG msg = {};
-		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
-			if (msg.message == WM_QUIT)
-			{
-				running = false;
-			}
+			PROFILE_BLOCK("Input processing");
 
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+			MSG msg = {};
+			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+			{
+				if (msg.message == WM_QUIT)
+				{
+					running = false;
+				}
+
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
 		}
 
 
 		// Update.
-		now = clock.now();
-		float dt = (now - lastBeforeUpdate).count() * 1e-9f;
-		lastBeforeUpdate = now;
+		{
+			PROFILE_BLOCK("Game update");
 
-		game.update(frameID, dt);
+			now = clock.now();
+			float dt = (now - lastBeforeUpdate).count() * 1e-9f;
+			lastBeforeUpdate = now;
 
+			game.update(frameID, dt);
+		}
 
 
 		// Render.
 
-		// Make sure, that the backbuffer to use in this frame is actually ready for use again.
-		renderCommandQueue.waitForFenceValue(fenceValues[currentBackBufferIndex]);
-		dx_descriptor_allocator::releaseStaleDescriptors(frameValues[currentBackBufferIndex]);
+		{
+			PROFILE_BLOCK("Wait for backbuffer");
 
+			// Make sure, that the backbuffer to use in this frame is actually ready for use again.
+			renderCommandQueue.waitForFenceValue(fenceValues[currentBackBufferIndex]);
+		}
 
-		ComPtr<ID3D12Resource> backBuffer = window.getCurrentBackBuffer();
-		dx_command_list* commandList = renderCommandQueue.getAvailableCommandList();
+		{
+			PROFILE_BLOCK("Release stale descriptors");
+			dx_descriptor_allocator::releaseStaleDescriptors(frameValues[currentBackBufferIndex]);
+		}
 
-		// Transition backbuffer from "Present" to "Render Target", so we can render to it.
-		commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		dx_command_list* commandList;
+		{
+			PROFILE_BLOCK("Record render commands");
 
-		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = window.getCurrentRenderTargetView();
+			ComPtr<ID3D12Resource> backBuffer = window.getCurrentBackBuffer();
+			commandList = renderCommandQueue.getAvailableCommandList();
 
-		game.render(commandList, rtv);
+			// Transition backbuffer from "Present" to "Render Target", so we can render to it.
+			commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-		// Transition back to "Present".
-		commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
+			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = window.getCurrentRenderTargetView();
 
-		// Run command list.
-		fenceValues[currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);
+			game.render(commandList, rtv);
 
+			// Transition back to "Present".
+			commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
+		}
 
+		{
+			PROFILE_BLOCK("Execute command list");
 
-		frameValues[currentBackBufferIndex] = frameID;
-		currentBackBufferIndex = window.present();
+			// Run command list.
+			fenceValues[currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);
+		}
 
+		{
+			PROFILE_BLOCK("Present to window");
+
+			frameValues[currentBackBufferIndex] = frameID;
+			currentBackBufferIndex = window.present();
+		}
 		++frameID;
 	}
 

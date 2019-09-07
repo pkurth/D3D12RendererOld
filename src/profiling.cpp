@@ -61,6 +61,7 @@ static uint32 nextFreeProfileBlock;
 
 static profile_block* currentFrameLastTopLevelBlocks[MAX_NUM_RECORDED_THREADS];
 
+static bool profilingPaused;
 
 static profile_thread& getProfileThread(uint32 threadID)
 {
@@ -117,20 +118,17 @@ static void collateProfileEvents(profile_event* profileEvents, uint32 numProfile
 			newFrame->endClock = 0;
 			newFrame->globalFrameID = event.frameID;
 
-			if (frame)
+			for (uint32 threadIndex = 0; threadIndex < MAX_NUM_RECORDED_THREADS; ++threadIndex)
 			{
-				for (uint32 threadIndex = 0; threadIndex < MAX_NUM_RECORDED_THREADS; ++threadIndex)
+				profile_block* prevFrameLastTopLevelBlock = currentFrameLastTopLevelBlocks[threadIndex];
+				if (prevFrameLastTopLevelBlock && prevFrameLastTopLevelBlock->endClock == 0)
 				{
-					profile_block* prevFrameLastTopLevelBlock = currentFrameLastTopLevelBlocks[threadIndex];
-					if (prevFrameLastTopLevelBlock && prevFrameLastTopLevelBlock->endClock == 0)
-					{
-						// This block still runs, so it becomes the first block of the next frame.
-						newFrame->firstTopLevelBlockPerThread[threadIndex] = prevFrameLastTopLevelBlock;
-					}
-					else
-					{
-						newFrame->firstTopLevelBlockPerThread[threadIndex] = nullptr;
-					}
+					// This block still runs, so it becomes the first block of the next frame.
+					newFrame->firstTopLevelBlockPerThread[threadIndex] = prevFrameLastTopLevelBlock;
+				}
+				else
+				{
+					newFrame->firstTopLevelBlockPerThread[threadIndex] = nullptr;
 				}
 			}
 
@@ -239,6 +237,17 @@ static void displayProfileInfo(debug_gui& gui)
 
 	DEBUG_TAB(gui, "Profiling")
 	{
+		if (gui.toggle("Paused", profilingPaused))
+		{
+			if (profilingPaused)
+			{
+				for (uint32 i = 0; i < MAX_NUM_RECORDED_THREADS; ++i)
+				{
+					currentFrameLastTopLevelBlocks[i] = nullptr;
+				}
+			}
+		}
+
 		uint32 frameColor = color_32(255, 0, 0, 255);
 		uint32 highlightFrameColor = color_32(255, 255, 0, 255);
 
@@ -278,6 +287,8 @@ static void displayProfileInfo(debug_gui& gui)
 			const float frameWidth30FPS = frameWidth60FPS * 2.f;
 			const float leftOffset = 100.f;
 
+			bool scrollHandled = false;
+
 			profile_frame* frame = recordedProfileFrames + highlightFrameIndex;
 			if (frame->endClock != 0)
 			{
@@ -295,7 +306,8 @@ static void displayProfileInfo(debug_gui& gui)
 						block = block->nextSibling)
 					{
 						profile_block* displayBlock = block;
-						for (uint32 i = 0; i < callDepth && displayBlock; ++i)
+						uint32 displayedCallDepth = 0;
+						for (; displayedCallDepth < callDepth && displayBlock->firstChild; ++displayedCallDepth)
 						{
 							displayBlock = displayBlock->firstChild;
 						}
@@ -308,9 +320,26 @@ static void displayProfileInfo(debug_gui& gui)
 							float left = leftOffset + relStartTime / 0.0167f * frameWidth60FPS;
 							float right = leftOffset + relEndTime / 0.0167f * frameWidth60FPS;
 
-							if (gui.quadHover(left, right, top, bottom, colorTable[colorIndex]))
+
+							auto [click, hover, scroll] = gui.interactableQuad((uint64)displayBlock, left, right, top, bottom, colorTable[colorIndex]);
+							if (hover)
 							{
-								gui.textF("%s: %f ms", displayBlock->info, (relEndTime - relStartTime) * 1000.f);
+								gui.textAtMouseF("%s: %f ms", displayBlock->info, (relEndTime - relStartTime) * 1000.f);
+							}
+							if (!scrollHandled)
+							{
+								if (scroll > 0.f && callDepth < MAX_RECORDED_CALLSTACK_DEPTH)
+								{
+									++callDepth;
+									scrollHandled = true;
+									break;
+								}
+								if (scroll < 0.f && callDepth > 0)
+								{
+									--callDepth;
+									scrollHandled = true;
+									break;
+								}
 							}
 
 							++colorIndex;
@@ -319,13 +348,15 @@ static void displayProfileInfo(debug_gui& gui)
 								colorIndex = 0;
 							}
 
-							if (callDepth == 0)
+							if (displayedCallDepth == 0)
 							{
 								break;
 							}
 						}
 						highestThreadIndex = threadIndex;
 					}
+
+					currentDisplayCallDepth[threadIndex] = callDepth;
 				}
 
 				float top = topOffset - 30.f;
@@ -352,8 +383,11 @@ void processAndDisplayProfileEvents(uint64 currentFrameID, debug_gui& gui)
 	uint32 arrayIndex = (uint32)(!(currentArrayAndEventIndex >> 32));
 	uint32 eventCount = lastFrameEventCount;
 
-	collateProfileEvents(profileEvents[arrayIndex], eventCount);
-	
+	if (!profilingPaused)
+	{
+		collateProfileEvents(profileEvents[arrayIndex], eventCount);
+	}
+
 	if (currentProfileFrame >= 0)
 	{
 		displayProfileInfo(gui);
