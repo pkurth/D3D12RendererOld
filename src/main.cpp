@@ -454,52 +454,58 @@ LRESULT CALLBACK windowCallback(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wPara
 
 int main()
 {
-	// Windows 10 Creators update adds Per Monitor V2 DPI awareness context.
-	// Using this awareness context allows the client area of the window 
-	// to achieve 100% scaling while still allowing non-client window content to 
-	// be rendered in a DPI sensitive fashion.
-	SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-
-	enableDebugLayer();
-
-	WNDCLASSEX windowClass = {};
-	windowClass.cbSize = sizeof(WNDCLASSEX);
-	windowClass.style = CS_HREDRAW | CS_VREDRAW;
-	windowClass.lpfnWndProc = &windowCallback;
-	windowClass.cbClsExtra = 0;
-	windowClass.cbWndExtra = 0;
-	windowClass.hInstance = NULL;
-	windowClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-	windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-	windowClass.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-	windowClass.lpszMenuName = NULL;
-	windowClass.lpszClassName = TEXT("WINDOWCLASS");
-	windowClass.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
-
-	if (!RegisterClassEx(&windowClass))
-	{
-		std::cerr << "Failed to create window class." << std::endl;
-		return 1;
-	}
-
-
-
-	ComPtr<IDXGIAdapter4> dxgiAdapter4 = getAdapter(useWarp);
-	device = createDevice(dxgiAdapter4);
-
-	dx_descriptor_allocator::initialize(device);
-	dx_command_queue::renderCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	dx_command_queue::computeCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	dx_command_queue::copyCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COPY);
-
-	initializeCommonGraphicsItems();
+	PROFILE_INITIALIZATION();
 
 	uint32 initialWidth = 1280;
 	uint32 initialHeight = 720;
 
-	window.initialize(windowClass.lpszClassName, device, initialWidth, initialHeight, colorDepth, exclusiveFullscreen);
-	game.initialize(device, initialWidth, initialHeight, colorDepth);
 
+	{
+		PROFILE_BLOCK("Set up window and device");
+		// Windows 10 Creators update adds Per Monitor V2 DPI awareness context.
+		// Using this awareness context allows the client area of the window 
+		// to achieve 100% scaling while still allowing non-client window content to 
+		// be rendered in a DPI sensitive fashion.
+		SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+		enableDebugLayer();
+
+		WNDCLASSEX windowClass = {};
+		windowClass.cbSize = sizeof(WNDCLASSEX);
+		windowClass.style = CS_HREDRAW | CS_VREDRAW;
+		windowClass.lpfnWndProc = &windowCallback;
+		windowClass.cbClsExtra = 0;
+		windowClass.cbWndExtra = 0;
+		windowClass.hInstance = NULL;
+		windowClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+		windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
+		windowClass.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+		windowClass.lpszMenuName = NULL;
+		windowClass.lpszClassName = TEXT("WINDOWCLASS");
+		windowClass.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
+
+		if (!RegisterClassEx(&windowClass))
+		{
+			std::cerr << "Failed to create window class." << std::endl;
+			return 1;
+		}
+
+
+
+		ComPtr<IDXGIAdapter4> dxgiAdapter4 = getAdapter(useWarp);
+		device = createDevice(dxgiAdapter4);
+
+		dx_descriptor_allocator::initialize(device);
+		dx_command_queue::renderCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+		dx_command_queue::computeCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		dx_command_queue::copyCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COPY);
+
+		initializeCommonGraphicsItems();
+
+		window.initialize(windowClass.lpszClassName, device, initialWidth, initialHeight, colorDepth, exclusiveFullscreen);
+	}
+
+	game.initialize(device, initialWidth, initialHeight, colorDepth);
 
 	uint64 fenceValues[dx_window::numFrames] = {};
 	uint64 frameValues[dx_window::numFrames] = {};
@@ -518,7 +524,7 @@ int main()
 	std::chrono::time_point now = clock.now();
 	std::chrono::time_point lastBeforeUpdate = now;
 
-	uint32 currentBackBufferIndex = window.getCurrentBackBufferIndex();;
+	uint32 currentBackBufferIndex = window.getCurrentBackBufferIndex();
 
 	bool running = true;
 	while (running)

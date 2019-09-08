@@ -26,8 +26,6 @@ struct indirect_shadow_command
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
 {
-	PROFILE_INITIALIZATION();
-
 	this->device = device;
 	scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 	viewport = CD3DX12_VIEWPORT(0.f, 0.f, (float)width, (float)height);
