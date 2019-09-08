@@ -309,7 +309,7 @@ static void displayProfileInfo(debug_gui& gui)
 
 			uint32 color = (frameIndex == highlightFrameIndex) ? highlightFrameColor : frameColor;
 
-			if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Frame %u", frame->globalFrameID))
+			if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Frame %llu", frame->globalFrameID))
 			{
 				highlightFrameIndex = frameIndex;
 			}
@@ -333,7 +333,7 @@ static void displayProfileInfo(debug_gui& gui)
 			profile_frame* frame = recordedProfileFrames + highlightFrameIndex;
 			if (frame->endClock != 0)
 			{
-				gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %u", frame->globalFrameID);
+				gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %llu", frame->globalFrameID);
 
 				profile_display_state state;
 				state.colorIndex = 0;
@@ -342,7 +342,6 @@ static void displayProfileInfo(debug_gui& gui)
 				state.callDepth = currentDisplayCallDepth;
 				state.mouseHoverX = -1.f;
 
-				uint32 highestThreadIndex = 0;
 				for (uint32 threadIndex = 0; threadIndex < MAX_NUM_RECORDED_THREADS; ++threadIndex)
 				{
 					float top = threadIndex * barSpacing + topOffset;
@@ -355,7 +354,7 @@ static void displayProfileInfo(debug_gui& gui)
 				}
 
 				float top = topOffset - 30.f;
-				float bottom = topOffset + (highestThreadIndex + 1) * barSpacing + 30.f;
+				float bottom = topOffset + numProfileThreads * barSpacing + 30.f;
 				gui.quad(leftOffset, leftOffset + 1, top, bottom, 0xFFFFFFFF);
 				gui.quad(leftOffset + frameWidth60FPS, leftOffset + frameWidth60FPS + 1, top, bottom, 0xFFFFFFFF);
 				gui.quad(leftOffset + frameWidth30FPS, leftOffset + frameWidth30FPS + 1, top, bottom, 0xFFFFFFFF);
