@@ -2,6 +2,7 @@
 #include "command_list.h"
 #include "error.h"
 #include "command_queue.h"
+#include "profiling.h"
 
 #include <DirectXTex/DirectXTex/DirectXTex.h>
 
@@ -256,6 +257,8 @@ void dx_command_list::copyTextureSubresource(dx_texture& texture, uint32 firstSu
 
 void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips)
 {
+	PROFILE_FUNCTION();
+
 	fs::path path(filename);
 	assert(fs::exists(path));
 
@@ -397,6 +400,8 @@ void dx_command_list::copyTextureForReadback(dx_texture& texture, ComPtr<ID3D12R
 
 void dx_command_list::generateMips(dx_texture& texture)
 {
+	PROFILE_FUNCTION();
+
 	if (commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
 	{
 		if (!computeCommandList)
