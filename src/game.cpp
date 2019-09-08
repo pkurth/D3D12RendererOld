@@ -26,6 +26,8 @@ struct indirect_shadow_command
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
 {
+	PROFILE_INITIALIZATION();
+
 	this->device = device;
 	scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 	viewport = CD3DX12_VIEWPORT(0.f, 0.f, (float)width, (float)height);
@@ -42,8 +44,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		screenRTFormats.RTFormats[0] = DXGI_FORMAT_R10G10B10A2_UNORM;
 	}
 
-	// GBuffer.
 	{
+		PROFILE_BLOCK("Render targets");
+
 		// Albedo, AO.
 		{
 			DXGI_FORMAT albedoAOFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -133,8 +136,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		}
 	}
 
+
 	// Indirect.
 	{
+		PROFILE_BLOCK("Indirect pipeline");
+
 		ComPtr<ID3DBlob> vertexShaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_indirect_vs.cso", &vertexShaderBlob));
 		ComPtr<ID3DBlob> pixelShaderBlob;
@@ -181,7 +187,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		rootSignatureDesc.NumStaticSamplers = 1;
 		indirectGeometryRootSignature.initialize(device, rootSignatureDesc);
 
-		
+
 		{
 			struct pipeline_state_stream
 			{
@@ -286,6 +292,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	// Geometry. This writes to the GBuffer.
 	{
+		PROFILE_BLOCK("Geometry pipeline");
+
 		ComPtr<ID3DBlob> vertexShaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_vs.cso", &vertexShaderBlob));
 		ComPtr<ID3DBlob> pixelShaderBlob;
@@ -358,141 +366,197 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		SET_NAME(opaqueGeometryPipelineState, "Opaque Pipeline");
 	}
 
-	ComPtr<ID3DBlob> fullscreenTriangleVertexShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/fullscreen_triangle_vs.cso", &fullscreenTriangleVertexShaderBlob));
-
 
 	dx_command_queue& copyCommandQueue = dx_command_queue::copyCommandQueue;
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
-	sky.initialize(device, commandList, lightingRT);
-	lighting.initialize(device, commandList, lightingRT);
-	present.initialize(device, screenRTFormats);
-
-	gui.initialize(device, commandList, screenRTFormats);
-
-	cpu_mesh<vertex_3PUNT> indirect;
-	auto[sponzaSubmeshes, sponzaMaterials] = indirect.pushFromFile("res/sponza/sponza.obj");
-	append(indirectSubmeshes, sponzaSubmeshes);
-
-	indirectMesh.initialize(device, commandList, indirect);
-
-	indirectMaterials.resize(sponzaMaterials.size());
-	for (uint32 i = 0; i < sponzaMaterials.size(); ++i)
 	{
-		commandList->loadTextureFromFile(indirectMaterials[i].albedo, stringToWString(sponzaMaterials[i].albedoName), texture_type_color);
-		commandList->loadTextureFromFile(indirectMaterials[i].normal, stringToWString(sponzaMaterials[i].normalName), texture_type_noncolor);
-		commandList->loadTextureFromFile(indirectMaterials[i].roughness, stringToWString(sponzaMaterials[i].roughnessName), texture_type_noncolor);
-		commandList->loadTextureFromFile(indirectMaterials[i].metallic, stringToWString(sponzaMaterials[i].metallicName), texture_type_noncolor);
+		PROFILE_BLOCK("Sky, lighting, present pipeline");
+		sky.initialize(device, commandList, lightingRT);
+		lighting.initialize(device, commandList, lightingRT);
+		present.initialize(device, screenRTFormats);
 	}
 
-	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
-	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	descriptorHeapDesc.NumDescriptors = (uint32)indirectMaterials.size() * 4;
-	descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&indirectDescriptorHeap)));
-
-	uint32 descriptorHandleIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(indirectDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(indirectDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-
-	albedosOffset = gpuHandle;
-	for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 	{
-		device->CreateShaderResourceView(indirectMaterials[i].albedo.resource.Get(), nullptr, cpuHandle);
-		cpuHandle.Offset(descriptorHandleIncrementSize);
-		gpuHandle.Offset(descriptorHandleIncrementSize);
-	}
-	normalsOffset = gpuHandle;
-	for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-	{
-		device->CreateShaderResourceView(indirectMaterials[i].normal.resource.Get(), nullptr, cpuHandle);
-		cpuHandle.Offset(descriptorHandleIncrementSize);
-		gpuHandle.Offset(descriptorHandleIncrementSize);
-	}
-	roughnessesOffset = gpuHandle;
-	for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-	{
-		device->CreateShaderResourceView(indirectMaterials[i].roughness.resource.Get(), nullptr, cpuHandle);
-		cpuHandle.Offset(descriptorHandleIncrementSize);
-		gpuHandle.Offset(descriptorHandleIncrementSize);
-	}
-	metallicsOffset = gpuHandle;
-	for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-	{
-		device->CreateShaderResourceView(indirectMaterials[i].metallic.resource.Get(), nullptr, cpuHandle);
-		cpuHandle.Offset(descriptorHandleIncrementSize);
-		gpuHandle.Offset(descriptorHandleIncrementSize);
+		PROFILE_BLOCK("Init gui");
+		gui.initialize(device, commandList, screenRTFormats);
 	}
 
-	indirect_command* indirectCommands = new indirect_command[sponzaSubmeshes.size()];
-	indirect_shadow_command* indirectShadowCommands = new indirect_shadow_command[sponzaSubmeshes.size()];
-
-	mat4 model = createScaleMatrix(0.03f);
-
-	for (uint32 i = 0; i < sponzaSubmeshes.size(); ++i)
 	{
-		indirectCommands[i].modelMatrix = model;
-		indirectShadowCommands[i].modelMatrix = model;
+		PROFILE_BLOCK("Load sponza model");
 
-		uint32 id = i;
+		std::vector<submesh_material_info> sponzaMaterials;
 
-		submesh_info mesh = indirectSubmeshes[id];
+		{
+			PROFILE_BLOCK("Load sponza mesh");
 
-		indirectCommands[i].material.textureID = mesh.materialIndex;
-		indirectCommands[i].material.usageFlags = (USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
-		indirectCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
-		indirectCommands[i].material.drawID = i;
+			cpu_mesh<vertex_3PUNT> indirect;
+			auto [sponzaSubmeshes, sponzaMaterials_] = indirect.pushFromFile("res/sponza/sponza.obj");
+			append(indirectSubmeshes, sponzaSubmeshes);
 
-		indirectCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
-		indirectCommands[i].drawArguments.InstanceCount = 1;
-		indirectCommands[i].drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
-		indirectCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
-		indirectCommands[i].drawArguments.StartInstanceLocation = 0;
+			{
+				PROFILE_BLOCK("Upload to GPU");
+				indirectMesh.initialize(device, commandList, indirect);
+			}
 
-		indirectShadowCommands[i].drawArguments = indirectCommands[i].drawArguments;
+			sponzaMaterials = std::move(sponzaMaterials_);
+		}
+
+		{
+			PROFILE_BLOCK("Load sponza textures");
+
+			indirectMaterials.resize(sponzaMaterials.size());
+			for (uint32 i = 0; i < sponzaMaterials.size(); ++i)
+			{
+				commandList->loadTextureFromFile(indirectMaterials[i].albedo, stringToWString(sponzaMaterials[i].albedoName), texture_type_color);
+				commandList->loadTextureFromFile(indirectMaterials[i].normal, stringToWString(sponzaMaterials[i].normalName), texture_type_noncolor);
+				commandList->loadTextureFromFile(indirectMaterials[i].roughness, stringToWString(sponzaMaterials[i].roughnessName), texture_type_noncolor);
+				commandList->loadTextureFromFile(indirectMaterials[i].metallic, stringToWString(sponzaMaterials[i].metallicName), texture_type_noncolor);
+			}
+		}
+		{
+			PROFILE_BLOCK("Set up descriptor heap");
+
+			D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
+			descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+			descriptorHeapDesc.NumDescriptors = (uint32)indirectMaterials.size() * 4;
+			descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+			checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&indirectDescriptorHeap)));
+
+			uint32 descriptorHandleIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+			CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(indirectDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+			CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(indirectDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+
+
+			albedosOffset = gpuHandle;
+			for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+			{
+				device->CreateShaderResourceView(indirectMaterials[i].albedo.resource.Get(), nullptr, cpuHandle);
+				cpuHandle.Offset(descriptorHandleIncrementSize);
+				gpuHandle.Offset(descriptorHandleIncrementSize);
+			}
+			normalsOffset = gpuHandle;
+			for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+			{
+				device->CreateShaderResourceView(indirectMaterials[i].normal.resource.Get(), nullptr, cpuHandle);
+				cpuHandle.Offset(descriptorHandleIncrementSize);
+				gpuHandle.Offset(descriptorHandleIncrementSize);
+			}
+			roughnessesOffset = gpuHandle;
+			for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+			{
+				device->CreateShaderResourceView(indirectMaterials[i].roughness.resource.Get(), nullptr, cpuHandle);
+				cpuHandle.Offset(descriptorHandleIncrementSize);
+				gpuHandle.Offset(descriptorHandleIncrementSize);
+			}
+			metallicsOffset = gpuHandle;
+			for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+			{
+				device->CreateShaderResourceView(indirectMaterials[i].metallic.resource.Get(), nullptr, cpuHandle);
+				cpuHandle.Offset(descriptorHandleIncrementSize);
+				gpuHandle.Offset(descriptorHandleIncrementSize);
+			}
+		}
+
+		{
+			PROFILE_BLOCK("Set up indirect command buffers");
+
+			indirect_command* indirectCommands = new indirect_command[indirectSubmeshes.size()];
+			indirect_shadow_command* indirectShadowCommands = new indirect_shadow_command[indirectSubmeshes.size()];
+
+			mat4 model = createScaleMatrix(0.03f);
+
+			for (uint32 i = 0; i < indirectSubmeshes.size(); ++i)
+			{
+				indirectCommands[i].modelMatrix = model;
+				indirectShadowCommands[i].modelMatrix = model;
+
+				uint32 id = i;
+
+				submesh_info mesh = indirectSubmeshes[id];
+
+				indirectCommands[i].material.textureID = mesh.materialIndex;
+				indirectCommands[i].material.usageFlags = (USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
+				indirectCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
+				indirectCommands[i].material.drawID = i;
+
+				indirectCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
+				indirectCommands[i].drawArguments.InstanceCount = 1;
+				indirectCommands[i].drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
+				indirectCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
+				indirectCommands[i].drawArguments.StartInstanceLocation = 0;
+
+				indirectShadowCommands[i].drawArguments = indirectCommands[i].drawArguments;
+			}
+
+			indirectCommandBuffer.initialize(device, indirectCommands, (uint32)indirectSubmeshes.size(), commandList);
+			indirectShadowCommandBuffer.initialize(device, indirectShadowCommands, (uint32)indirectSubmeshes.size(), commandList);
+
+			delete[] indirectShadowCommands;
+			delete[] indirectCommands;
+		}
+
 	}
-
-	indirectCommandBuffer.initialize(device, indirectCommands, (uint32)sponzaSubmeshes.size(), commandList);
-	indirectShadowCommandBuffer.initialize(device, indirectShadowCommands, (uint32)sponzaSubmeshes.size(), commandList);
-	
-	delete[] indirectShadowCommands;
-	delete[] indirectCommands;
-
 
 
 	sun.worldSpaceDirection = comp_vec(-0.6f, -1.f, -0.3f, 0.f).normalize();
 	sun.color = vec4(1.f, 0.93f, 0.76f, 0.f) * 3.f;
 	//sun.color = vec4(1.f, 0, 0, 1.f) * 8.f;
 
-	dx_texture equirectangular;
-	commandList->loadTextureFromFile(equirectangular, L"res/hdris/sunset_in_the_chalk_quarry_4k.hdr", texture_type_noncolor);
-	commandList->convertEquirectangularToCubemap(equirectangular, cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
-	commandList->createIrradianceMap(cubemap, irradiance);
-	commandList->prefilterEnvironmentMap(cubemap, prefilteredEnvironment, 256);
-
-
-	uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
-	copyCommandQueue.waitForFenceValue(fenceValue);
-
-	dx_command_queue& renderCommandQueue = dx_command_queue::renderCommandQueue;
-	commandList = renderCommandQueue.getAvailableCommandList();
-
-
-	// Transition indirect textures to pixel shader state.
-	for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 	{
-		commandList->transitionBarrier(indirectMaterials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->transitionBarrier(indirectMaterials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->transitionBarrier(indirectMaterials[i].roughness, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->transitionBarrier(indirectMaterials[i].metallic, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		PROFILE_BLOCK("Load environment");
+
+		dx_texture equirectangular;
+		{
+			PROFILE_BLOCK("Load HDRI");
+			commandList->loadTextureFromFile(equirectangular, L"res/hdris/sunset_in_the_chalk_quarry_4k_16bit.hdr", texture_type_noncolor);
+		}
+		{
+			PROFILE_BLOCK("Convert to cubemap");
+			commandList->convertEquirectangularToCubemap(equirectangular, cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
+		}
+		{
+			PROFILE_BLOCK("Create irradiance map");
+			commandList->createIrradianceMap(cubemap, irradiance);
+		}
+		{
+			PROFILE_BLOCK("Prefilter environment");
+			commandList->prefilterEnvironmentMap(cubemap, prefilteredEnvironment, 256);
+		}
 	}
 
-	fenceValue = renderCommandQueue.executeCommandList(commandList);
-	renderCommandQueue.waitForFenceValue(fenceValue);
+	{
+		PROFILE_BLOCK("Execute copy command list");
 
-	
+		uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
+		copyCommandQueue.waitForFenceValue(fenceValue);
+	}
+
+	{
+		PROFILE_BLOCK("Transition textures to resource state");
+
+		dx_command_queue& renderCommandQueue = dx_command_queue::renderCommandQueue;
+		commandList = renderCommandQueue.getAvailableCommandList();
+
+
+		// Transition indirect textures to pixel shader state.
+		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+		{
+			commandList->transitionBarrier(indirectMaterials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->transitionBarrier(indirectMaterials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->transitionBarrier(indirectMaterials[i].roughness, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->transitionBarrier(indirectMaterials[i].metallic, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		}
+		
+		{
+			PROFILE_BLOCK("Execute transition command list");
+
+			uint64 fenceValue = renderCommandQueue.executeCommandList(commandList);
+			renderCommandQueue.waitForFenceValue(fenceValue);
+		}
+	}
+
 	// Loading scene done.
 	contentLoaded = true;
 
@@ -538,7 +602,7 @@ void dx_game::resize(uint32 width, uint32 height)
 
 void dx_game::update(uint64 currentFrameID, float dt)
 {
-	camera.rotation = createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw) 
+	camera.rotation = createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw)
 		* createQuaternionFromAxisAngle(comp_vec(1.f, 0.f, 0.f), camera.pitch);
 
 	camera.position = camera.position + camera.rotation * inputMovement * dt * CAMERA_MOVEMENT_SPEED * inputSpeedModifier;
@@ -676,8 +740,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 			{
 				submesh_info submesh = sceneSubmeshes[i];
 				commandList->drawIndexed(submesh.numTriangles * 3, 1, submesh.firstTriangle * 3, submesh.baseVertex, 0);
+			}
 		}
-	}
 #endif
 	}
 
@@ -691,10 +755,10 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	commandList->transitionBarrier(depthTexture, D3D12_RESOURCE_STATE_DEPTH_READ);
 
 	// Lighting.
-	lighting.render(commandList, 
-		irradiance, prefilteredEnvironment, 
-		albedoAOTexture, normalRoughnessMetalnessTexture, depthTextureCopy, 
-		sunShadowMapTexture, sun.numShadowCascades, 
+	lighting.render(commandList,
+		irradiance, prefilteredEnvironment,
+		albedoAOTexture, normalRoughnessMetalnessTexture, depthTextureCopy,
+		sunShadowMapTexture, sun.numShadowCascades,
 		cameraCBAddress, sunCBAddress);
 
 

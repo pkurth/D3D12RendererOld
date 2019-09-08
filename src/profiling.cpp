@@ -291,6 +291,7 @@ static void displayProfileInfo(debug_gui& gui)
 			}
 		}
 
+		uint32 initColor = color_32(0, 255, 0, 255);
 		uint32 frameColor = color_32(255, 0, 0, 255);
 		uint32 highlightFrameColor = color_32(255, 255, 0, 255);
 
@@ -307,11 +308,22 @@ static void displayProfileInfo(debug_gui& gui)
 			float right = left + barWidth;
 			float top = bottom - height;
 
-			uint32 color = (frameIndex == highlightFrameIndex) ? highlightFrameColor : frameColor;
+			uint32 color = (frame->globalFrameID == -1) ? initColor : frameColor;
+			color = (frameIndex == highlightFrameIndex) ? highlightFrameColor : color;
 
-			if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Frame %llu", frame->globalFrameID))
+			if (frame->globalFrameID == -1)
 			{
-				highlightFrameIndex = frameIndex;
+				if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Initialization"))
+				{
+					highlightFrameIndex = frameIndex;
+				}
+			}
+			else
+			{
+				if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Frame %llu", frame->globalFrameID))
+				{
+					highlightFrameIndex = frameIndex;
+				}
 			}
 		}
 
@@ -323,17 +335,27 @@ static void displayProfileInfo(debug_gui& gui)
 
 		if (highlightFrameIndex != -1)
 		{
-			const float topOffset = 520.f;
-			const float barHeight = 25.f;
-			const float barSpacing = 30.f;
-			const float frameWidth60FPS = 500.f;
-			const float frameWidth30FPS = frameWidth60FPS * 2.f;
-			const float leftOffset = 100.f;
+			float topOffset = 520.f;
+			float barHeight = 25.f;
+			float barSpacing = 30.f;
+			float frameWidth60FPS = 500.f;
+			float frameWidth30FPS = frameWidth60FPS * 2.f;
+			float leftOffset = 100.f;
 
 			profile_frame* frame = recordedProfileFrames + highlightFrameIndex;
 			if (frame->endClock != 0)
 			{
-				gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %llu", frame->globalFrameID);
+				if (frame->globalFrameID == -1)
+				{
+					gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Initialization");
+
+					frameWidth60FPS = 2.f;
+					frameWidth30FPS = frameWidth60FPS * 2.f;
+				}
+				else
+				{
+					gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %llu", frame->globalFrameID);
+				}
 
 				profile_display_state state;
 				state.colorIndex = 0;
@@ -355,19 +377,23 @@ static void displayProfileInfo(debug_gui& gui)
 
 				float top = topOffset - 30.f;
 				float bottom = topOffset + numProfileThreads * barSpacing + 30.f;
-				gui.quad(leftOffset, leftOffset + 1, top, bottom, 0xFFFFFFFF);
-				gui.quad(leftOffset + frameWidth60FPS, leftOffset + frameWidth60FPS + 1, top, bottom, 0xFFFFFFFF);
-				gui.quad(leftOffset + frameWidth30FPS, leftOffset + frameWidth30FPS + 1, top, bottom, 0xFFFFFFFF);
 
-				gui.textAt(leftOffset, top, 0xFFFFFFFF, "0 ms");
-				gui.textAt(leftOffset + frameWidth60FPS, top, 0xFFFFFFFF, "16.7 ms");
-				gui.textAt(leftOffset + frameWidth30FPS, top, 0xFFFFFFFF, "33.3 ms");
-
-				float millisecondSpacing = frameWidth30FPS / 33.3f;
-				for (uint32 i = 1; i <= 33; ++i)
+				if (frame->globalFrameID != -1)
 				{
-					uint32 color = (i % 5 == 0) ? 0xEAFFFFFF : 0x7AFFFFFF;
-					gui.quad(leftOffset + i * millisecondSpacing, leftOffset + i * millisecondSpacing + 1.f, top, bottom, color);
+					gui.quad(leftOffset, leftOffset + 1, top, bottom, 0xFFFFFFFF);
+					gui.quad(leftOffset + frameWidth60FPS, leftOffset + frameWidth60FPS + 1, top, bottom, 0xFFFFFFFF);
+					gui.quad(leftOffset + frameWidth30FPS, leftOffset + frameWidth30FPS + 1, top, bottom, 0xFFFFFFFF);
+
+					gui.textAt(leftOffset, top, 0xFFFFFFFF, "0 ms");
+					gui.textAt(leftOffset + frameWidth60FPS, top, 0xFFFFFFFF, "16.7 ms");
+					gui.textAt(leftOffset + frameWidth30FPS, top, 0xFFFFFFFF, "33.3 ms");
+
+					float millisecondSpacing = frameWidth30FPS / 33.3f;
+					for (uint32 i = 1; i <= 33; ++i)
+					{
+						uint32 color = (i % 5 == 0) ? 0xEAFFFFFF : 0x7AFFFFFF;
+						gui.quad(leftOffset + i * millisecondSpacing, leftOffset + i * millisecondSpacing + 1.f, top, bottom, color);
+					}
 				}
 
 				if (state.mouseHoverX > 0.f)
