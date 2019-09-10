@@ -1,5 +1,4 @@
 #include "camera.h"
-#include "quaternion.h"
 
 struct model_cb
 {
@@ -21,7 +20,7 @@ struct vs_input
 struct vs_output
 {
 	float2 uv		: TEXCOORDS;
-	quat tbn		: TANGENT_FRAME;
+	float3x3 tbn	: TANGENT_FRAME;
 	float4 position : SV_Position;
 };
 
@@ -36,7 +35,7 @@ vs_output main(vs_input IN)
 	float3 normal = normalize(mul(model.m, float4(IN.normal, 0.f)).xyz);
 	float3 tangent = normalize(mul(model.m, float4(IN.tangent, 0.f)).xyz);
 	float3 bitangent = normalize(cross(normal, tangent)); 
-	OUT.tbn = quatFrom3x3(float3x3(tangent, bitangent, normal));
+	OUT.tbn = float3x3(tangent, bitangent, normal);
 
 	return OUT;
 }

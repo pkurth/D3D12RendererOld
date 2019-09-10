@@ -3,7 +3,7 @@ typedef float4 quat;
 
 float3 quatRotate(in float3 v, in quat q)
 {
-	float3 t = 2 * cross(q.xyz, v);
+	float3 t = 2.f * cross(q.xyz, v);
 	return v + q.w * t + cross(q.xyz, t);
 }
 
@@ -14,7 +14,7 @@ quat quatFrom3x3(in float3x3 m)
 	float trace = a[0][0] + a[1][1] + a[2][2];
 	if (trace > 0)
 	{
-		float s = 0.5f / sqrt(trace + 1.0f);
+		float s = 0.5f / sqrt(trace + 1.f);
 		q.w = 0.25f / s;
 		q.x = (a[2][1] - a[1][2]) * s;
 		q.y = (a[0][2] - a[2][0]) * s;
@@ -24,7 +24,7 @@ quat quatFrom3x3(in float3x3 m)
 	{
 		if (a[0][0] > a[1][1] && a[0][0] > a[2][2])
 		{
-			float s = 2.0f * sqrt(1.0f + a[0][0] - a[1][1] - a[2][2]);
+			float s = 2.f * sqrt(1.0f + a[0][0] - a[1][1] - a[2][2]);
 			q.w = (a[2][1] - a[1][2]) / s;
 			q.x = 0.25f * s;
 			q.y = (a[0][1] + a[1][0]) / s;
@@ -32,7 +32,7 @@ quat quatFrom3x3(in float3x3 m)
 		}
 		else if (a[1][1] > a[2][2])
 		{
-			float s = 2.0f * sqrt(1.0f + a[1][1] - a[0][0] - a[2][2]);
+			float s = 2.f * sqrt(1.f + a[1][1] - a[0][0] - a[2][2]);
 			q.w = (a[0][2] - a[2][0]) / s;
 			q.x = (a[0][1] + a[1][0]) / s;
 			q.y = 0.25f * s;
@@ -40,7 +40,7 @@ quat quatFrom3x3(in float3x3 m)
 		}
 		else
 		{
-			float s = 2.0f * sqrt(1.0f + a[2][2] - a[0][0] - a[1][1]);
+			float s = 2.f * sqrt(1.0f + a[2][2] - a[0][0] - a[1][1]);
 			q.w = (a[1][0] - a[0][1]) / s;
 			q.x = (a[0][2] + a[2][0]) / s;
 			q.y = (a[1][2] + a[2][1]) / s;

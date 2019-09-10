@@ -115,6 +115,10 @@ union vec3
 
 	inline operator const DirectX::XMFLOAT3& () const { return dxvector; }
 	inline operator DirectX::XMVECTOR() const { return DirectX::XMLoadFloat3(&dxvector); } // This initializes w to 0.
+
+	static const vec3 right;
+	static const vec3 up;
+	static const vec3 forward;
 };
 
 union vec4
@@ -344,6 +348,26 @@ inline comp_mat createModelMatrix(comp_vec trans, comp_quat rot, float scale = 1
 inline comp_quat createQuaternionFromAxisAngle(comp_vec axis, float angle)
 {
 	return DirectX::XMQuaternionRotationAxis(axis, angle);
+}
+
+inline comp_vec dot2(comp_vec a, comp_vec b)
+{
+	return DirectX::XMVector2Dot(a, b);
+}
+
+inline comp_vec dot3(comp_vec a, comp_vec b)
+{
+	return DirectX::XMVector3Dot(a, b);
+}
+
+inline comp_vec dot4(comp_vec a, comp_vec b)
+{
+	return DirectX::XMVector4Dot(a, b);
+}
+
+inline comp_vec cross(comp_vec a, comp_vec b)
+{
+	return DirectX::XMVector3Cross(a, b);
 }
 
 

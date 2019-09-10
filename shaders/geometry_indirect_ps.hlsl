@@ -1,11 +1,10 @@
 #include "normals.h"
 #include "material.h"
-#include "quaternion.h"
 
 struct ps_input
 {
 	float2 uv		: TEXCOORDS;
-	quat tbn		: TANGENT_FRAME;
+	float3x3 tbn	: TANGENT_FRAME;
 };
 
 struct ps_output
@@ -23,16 +22,6 @@ Texture2D<float4> normalTextures[64]	: register(t0, space1);
 Texture2D<float> roughnessTextures[64]	: register(t0, space2);
 Texture2D<float> metallicTextures[64]	: register(t0, space3);
 
-uint wang_hash(uint seed)
-{
-	seed = (seed ^ 61) ^ (seed >> 16);
-	seed *= 9;
-	seed = seed ^ (seed >> 4);
-	seed *= 0x27d4eb2d;
-	seed = seed ^ (seed >> 15);
-	return seed;
-}
-
 ps_output main(ps_input IN)
 {
 	ps_output OUT;
@@ -42,21 +31,9 @@ ps_output main(ps_input IN)
 		: float4(1.f, 1.f, 1.f, 1.f))
 		* material.albedoTint;
 
-	/*float4 color;
-	uint a = wang_hash(material.drawID);
-	uint b = wang_hash(a);
-	uint c = wang_hash(b);
-	color.x = a / 4294967296.f;
-	color.y = b / 4294967296.f;
-	color.z = c / 4294967296.f;*/
-
-
-	float3 N = quatRotate((material.usageFlags & USE_NORMAL_TEXTURE)
-		? normalize(normalTextures[material.textureID].Sample(linearWrapSampler, IN.uv).xyz * 2.f - float3(1.f, 1.f, 1.f))
-		: float3(0.f, 0.f, 1.f),
-		normalize(IN.tbn));
-
-	//float3 RMAO = rmaoTextures[material.textureID].Sample(linearWrapSampler, IN.uv).xyz;
+	float3 N = (material.usageFlags & USE_NORMAL_TEXTURE)
+		? mul(normalTextures[material.textureID].Sample(linearWrapSampler, IN.uv).xyz * 2.f - float3(1.f, 1.f, 1.f), IN.tbn)
+		: IN.tbn[2];
 
 	float roughness = (material.usageFlags & USE_ROUGHNESS_TEXTURE) 
 		? roughnessTextures[material.textureID].Sample(linearWrapSampler, IN.uv) 

@@ -105,8 +105,8 @@ struct cpu_mesh
 
 	submesh_info pushQuad(float radius = 1.f);
 	submesh_info pushCube(float radius = 1.f, bool invertWindingOrder = false);
-	submesh_info pushSphere(uint32 slices, uint32 rows, float radius = 1.f);
-	submesh_info pushCapsule(uint32 slices, uint32 rows, float height, float radius = 1.f);
+	submesh_info pushSphere(uint16 slices, uint16 rows, float radius = 1.f);
+	submesh_info pushCapsule(uint16 slices, uint16 rows, float height, float radius = 1.f);
 
 	std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> pushFromFile(const std::string& filename);
 
@@ -432,7 +432,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushCube(float radius, bool invertWindin
 }
 
 template<typename vertex_t>
-inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, float radius)
+inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint16 slices, uint16 rows, float radius)
 {
 	assert(slices > 2);
 	assert(rows > 0);
@@ -441,14 +441,15 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, f
 	float horzDeltaAngle = 2.f * DirectX::XM_PI / slices;
 
 	assert(slices * rows + 2 <= UINT16_MAX);
-	vertex_3PUN* vertices = new vertex_3PUN[slices * rows + 2];
+	vertex_3PUNT* vertices = new vertex_3PUNT[slices * rows + 2];
 	indexed_triangle16* triangles = new indexed_triangle16[2 * rows * slices];
 
-	uint32 vertIndex = 0;
+	uint16 vertIndex = 0;
 
 	// Vertices.
 	vertices[vertIndex].position = vec3(0.f, -radius, 0.f);
 	vertices[vertIndex].normal = vec3(0.f, -1.f, 0.f);
+	vertices[vertIndex].tangent = vec3(1.f, 0.f, 0.f);
 	vertices[vertIndex].uv = vec2(0.5f, 0.f);
 	++vertIndex;
 
@@ -466,6 +467,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, f
 			vec3 nor(vertexX, vertexY, vertexZ);
 			vertices[vertIndex].position = pos;
 			vertices[vertIndex].normal = nor;
+			vertices[vertIndex].tangent = cross(vec3::up, vertices[vertIndex].normal).normalize();
 
 			float u = asinf(vertexX) / DirectX::XM_PI + 0.5f;
 			float v = asinf(vertexY) / DirectX::XM_PI + 0.5f;
@@ -475,6 +477,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, f
 	}
 	vertices[vertIndex].position = vec3(0.f, radius, 0.f);
 	vertices[vertIndex].normal = vec3(0.f, 1.f, 0.f);
+	vertices[vertIndex].tangent = vec3(1.f, 0.f, 0.f);
 	vertices[vertIndex].uv = vec2(0.5f, 1.f);
 	++vertIndex;
 
@@ -483,26 +486,26 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, f
 	uint32 triIndex = 0;
 
 	// Indices.
-	for (uint32 x = 0; x < slices - 1; ++x)
+	for (uint16 x = 0; x < slices - 1; ++x)
 	{
-		triangles[triIndex++] = indexed_triangle16{ 0, x + 1, x + 2 };
+		triangles[triIndex++] = indexed_triangle16{ 0, x + 1u, x + 2u };
 	}
 	triangles[triIndex++] = indexed_triangle16{ 0, slices, 1 };
-	for (uint32 y = 0; y < rows - 1; ++y)
+	for (uint16 y = 0; y < rows - 1; ++y)
 	{
-		for (uint32 x = 0; x < slices - 1; ++x)
+		for (uint16 x = 0; x < slices - 1; ++x)
 		{
-			triangles[triIndex++] = indexed_triangle16{ y * slices + 1 + x, (y + 1) * slices + 2 + x, y * slices + 2 + x };
-			triangles[triIndex++] = indexed_triangle16{ y * slices + 1 + x, (y + 1) * slices + 1 + x, (y + 1) * slices + 2 + x };
+			triangles[triIndex++] = indexed_triangle16{ y * slices + 1u + x, (y + 1u) * slices + 2u + x, y * slices + 2u + x };
+			triangles[triIndex++] = indexed_triangle16{ y * slices + 1u + x, (y + 1u) * slices + 1u + x, (y + 1u) * slices + 2u + x };
 		}
-		triangles[triIndex++] = indexed_triangle16{ y * slices + slices, (y + 1) * slices + 1, y * slices + 1 };
-		triangles[triIndex++] = indexed_triangle16{ y * slices + slices, (y + 1) * slices + slices, (y + 1) * slices + 1 };
+		triangles[triIndex++] = indexed_triangle16{ (uint16)(y * slices + slices), (uint16)((y + 1u) * slices + 1u), (uint16)(y * slices + 1u) };
+		triangles[triIndex++] = indexed_triangle16{ (uint16)(y * slices + slices), (uint16)((y + 1u) * slices + slices), (uint16)((y + 1u) * slices + 1u) };
 	}
-	for (uint32 x = 0; x < slices - 1; ++x)
+	for (uint16 x = 0; x < slices - 1; ++x)
 	{
-		triangles[triIndex++] = indexed_triangle16{ vertIndex - 2 - x, vertIndex - 3 - x, vertIndex - 1 };
+		triangles[triIndex++] = indexed_triangle16{ vertIndex - 2u - x, vertIndex - 3u - x, vertIndex - 1u };
 	}
-	triangles[triIndex++] = indexed_triangle16{ vertIndex - 1 - slices, vertIndex - 2, vertIndex - 1 };
+	triangles[triIndex++] = indexed_triangle16{ vertIndex - 1u - slices, vertIndex - 2u, vertIndex - 1u };
 
 	assert(triIndex == 2 * rows * slices);
 
@@ -519,6 +522,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, f
 		setPosition(this->vertices[i + baseVertex], vertices[i].position);
 		setUV(this->vertices[i + baseVertex], vertices[i].uv);
 		setNormal(this->vertices[i + baseVertex], vertices[i].normal);
+		setTangent(this->vertices[i + baseVertex], vertices[i].tangent);
 	}
 
 	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(indexed_triangle16) * triIndex);
@@ -530,7 +534,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint32 slices, uint32 rows, f
 }
 
 template<typename vertex_t>
-inline submesh_info cpu_mesh<vertex_t>::pushCapsule(uint32 slices, uint32 rows, float height, float radius)
+inline submesh_info cpu_mesh<vertex_t>::pushCapsule(uint16 slices, uint16 rows, float height, float radius)
 {
 	assert(slices > 2);
 	assert(rows > 0);
