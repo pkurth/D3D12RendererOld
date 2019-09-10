@@ -598,7 +598,7 @@ void dx_game::resize(uint32 width, uint32 height)
 	}
 }
 
-void dx_game::update(uint64 currentFrameID, float dt)
+void dx_game::update(float dt)
 {
 	camera.rotation = createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw)
 		* createQuaternionFromAxisAngle(comp_vec(1.f, 0.f, 0.f), camera.pitch);
@@ -609,7 +609,6 @@ void dx_game::update(uint64 currentFrameID, float dt)
 	sun.updateMatrices(camera.getWorldSpaceFrustum());
 
 	this->dt = dt;
-	this->currentFrameID = currentFrameID;
 
 	DEBUG_TAB(gui, "Stats")
 	{
@@ -768,7 +767,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	present.render(commandList, hdrTexture);
 
 	// GUI.
-	processAndDisplayProfileEvents(currentFrameID, gui);
+	processAndDisplayProfileEvents(gui);
 	gui.render(commandList, viewport); // Probably not completely correct here, since alpha blending assumes linear colors?
 }
 

@@ -38,7 +38,7 @@ public:
 	void initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth = color_depth_8);
 	void resize(uint32 width, uint32 height);
 
-	void update(uint64 currentFrameID, float dt);
+	void update(float dt);
 	void render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV);
 
 	bool keyDownCallback(keyboard_event event);
@@ -92,7 +92,6 @@ private:
 	uint32 width;
 	uint32 height;
 	float dt;
-	uint64 currentFrameID;
 
 	D3D12_VIEWPORT viewport;
 	D3D12_RECT scissorRect;

@@ -557,7 +557,7 @@ int main()
 			float dt = (now - lastBeforeUpdate).count() * 1e-9f;
 			lastBeforeUpdate = now;
 
-			game.update(frameID, dt);
+			game.update(dt);
 		}
 
 

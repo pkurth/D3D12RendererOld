@@ -421,7 +421,7 @@ static void displayProfileInfo(debug_gui& gui)
 	}
 }
 
-void processAndDisplayProfileEvents(uint64 currentFrameID, debug_gui& gui)
+void processAndDisplayProfileEvents(debug_gui& gui)
 {
 	PROFILE_FUNCTION();
 
