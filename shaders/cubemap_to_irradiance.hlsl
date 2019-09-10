@@ -71,7 +71,7 @@ void main(cs_input IN)
 	// First check if the thread is in the cubemap dimensions.
 	if (texCoord.x >= irradianceMapSize || texCoord.y >= irradianceMapSize) return;
 
-	// Map the UV coords of the cubemap face to a direction
+	// Map the UV coords of the cubemap face to a direction.
 	// [(0, 0), (1, 1)] => [(-0.5, -0.5), (0.5, 0.5)]
 	float3 dir = float3(texCoord.xy / float(irradianceMapSize) - 0.5f, 0.5f);
 	dir = normalize(mul(rotateUV[texCoord.z], dir));
@@ -82,24 +82,35 @@ void main(cs_input IN)
 
 	float3 irradiance = float3(0.f, 0.f, 0.f);
 
+
+	uint srcWidth, srcHeight, numMipLevels;
+	srcTexture.GetDimensions(0, srcWidth, srcHeight, numMipLevels);
+
+	float sampleMipLevel = log2((float)srcWidth / (float)irradianceMapSize);
+
 	const float sampleDelta = 0.025f;
 	float nrSamples = 0.f;
 	for (float phi = 0.f; phi < 2.f * pi; phi += sampleDelta)
 	{
 		for (float theta = 0.f; theta < 0.5f * pi; theta += sampleDelta)
 		{
-			// spherical to cartesian (in tangent space)
-			float3 tangentSample = float3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
-			// tangent space to world
+			float sinTheta, cosTheta;
+			float sinPhi, cosPhi;
+			sincos(theta, sinTheta, cosTheta);
+			sincos(phi, sinPhi, cosPhi);
+
+			// Spherical to cartesian (in tangent space).
+			float3 tangentSample = float3(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta);
+			// Tangent space to world.
 			float3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * dir;
 
-			float4 color = srcTexture.SampleLevel(linearRepeatSampler, sampleVec, 0);
-			irradiance += color.xyz * cos(theta) * sin(theta);
+			float4 color = srcTexture.SampleLevel(linearRepeatSampler, sampleVec, sampleMipLevel);
+			irradiance += color.xyz * cosTheta * sinTheta;
 			nrSamples++;
 		}
 	}
 
 	irradiance = pi * irradiance * (1.f / float(nrSamples));
 
-	outIrradiance[texCoord] = float4(irradiance, 1);
+	outIrradiance[texCoord] = float4(irradiance, 1.f);
 }

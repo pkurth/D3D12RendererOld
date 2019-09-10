@@ -623,6 +623,7 @@ void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangula
 	cubemap.initialize(device, cubemapDesc);
 
 	cubemapDesc = CD3DX12_RESOURCE_DESC(cubemap.resource->GetDesc());
+	numMips = cubemapDesc.MipLevels;
 
 	ComPtr<ID3D12Resource> cubemapResource = cubemap.resource;
 	ComPtr<ID3D12Resource> stagingResource = cubemapResource;
@@ -767,7 +768,7 @@ void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& i
 	uavDesc.Texture2DArray.ArraySize = 6;
 	uavDesc.Texture2DArray.MipSlice = 0;
 
-	cubemapToIrradianceCB.irradianceMapSize = irradianceDesc.Height;
+	cubemapToIrradianceCB.irradianceMapSize = resolution;
 
 	setCompute32BitConstants(cubemap_to_irradiance_param_constant_buffer, cubemapToIrradianceCB);
 

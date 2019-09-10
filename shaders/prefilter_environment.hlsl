@@ -71,21 +71,37 @@ static const float3x3 rotateUV[6] = {
 
 static float4 filter(uint mip, float3 N, float3 V)
 {
-	float relMipLevel = float(mip) / (totalNumMipLevels - 1);
+	float roughness = float(mip) / (totalNumMipLevels - 1);
 
 	const uint SAMPLE_COUNT = 1024u;
 	float totalWeight = 0.f;
 	float3 prefilteredColor = float3(0.f, 0.f, 0.f);
+
+
+	uint width, height, numMipLevels;
+	srcTexture.GetDimensions(0, width, height, numMipLevels);
+
 	for (uint i = 0u; i < SAMPLE_COUNT; ++i)
 	{
 		float2 Xi = hammersley(i, SAMPLE_COUNT);
-		float3 H = importanceSampleGGX(Xi, N, relMipLevel);
+		float3 H = importanceSampleGGX(Xi, N, roughness);
 		float3 L = normalize(2.f * dot(V, H) * H - V);
 
 		float NdotL = max(dot(N, L), 0.f);
+		float NdotH = max(dot(N, H), 0.f);
+		float HdotV = max(dot(H, V), 0.f);
 		if (NdotL > 0.f)
 		{
-			prefilteredColor += srcTexture.SampleLevel(linearRepeatSampler, L, 0).xyz * NdotL;
+			float D = distributionGGX(N, H, roughness);
+			float pdf = (D * NdotH / (4.f * HdotV)) + 0.0001f;
+
+			uint resolution = cubemapSize;
+			float saTexel = 4.f * pi / (6.f * width * height);
+			float saSample = 1.f / (SAMPLE_COUNT * pdf + 0.00001f);
+
+			float sampleMipLevel = (roughness == 0.f) ? 0.f : 0.5f * log2(saSample / saTexel);
+
+			prefilteredColor += srcTexture.SampleLevel(linearRepeatSampler, L, sampleMipLevel).xyz * NdotL;
 			totalWeight += NdotL;
 		}
 	}
