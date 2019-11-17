@@ -221,8 +221,6 @@
     <FxCompile Include="shaders\equirectangular_to_cubemap.hlsl" />
     <FxCompile Include="shaders\sky_vs.hlsl" />
     <FxCompile Include="shaders\sky_ps.hlsl" />
-    <FxCompile Include="shaders\geometry_vs.hlsl" />
-    <FxCompile Include="shaders\geometry_ps.hlsl" />
     <FxCompile Include="shaders\cubemap_to_irradiance.hlsl" />
     <FxCompile Include="shaders\prefilter_environment.hlsl" />
     <FxCompile Include="shaders\integrate_brdf.hlsl" />
@@ -230,11 +228,13 @@
     <FxCompile Include="shaders\fullscreen_triangle_vs.hlsl" />
     <FxCompile Include="shaders\font_ps.hlsl" />
     <FxCompile Include="shaders\font_vs.hlsl" />
-    <FxCompile Include="shaders\lighting_ps.hlsl" />
-    <FxCompile Include="shaders\geometry_indirect_ps.hlsl" />
-    <FxCompile Include="shaders\geometry_indirect_vs.hlsl" />
     <FxCompile Include="shaders\flat_2d_ps.hlsl" />
     <FxCompile Include="shaders\flat_2d_vs.hlsl" />
+    <FxCompile Include="shaders\deferred_geometry_indirect_ps.hlsl" />
+    <FxCompile Include="shaders\deferred_geometry_indirect_vs.hlsl" />
+    <FxCompile Include="shaders\deferred_geometry_ps.hlsl" />
+    <FxCompile Include="shaders\deferred_geometry_vs.hlsl" />
+    <FxCompile Include="shaders\deferred_lighting_ps.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

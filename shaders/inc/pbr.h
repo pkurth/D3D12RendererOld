@@ -112,3 +112,57 @@ static float3 importanceSampleGGX(float2 Xi, float3 N, float roughness)
 	float3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
 	return normalize(sampleVec);
 }
+
+static float3 calculateAmbientLighting(float3 albedo, 
+	TextureCube<float4> irradianceTexture, TextureCube<float4> environmentTexture, Texture2D<float4> brdf, SamplerState brdfSampler,
+	float3 N, float3 V, float3 F0, float roughness, float metallic, float ao)
+{
+	// Common.
+	float NdotV = max(dot(N, V), 0.f);
+	float3 F = fresnelSchlickRoughness(NdotV, F0, roughness);
+	float3 kS = F;
+	float3 kD = float3(1.f, 1.f, 1.f) - kS;
+	kD *= 1.f - metallic;
+
+	// Diffuse.
+	float3 irradiance = irradianceTexture.Sample(brdfSampler, N).rgb;
+	float3 diffuse = irradiance * albedo;
+
+	// Specular.
+	float3 R = reflect(-V, N);
+	uint width, height, numMipLevels;
+	environmentTexture.GetDimensions(0, width, height, numMipLevels);
+	float lod = roughness * float(numMipLevels - 1);
+
+	float3 prefilteredColor = environmentTexture.SampleLevel(brdfSampler, R, lod).rgb;
+	float2 envBRDF = brdf.Sample(brdfSampler, float2(roughness, NdotV)).rg;
+	float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+
+	float3 ambient = (kD * diffuse + specular) * ao;
+
+	return ambient;
+}
+
+static float3 calculateDirectLighting(float3 albedo, float3 radiance, float3 N, float3 L, float3 V, float3 F0, float roughness, float metallic)
+{
+	float3 H = normalize(V + L);
+	float NdotV = max(dot(N, V), 0.f);
+
+	// Cook-Torrance BRDF.
+	float NDF = distributionGGX(N, H, roughness);
+	float G = geometrySmith(N, V, L, roughness);
+	float3 F = fresnelSchlick(max(dot(H, V), 0.f), F0);
+
+	float3 kS = F;
+	float3 kD = float3(1.f, 1.f, 1.f) - kS;
+	kD *= 1.f - metallic;
+
+	float NdotL = max(dot(N, L), 0.f);
+	float3 numerator = NDF * G * F;
+	float denominator = 4.f * NdotV * NdotL;
+	float3 specular = numerator / max(denominator, 0.001f);
+
+	return (kD * albedo * oneOverPI + specular) * radiance * NdotL;
+}
+
+

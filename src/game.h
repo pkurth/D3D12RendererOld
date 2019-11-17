@@ -67,10 +67,10 @@ private:
 
 
 	dx_mesh indirectMesh;
-	std::vector<submesh_info> indirectSubmeshes;
 	std::vector<dx_material> indirectMaterials;
 	dx_buffer indirectCommandBuffer;
 	dx_buffer indirectShadowCommandBuffer;
+	uint32 numIndirectDrawCalls;
 	ComPtr<ID3D12DescriptorHeap> indirectDescriptorHeap;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE albedosOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;

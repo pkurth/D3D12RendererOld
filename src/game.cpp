@@ -140,9 +140,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		PROFILE_BLOCK("Indirect pipeline");
 
 		ComPtr<ID3DBlob> vertexShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_indirect_vs.cso", &vertexShaderBlob));
+		checkResult(D3DReadFileToBlob(L"shaders/bin/deferred_geometry_indirect_vs.cso", &vertexShaderBlob));
 		ComPtr<ID3DBlob> pixelShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_indirect_ps.cso", &pixelShaderBlob));
+		checkResult(D3DReadFileToBlob(L"shaders/bin/deferred_geometry_indirect_ps.cso", &pixelShaderBlob));
 
 		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -293,9 +293,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		PROFILE_BLOCK("Geometry pipeline");
 
 		ComPtr<ID3DBlob> vertexShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_vs.cso", &vertexShaderBlob));
+		checkResult(D3DReadFileToBlob(L"shaders/bin/deferred_geometry_vs.cso", &vertexShaderBlob));
 		ComPtr<ID3DBlob> pixelShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_ps.cso", &pixelShaderBlob));
+		checkResult(D3DReadFileToBlob(L"shaders/bin/deferred_geometry_ps.cso", &pixelShaderBlob));
 
 		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -383,14 +383,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		PROFILE_BLOCK("Load sponza model");
 
+		std::vector<submesh_info> sponzaSubmeshes;
 		std::vector<submesh_material_info> sponzaMaterials;
+		submesh_info sphereSubmesh;
 
 		{
 			PROFILE_BLOCK("Load sponza mesh");
 
 			cpu_mesh<vertex_3PUNT> indirect;
-			auto [sponzaSubmeshes, sponzaMaterials_] = indirect.pushFromFile("res/sponza/sponza.obj");
-			append(indirectSubmeshes, sponzaSubmeshes);
+			auto [sponzaSubmeshes_, sponzaMaterials_] = indirect.pushFromFile("res/sponza/sponza.obj");
+			append(sponzaSubmeshes, sponzaSubmeshes_);
+			sphereSubmesh = indirect.pushSphere(21, 21, 1.f);
 
 			{
 				PROFILE_BLOCK("Upload to GPU");
@@ -460,20 +463,20 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		{
 			PROFILE_BLOCK("Set up indirect command buffers");
 
-			indirect_command* indirectCommands = new indirect_command[indirectSubmeshes.size()];
-			indirect_shadow_command* indirectShadowCommands = new indirect_shadow_command[indirectSubmeshes.size()];
+			uint32 numSpheres = 5;
+			numIndirectDrawCalls = (uint32)sponzaSubmeshes.size() + numSpheres;
+			indirect_command* indirectCommands = new indirect_command[numIndirectDrawCalls];
+			indirect_shadow_command* indirectShadowCommands = new indirect_shadow_command[numIndirectDrawCalls];
 
 			mat4 model = createScaleMatrix(0.03f);
 
-			for (uint32 i = 0; i < indirectSubmeshes.size(); ++i)
+			for (uint32 i = 0; i < sponzaSubmeshes.size(); ++i)
 			{
-				indirectCommands[i].modelMatrix = model;
-				indirectShadowCommands[i].modelMatrix = model;
-
 				uint32 id = i;
 
-				submesh_info mesh = indirectSubmeshes[id];
+				submesh_info mesh = sponzaSubmeshes[id];
 
+				indirectCommands[i].modelMatrix = model;
 				indirectCommands[i].material.textureID = mesh.materialIndex;
 				indirectCommands[i].material.usageFlags = (USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
 				indirectCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
@@ -485,11 +488,33 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 				indirectCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
 				indirectCommands[i].drawArguments.StartInstanceLocation = 0;
 
+				indirectShadowCommands[i].modelMatrix = model;
 				indirectShadowCommands[i].drawArguments = indirectCommands[i].drawArguments;
 			}
 
-			indirectCommandBuffer.initialize(device, indirectCommands, (uint32)indirectSubmeshes.size(), commandList);
-			indirectShadowCommandBuffer.initialize(device, indirectShadowCommands, (uint32)indirectSubmeshes.size(), commandList);
+			for (uint32 i = (uint32)sponzaSubmeshes.size(); i < (uint32)sponzaSubmeshes.size() + numSpheres; ++i)
+			{
+				uint32 j = i - (uint32)sponzaSubmeshes.size();
+				indirectCommands[i].modelMatrix = createModelMatrix(vec3(-10.f + j * 4.f, 3.f, 0.f), quat::identity);
+				indirectCommands[i].material.textureID = 0;
+				indirectCommands[i].material.usageFlags = 0;
+				indirectCommands[i].material.roughnessOverride = (float)j / (numSpheres - 1);
+				indirectCommands[i].material.metallicOverride = 0.5f;
+				indirectCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
+				indirectCommands[i].material.drawID = i;
+
+				indirectCommands[i].drawArguments.IndexCountPerInstance = sphereSubmesh.numTriangles * 3;
+				indirectCommands[i].drawArguments.InstanceCount = 1;
+				indirectCommands[i].drawArguments.StartIndexLocation = sphereSubmesh.firstTriangle * 3;
+				indirectCommands[i].drawArguments.BaseVertexLocation = sphereSubmesh.baseVertex;
+				indirectCommands[i].drawArguments.StartInstanceLocation = 0;
+
+				indirectShadowCommands[i].modelMatrix = indirectCommands[i].modelMatrix;
+				indirectShadowCommands[i].drawArguments = indirectCommands[i].drawArguments;
+			}
+
+			indirectCommandBuffer.initialize(device, indirectCommands, numIndirectDrawCalls, commandList);
+			indirectShadowCommandBuffer.initialize(device, indirectShadowCommands, numIndirectDrawCalls, commandList);
 
 			delete[] indirectShadowCommands;
 			delete[] indirectCommands;
@@ -618,7 +643,7 @@ void dx_game::update(float dt)
 			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
 			gui.textF("Input movement: %.2f, %.2f, %.2f", inputMovement.x, inputMovement.y, inputMovement.z);
 		}
-		gui.textF("%u draw calls", (uint32)indirectSubmeshes.size());
+		gui.textF("%u draw calls", numIndirectDrawCalls);
 	}
 }
 
@@ -664,7 +689,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 			// Static scene.
 			commandList->getD3D12CommandList()->ExecuteIndirect(
 				indirectShadowCommandSignature.Get(),
-				(uint32)indirectSubmeshes.size(),
+				numIndirectDrawCalls,
 				indirectShadowCommandBuffer.resource.Get(),
 				0,
 				nullptr,
@@ -706,7 +731,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 			commandList->getD3D12CommandList()->ExecuteIndirect(
 				indirectGeometryCommandSignature.Get(),
-				(uint32)indirectSubmeshes.size(),
+				numIndirectDrawCalls,
 				indirectCommandBuffer.resource.Get(),
 				0,
 				nullptr,

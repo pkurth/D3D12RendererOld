@@ -32,28 +32,6 @@ Texture2D<float> sunShadowMapCascades[4]	: register(t6);
 ConstantBuffer<directional_light> sunLight : register(b1);
 
 
-static float3 calculateLighting(float3 albedo, float3 radiance, float3 N, float3 L, float3 V, float3 F0, float roughness, float metallic)
-{
-	float3 H = normalize(V + L);
-	float NdotV = max(dot(N, V), 0.f);
-
-	// Cook-Torrance BRDF.
-	float NDF = distributionGGX(N, H, roughness);
-	float G = geometrySmith(N, V, L, roughness);
-	float3 F = fresnelSchlick(max(dot(H, V), 0.f), F0);
-
-	float3 kS = F;
-	float3 kD = float3(1.f, 1.f, 1.f) - kS;
-	kD *= 1.f - metallic;
-
-	float NdotL = max(dot(N, L), 0.f);
-	float3 numerator = NDF * G * F;
-	float denominator = 4.f * NdotV * NdotL;
-	float3 specular = numerator / max(denominator, 0.001f);
-
-	return (kD * albedo * oneOverPI + specular) * radiance * NdotL;
-}
-
 float4 main(ps_input IN) : SV_TARGET
 {
 	float depthBufferDepth = depthBuffer.Sample(gbufferSampler, IN.uv);
@@ -75,32 +53,7 @@ float4 main(ps_input IN) : SV_TARGET
 	float4 totalLighting = float4(0.f, 0.f, 0.f, 1.f);
 
 	// Ambient.
-	{
-		// Common.
-		float NdotV = max(dot(N, V), 0.f);
-		float3 F = fresnelSchlickRoughness(NdotV, F0, roughness);
-		float3 kS = F;
-		float3 kD = float3(1.f, 1.f, 1.f) - kS;
-		kD *= 1.f - metallic;
-
-		// Diffuse.
-		float3 irradiance = irradianceTexture.Sample(brdfSampler, N).rgb;
-		float3 diffuse = irradiance * albedo;
-
-		// Specular.
-		float3 R = reflect(-V, N);
-		uint width, height, numMipLevels;
-		environmentTexture.GetDimensions(0, width, height, numMipLevels);
-		float lod = roughness * float(numMipLevels - 1);
-
-		float3 prefilteredColor = environmentTexture.SampleLevel(brdfSampler, R, lod).rgb;
-		float2 envBRDF = brdf.Sample(brdfSampler, float2(roughness, NdotV)).rg;
-		float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
-
-		float3 ambient = (kD * diffuse + specular) * ao;
-
-		totalLighting.xyz += ambient;
-	}
+	totalLighting.xyz += calculateAmbientLighting(albedo, irradianceTexture, environmentTexture, brdf, brdfSampler, N, V, F0, roughness, metallic, ao);
 
 	// Sun.
 	{
@@ -156,7 +109,7 @@ float4 main(ps_input IN) : SV_TARGET
 		float3 L = -sunLight.worldSpaceDirection.xyz;
 		float3 radiance = sunLight.color.xyz; // No attenuation for sun.
 
-		totalLighting.xyz += calculateLighting(albedo, radiance, N, L, V, F0, roughness, metallic) * visibility;
+		totalLighting.xyz += calculateDirectLighting(albedo, radiance, N, L, V, F0, roughness, metallic) * visibility;
 	}
 
 	return totalLighting;
