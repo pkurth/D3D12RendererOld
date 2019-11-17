@@ -403,7 +403,7 @@ bool debug_gui::quadButton(uint64 guid, float left, float right, float top, floa
 	uint32 button = handleButtonPress(guid, vec2(left, top), vec2(right, bottom));
 	if (button & 1)
 	{
-		color = DEBUG_GUI_HOVERED_COLOR;
+		color = (DEBUG_GUI_HOVERED_COLOR & 0xFFFFFF) | (color & 0xFF000000);
 		
 		if (formatOnHover)
 		{
@@ -601,7 +601,7 @@ bool debug_gui::buttonInternal(uint64 id, const char* name, uint32 color, float 
 	uint32 button = handleButtonPress(id, name, size);
 	if (button & 1)
 	{
-		color = DEBUG_GUI_HOVERED_COLOR;
+		color = (DEBUG_GUI_HOVERED_COLOR & 0xFFFFFF) | (color & 0xFF000000);
 	}
 	textInternal(name, color, size);
 
@@ -625,7 +625,7 @@ bool debug_gui::buttonInternalF(uint64 id, const char* name, uint32 color, float
 	uint32 button = handleButtonPress(id, text, size);
 	if (button & 1)
 	{
-		color = DEBUG_GUI_HOVERED_COLOR;
+		color = (DEBUG_GUI_HOVERED_COLOR & 0xFFFFFF) | (color & 0xFF000000);
 	}
 	textInternal(text, color, size);
 	return button & 2;
