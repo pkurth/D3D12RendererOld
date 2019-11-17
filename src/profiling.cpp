@@ -202,8 +202,6 @@ static float measureSignedTime(uint64 frameStart, uint64 clock)
 	}
 }
 
-static uint32 currentDisplayCallDepth;
-
 static uint32 colorTable[] =
 {
 	color_32(255, 0, 0, 255),
@@ -227,44 +225,51 @@ struct profile_display_state
 {
 	float leftOffset;
 	float frameWidth60FPS;
-	float top;
-	float bottom;
+	float barHeight;
 	uint32 colorIndex;
-	uint32 callDepth;
 	float mouseHoverX;
 };
 
-static void displayProfileBlock(profile_display_state& state, debug_gui& gui, profile_frame* frame, 
-	profile_block* topLevelBlock, uint32 currentCallDepth = 0)
+static uint32 displayProfileBlock(profile_display_state& state, debug_gui& gui, profile_frame* frame, 
+	profile_block* topLevelBlock, float top)
 {
+	uint32 result = 0;
+
+	float bottom = top + state.barHeight;
+
+	if (topLevelBlock)
+	{
+		result += 1;
+	}
+
 	for (profile_block* block = topLevelBlock; block; block = block->nextSibling)
 	{
-		if (currentCallDepth < state.callDepth && block->firstChild)
+		float relStartTime = measureSignedTime(frame->startClock, block->startClock);
+		float relEndTime = measureSignedTime(frame->startClock, block->endClock);
+
+		float left = state.leftOffset + relStartTime / 0.0167f * state.frameWidth60FPS;
+		float right = state.leftOffset + relEndTime / 0.0167f * state.frameWidth60FPS;
+
+		if (gui.quadHover(left, right, top, bottom, colorTable[state.colorIndex]))
 		{
-			displayProfileBlock(state, gui, frame, block->firstChild, currentCallDepth + 1);
+			gui.textAtMouseF("%s: %f ms", block->info, (relEndTime - relStartTime) * 1000.f);
+			state.mouseHoverX = gui.mousePosition.x;
 		}
-		else
+
+		++state.colorIndex;
+		if (state.colorIndex >= arraysize(colorTable))
 		{
-			float relStartTime = measureSignedTime(frame->startClock, block->startClock);
-			float relEndTime = measureSignedTime(frame->startClock, block->endClock);
-
-			float left = state.leftOffset + relStartTime / 0.0167f * state.frameWidth60FPS;
-			float right = state.leftOffset + relEndTime / 0.0167f * state.frameWidth60FPS;
-
-			if (gui.quadHover(left, right, state.top, state.bottom, colorTable[state.colorIndex]))
-			{
-				gui.textAtMouseF("%s: %f ms", block->info, (relEndTime - relStartTime) * 1000.f);
-				state.mouseHoverX = gui.mousePosition.x;
-			}
-
-			++state.colorIndex;
-			if (state.colorIndex >= arraysize(colorTable))
-			{
-				state.colorIndex = 0;
-			}
+			state.colorIndex = 0;
 		}
+
+		// Display children.
+		result += displayProfileBlock(state, gui, frame, block->firstChild, bottom);
 	}
+
+	return result;
 }
+
+static float frameWidth60FPS = 500.f;
 
 static void displayProfileInfo(debug_gui& gui)
 {
@@ -338,9 +343,8 @@ static void displayProfileInfo(debug_gui& gui)
 			float topOffset = 520.f;
 			float barHeight = 25.f;
 			float barSpacing = 30.f;
-			float frameWidth60FPS = 500.f;
 			float frameWidth30FPS = frameWidth60FPS * 2.f;
-			float leftOffset = 100.f;
+			float leftOffset = 150.f;
 
 			profile_frame* frame = recordedProfileFrames + highlightFrameIndex;
 			if (frame->endClock != 0)
@@ -361,22 +365,29 @@ static void displayProfileInfo(debug_gui& gui)
 				state.colorIndex = 0;
 				state.frameWidth60FPS = frameWidth60FPS;
 				state.leftOffset = leftOffset;
-				state.callDepth = currentDisplayCallDepth;
 				state.mouseHoverX = -1.f;
+				state.barHeight = barHeight;
 
+
+				// Display call stacks.
+				uint32 currentLane = 0;
 				for (uint32 threadIndex = 0; threadIndex < MAX_NUM_RECORDED_THREADS; ++threadIndex)
 				{
-					float top = threadIndex * barSpacing + topOffset;
-					float bottom = top + barHeight;
+					float top = currentLane * barSpacing + topOffset;
+					uint32 numLanesInThread = displayProfileBlock(state, gui, frame, frame->firstTopLevelBlockPerThread[threadIndex], top);
+					currentLane += numLanesInThread;
 
-					state.top = top;
-					state.bottom = bottom;
-
-					displayProfileBlock(state, gui, frame, frame->firstTopLevelBlockPerThread[threadIndex]);
+					if (numLanesInThread)
+					{
+						gui.textAtF(leftOffset - 100.f, top + barHeight - 3, 0xFFFFFFFF, "Thread %u", threadIndex);
+						top += numLanesInThread * barHeight + 2;
+						gui.quad(leftOffset - 100.f, leftOffset + frameWidth30FPS, top, top + 1, 0xFFFFFFFF);
+					}
 				}
 
+				// Display millisecond spacings.
 				float top = topOffset - 30.f;
-				float bottom = topOffset + numProfileThreads * barSpacing + 30.f;
+				float bottom = topOffset + currentLane * barSpacing + 30.f;
 
 				if (frame->globalFrameID != -1)
 				{
@@ -403,19 +414,12 @@ static void displayProfileInfo(debug_gui& gui)
 					gui.textAtF(state.mouseHoverX, top, color_32(255, 255, 0, 255), "%.3f ms", time);
 				}
 
-				if (gui.button("Call depth up"))
+				float scroll = gui.quadScroll(leftOffset, 10000.f, topOffset, bottom, 0x0);
+				frameWidth60FPS += scroll * 30.f;
+				if (frameWidth60FPS < 200.f)
 				{
-					++currentDisplayCallDepth;
+					frameWidth60FPS = 200.f;
 				}
-				if (gui.button("Call depth down"))
-				{
-					if (currentDisplayCallDepth > 0)
-					{
-						--currentDisplayCallDepth;
-					}
-				}
-
-				gui.value("Call depth", currentDisplayCallDepth);
 			}
 		}
 	}

@@ -424,7 +424,7 @@ bool debug_gui::quadHover(float left, float right, float top, float bottom, uint
 	if (pointInRectangle(mousePosition, vec2(left, top), vec2(right, bottom)))
 	{
 		result = true;
-		color = DEBUG_GUI_HOVERED_COLOR;
+		color = (DEBUG_GUI_HOVERED_COLOR & 0xFFFFFF) | (color & 0xFF000000);
 	}
 	quad(left, right, top, bottom, color);
 	return result;
@@ -436,7 +436,7 @@ float debug_gui::quadScroll(float left, float right, float top, float bottom, ui
 	if (pointInRectangle(mousePosition, vec2(left, top), vec2(right, bottom)))
 	{
 		result = mouseScroll;
-		color = DEBUG_GUI_HOVERED_COLOR;
+		color = (DEBUG_GUI_HOVERED_COLOR & 0xFFFFFF) | (color & 0xFF000000);
 	}
 	quad(left, right, top, bottom, color);
 	return result;
@@ -449,7 +449,7 @@ debug_gui_interaction debug_gui::interactableQuad(uint64 guid, float left, float
 	uint32 button = handleButtonPress(guid, vec2(left, top), vec2(right, bottom));
 	if (button & 1)
 	{
-		color = DEBUG_GUI_HOVERED_COLOR;
+		color = (DEBUG_GUI_HOVERED_COLOR & 0xFFFFFF) | (color & 0xFF000000);
 		result.hover = true;
 		result.scroll = mouseScroll;
 	}
