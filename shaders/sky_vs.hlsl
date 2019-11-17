@@ -23,6 +23,7 @@ vs_output main(vs_input IN)
 	OUT.uv = IN.position;
 	//OUT.uv.z *= -1.f;
 	OUT.position = mul(viewProjectionCB.vp, float4(IN.position, 1.f));
+	OUT.position.z = OUT.position.w - 1e-6f;
 
 	return OUT;
 }

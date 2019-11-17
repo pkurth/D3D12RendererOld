@@ -33,6 +33,7 @@ struct camera_cb
 	mat4 invV;
 	mat4 invP;
 	vec4 pos;
+	vec4 forward;
 	vec4 projectionParams; // nearPlane, farPlane, farPlane / nearPlane, 1 - farPlane / nearPlane
 };
 
@@ -77,6 +78,7 @@ struct render_camera
 		cb.invP = invProjectionMatrix;
 		cb.invVP = invViewProjectionMatrix;
 		cb.pos = vec4(position.x, position.y, position.z, 1.f);
+		cb.forward = rotation * vec3(0.f, 0.f, -1.f);
 		cb.projectionParams = vec4(nearPlane, farPlane, farPlane / nearPlane, 1.f - farPlane / nearPlane);
 	}
 

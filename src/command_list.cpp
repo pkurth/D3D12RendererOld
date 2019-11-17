@@ -1135,6 +1135,24 @@ void dx_command_list::drawIndexed(uint32 indexCount, uint32 instanceCount, uint3
 	commandList->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
 }
 
+void dx_command_list::drawIndirect(ComPtr<ID3D12CommandSignature> commandSignature, uint32 numDraws, dx_buffer commandBuffer)
+{
+	flushResourceBarriers();
+
+	for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
+	{
+		dynamicDescriptorHeaps[i].commitStagedDescriptorsForDraw(this);
+	}
+
+	commandList->ExecuteIndirect(
+		commandSignature.Get(),
+		numDraws,
+		commandBuffer.resource.Get(),
+		0,
+		nullptr,
+		0);
+}
+
 void dx_command_list::dispatch(uint32 numGroupsX, uint32 numGroupsY, uint32 numGroupsZ)
 {
 	flushResourceBarriers();

@@ -52,7 +52,6 @@ void sky_pipeline::initialize(ComPtr<ID3D12Device2> device, dx_command_list* com
 		CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
 		CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
 		CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
-		CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencilDesc;
 	} pipelineStateStream;
 
 	pipelineStateStream.rootSignature = rootSignature.rootSignature.Get();
@@ -63,7 +62,6 @@ void sky_pipeline::initialize(ComPtr<ID3D12Device2> device, dx_command_list* com
 	pipelineStateStream.dsvFormat = renderTarget.depthStencilFormat;
 	pipelineStateStream.rtvFormats = renderTarget.renderTargetFormat;
 	pipelineStateStream.rasterizer = defaultRasterizerDesc;
-	pipelineStateStream.depthStencilDesc = notEqualStencilDesc;
 
 	D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
 		sizeof(pipeline_state_stream), &pipelineStateStream

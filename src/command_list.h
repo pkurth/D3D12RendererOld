@@ -144,6 +144,7 @@ public:
 	// Draw.
 	void draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance);
 	void drawIndexed(uint32 indexCount, uint32 instanceCount, uint32 startIndex, int32 baseVertex, uint32 startInstance);
+	void drawIndirect(ComPtr<ID3D12CommandSignature> commandSignature, uint32 numDraws, dx_buffer commandBuffer);
 
 	// Dispatch.
 	void dispatch(uint32 numGroupsX, uint32 numGroupsY = 1, uint32 numGroupsZ = 1);

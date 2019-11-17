@@ -12,7 +12,7 @@ void lighting_pipeline::initialize(ComPtr<ID3D12Device2> device, dx_command_list
 	ComPtr<ID3DBlob> vertexShaderBlob;
 	checkResult(D3DReadFileToBlob(L"shaders/bin/fullscreen_triangle_vs.cso", &vertexShaderBlob));
 	ComPtr<ID3DBlob> pixelShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/deferred_lighting_ps.cso", &pixelShaderBlob));
+	checkResult(D3DReadFileToBlob(L"shaders/bin/lighting_deferred_ps.cso", &pixelShaderBlob));
 
 	// Root signature.
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =

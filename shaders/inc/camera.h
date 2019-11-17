@@ -9,6 +9,7 @@ struct camera_cb
 	float4x4 invV;
 	float4x4 invP;
 	float4 position;
+	float4 forward;
 	float4 projectionParams; // nearPlane, farPlane, farPlane / nearPlane, 1 - farPlane / nearPlane
 };
 

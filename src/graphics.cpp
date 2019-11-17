@@ -10,6 +10,7 @@ CD3DX12_RASTERIZER_DESC noBackfaceCullRasterizerDesc;
 
 CD3DX12_DEPTH_STENCIL_DESC1 alwaysReplaceStencilDesc;
 CD3DX12_DEPTH_STENCIL_DESC1 notEqualStencilDesc;
+CD3DX12_DEPTH_STENCIL_DESC1 equalDepthDesc;
 
 void initializeCommonGraphicsItems()
 {
@@ -43,6 +44,10 @@ void initializeCommonGraphicsItems()
 	alwaysReplaceStencilDesc.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
 	alwaysReplaceStencilDesc.BackFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
 	alwaysReplaceStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+
+	equalDepthDesc = CD3DX12_DEPTH_STENCIL_DESC1(D3D12_DEFAULT);
+	equalDepthDesc.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL;
+	equalDepthDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 
 	notEqualStencilDesc = CD3DX12_DEPTH_STENCIL_DESC1(D3D12_DEFAULT); 
 	notEqualStencilDesc.StencilEnable = true;

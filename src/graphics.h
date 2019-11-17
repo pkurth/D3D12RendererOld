@@ -10,6 +10,7 @@ extern CD3DX12_RASTERIZER_DESC noBackfaceCullRasterizerDesc;
 
 extern CD3DX12_DEPTH_STENCIL_DESC1 alwaysReplaceStencilDesc;
 extern CD3DX12_DEPTH_STENCIL_DESC1 notEqualStencilDesc;
+extern CD3DX12_DEPTH_STENCIL_DESC1 equalDepthDesc;
 
 
 
