@@ -17,12 +17,6 @@ cbuffer integrate_brdf_cb : register(b0)
 
 RWTexture2D<float2> outBRDF : register(u0);
 
-#define integrateBRDF_rootSignature \
-    "RootFlags(0), " \
-    "RootConstants(b0, num32BitConstants = 1), " \
-    "DescriptorTable( UAV(u0, numDescriptors = 1) )" 
-
-[RootSignature(integrateBRDF_rootSignature)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(cs_input IN)
 {

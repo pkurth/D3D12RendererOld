@@ -13,10 +13,12 @@ struct dx_buffer
 {
 	ComPtr<ID3D12Resource> resource;
 
-	void initialize(ComPtr<ID3D12Device2> device, uint32 size, const void* data = nullptr, dx_command_list* commandList = nullptr);
-	template <typename T> void initialize(ComPtr<ID3D12Device2> device, const T* data, uint32 count, dx_command_list* commandList = nullptr)
+	void initialize(ComPtr<ID3D12Device2> device, uint32 size, const void* data = nullptr, dx_command_list* commandList = nullptr, 
+		D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
+	template <typename T> void initialize(ComPtr<ID3D12Device2> device, const T* data, uint32 count, dx_command_list* commandList = nullptr,
+		D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE)
 	{ 
-		initialize(device, sizeof(T) * count, data, commandList); 
+		initialize(device, sizeof(T) * count, data, commandList, flags); 
 	}
 };
 
@@ -33,6 +35,17 @@ struct dx_index_buffer : dx_buffer
 	uint32 numIndices;
 
 	template <typename index_t> void initialize(ComPtr<ID3D12Device2> device, index_t* indices, uint32 count, dx_command_list* commandList = nullptr);
+};
+
+struct dx_structured_buffer : dx_buffer
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE srv;
+
+	void initialize(ComPtr<ID3D12Device2> device, uint32 count, uint32 elementSize, const void* data = nullptr, dx_command_list* commandList = nullptr);
+	template <typename T> void initialize(ComPtr<ID3D12Device2> device, const T* data, uint32 count, dx_command_list* commandList = nullptr)
+	{
+		initialize(device, count, (uint32)sizeof(T), data, commandList);
+	}
 };
 
 struct dx_mesh

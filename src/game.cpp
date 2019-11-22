@@ -131,9 +131,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		CD3DX12_DESCRIPTOR_RANGE1 metallics(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 4);
 
 		CD3DX12_DESCRIPTOR_RANGE1 shadowMaps(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_NUM_SUN_SHADOW_CASCADES, 0, 5);
+		
+		CD3DX12_DESCRIPTOR_RANGE1 pointLights(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, MAX_NUM_SUN_SHADOW_CASCADES, 5);
 
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[10];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[11];
 		rootParameters[INDIRECT_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_ALL); // Camera.
 		rootParameters[INDIRECT_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
 		rootParameters[INDIRECT_ROOTPARAM_MATERIAL].InitAsConstants(sizeof(material_cb) / sizeof(float), 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material.
@@ -150,6 +152,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		// Sun.
 		rootParameters[INDIRECT_ROOTPARAM_DIRECTIONAL].InitAsConstantBufferView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[INDIRECT_ROOTPARAM_SHADOWMAPS].InitAsDescriptorTable(1, &shadowMaps, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		// Point lights.
+		rootParameters[INDIRECT_ROOTPARAM_POINTLIGHTS].InitAsDescriptorTable(1, &pointLights, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		CD3DX12_STATIC_SAMPLER_DESC samplers[] =
 		{
@@ -440,6 +445,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	sun.worldSpaceDirection = comp_vec(-0.6f, -1.f, -0.3f, 0.f).normalize();
 	sun.color = vec4(1.f, 0.93f, 0.76f, 0.f) * 3.f;
 
+	pointLights.resize(512);
+	for (uint32 i = 0; i < pointLights.size(); ++i)
+	{
+		point_light& l = pointLights[i];
+		l.color = vec4(1, randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), 1);
+		l.worldSpacePositionAndRadius.xyz = vec3(i / 10, 1.f, i % 10);
+		l.worldSpacePositionAndRadius.w = 20.f;
+	}
+
+	pointLightBuffer.initialize(device, pointLights.data(), pointLights.size(), commandList);
+
 	{
 		PROFILE_BLOCK("Load environment");
 
@@ -665,6 +681,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		}
 		commandList->stageDescriptors(INDIRECT_ROOTPARAM_SHADOWMAPS, sun.numShadowCascades, MAX_NUM_SUN_SHADOW_CASCADES - sun.numShadowCascades, lighting.defaultSRV);
 		commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_DIRECTIONAL, sunCBAddress);
+
+		commandList->stageDescriptors(INDIRECT_ROOTPARAM_POINTLIGHTS, 0, 1, pointLightBuffer.srv);
 
 
 		commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);

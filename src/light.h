@@ -56,3 +56,9 @@ struct directional_light
 	}
 };
 
+struct point_light
+{
+	vec4 worldSpacePositionAndRadius;
+	vec4 color;
+};
+

@@ -36,17 +36,6 @@ RWTexture2D<float4> outMip4		: register(u3);
 // Linear clamp sampler.
 SamplerState linearClampSampler : register(s0);
 
-#define generateMips_rootSignature \
-    "RootFlags(0), " \
-    "RootConstants(b0, num32BitConstants = 6), " \
-    "DescriptorTable( SRV(t0, numDescriptors = 1) )," \
-    "DescriptorTable( UAV(u0, numDescriptors = 4) )," \
-    "StaticSampler(s0," \
-        "addressU = TEXTURE_ADDRESS_CLAMP," \
-        "addressV = TEXTURE_ADDRESS_CLAMP," \
-        "addressW = TEXTURE_ADDRESS_CLAMP," \
-        "filter = FILTER_MIN_MAG_MIP_LINEAR)"
-
 // The reason for separating channels is to reduce bank conflicts in the
 // local data memory controller.  A large stride will cause more threads
 // to collide on the same memory bank.
@@ -90,7 +79,6 @@ float4 packColor(float4 x)
 	}
 }
 
-[RootSignature(generateMips_rootSignature)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(cs_input IN)
 {

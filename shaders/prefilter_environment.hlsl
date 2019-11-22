@@ -28,17 +28,6 @@ RWTexture2DArray<float4> outMip5 : register(u4);
 
 SamplerState linearRepeatSampler : register(s0);
 
-#define prefilterEnvironment_rootSignature \
-    "RootFlags(0), " \
-    "RootConstants(b0, num32BitConstants = 4), " \
-    "DescriptorTable( SRV(t0, numDescriptors = 1) )," \
-    "DescriptorTable( UAV(u0, numDescriptors = 5) )," \
-    "StaticSampler(s0," \
-        "addressU = TEXTURE_ADDRESS_WRAP," \
-        "addressV = TEXTURE_ADDRESS_WRAP," \
-        "addressW = TEXTURE_ADDRESS_WRAP," \
-        "filter = FILTER_MIN_MAG_LINEAR_MIP_POINT )"
-
 
 // Transform from dispatch ID to cubemap face direction
 static const float3x3 rotateUV[6] = {
@@ -109,7 +98,6 @@ static float4 filter(uint mip, float3 N, float3 V)
 	return float4(prefilteredColor, 1.f);
 }
 
-[RootSignature(prefilterEnvironment_rootSignature)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(cs_input IN)
 {

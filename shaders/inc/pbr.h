@@ -26,6 +26,12 @@ struct directional_light
 	float cascadeBlendArea;
 };
 
+struct point_light
+{
+	float4 worldSpacePositionAndRadius;
+	float4 color;
+};
+
 
 static float3 fresnelSchlick(float cosTheta, float3 F0)
 {

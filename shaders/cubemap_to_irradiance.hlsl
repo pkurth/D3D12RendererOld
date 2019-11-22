@@ -19,17 +19,6 @@ RWTexture2DArray<float4> outIrradiance : register(u0);
 
 SamplerState linearRepeatSampler : register(s0);
 
-#define cubemapToIrradiance_rootSignature \
-    "RootFlags(0), " \
-    "RootConstants(b0, num32BitConstants = 3), " \
-    "DescriptorTable( SRV(t0, numDescriptors = 1) )," \
-    "DescriptorTable( UAV(u0, numDescriptors = 1) )," \
-    "StaticSampler(s0," \
-        "addressU = TEXTURE_ADDRESS_WRAP," \
-        "addressV = TEXTURE_ADDRESS_WRAP," \
-        "addressW = TEXTURE_ADDRESS_WRAP," \
-        "filter = FILTER_MIN_MAG_LINEAR_MIP_POINT )"
-
 static const float pi = 3.141592653589793238462643383279f;
 
 // Transform from dispatch ID to cubemap face direction
@@ -61,7 +50,6 @@ static const float3x3 rotateUV[6] = {
 };
 
 
-[RootSignature(cubemapToIrradiance_rootSignature)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(cs_input IN)
 {

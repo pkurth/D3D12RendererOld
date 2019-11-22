@@ -26,6 +26,7 @@
 #define INDIRECT_ROOTPARAM_METALLICS		7
 #define INDIRECT_ROOTPARAM_DIRECTIONAL		8
 #define INDIRECT_ROOTPARAM_SHADOWMAPS		9
+#define INDIRECT_ROOTPARAM_POINTLIGHTS		10
 
 
 #define CAMERA_SENSITIVITY 4.f
@@ -78,6 +79,8 @@ private:
 	std::vector<submesh_info> sceneSubmeshes;
 
 	directional_light sun;
+	std::vector<point_light> pointLights;
+	dx_structured_buffer pointLightBuffer;
 
 	dx_texture cubemap;
 	dx_texture irradiance;

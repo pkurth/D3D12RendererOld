@@ -29,17 +29,6 @@ RWTexture2DArray<float4> outMip5 : register(u4);
 // Linear repeat sampler.
 SamplerState linearRepeatSampler : register(s0);
 
-#define equirectangularToCubeMap_rootSignature \
-    "RootFlags(0), " \
-    "RootConstants(b0, num32BitConstants = 3), " \
-    "DescriptorTable( SRV(t0, numDescriptors = 1) )," \
-    "DescriptorTable( UAV(u0, numDescriptors = 5) )," \
-    "StaticSampler(s0," \
-        "addressU = TEXTURE_ADDRESS_WRAP," \
-        "addressV = TEXTURE_ADDRESS_WRAP," \
-        "addressW = TEXTURE_ADDRESS_WRAP," \
-        "filter = FILTER_MIN_MAG_LINEAR_MIP_POINT )"
-
 
 // 1 / PI
 static const float invPI = 0.31830988618379067153776752674503f;
@@ -74,7 +63,6 @@ static const float3x3 rotateUV[6] = {
    			 0,   0, -1)
 };  
 
-[RootSignature(equirectangularToCubeMap_rootSignature)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(cs_input IN)
 {

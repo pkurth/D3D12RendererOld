@@ -40,6 +40,8 @@ Texture2D<float> metallicTextures[64]	: register(t0, space4);
 
 // Shadow maps.
 Texture2D<float> sunShadowMapCascades[4]	: register(t0, space5);
+StructuredBuffer<point_light> pointLights	: register(t4, space5);
+
 
 ps_output main(ps_input IN)
 {
@@ -67,7 +69,7 @@ ps_output main(ps_input IN)
 	float3 V = -normalize(camToP);
 	float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo.xyz, metallic);
 
-	float4 totalLighting = float4(0.f, 0.f, 0.f, 1.f);
+	float4 totalLighting = float4(0.f, 0.f, 0.f, albedo.w);
 
 
 	// Ambient.
@@ -131,6 +133,23 @@ ps_output main(ps_input IN)
 
 		totalLighting.xyz += calculateDirectLighting(albedo.xyz, radiance, N, L, V, F0, roughness, metallic) * visibility;
 	}
+
+#if 0
+	// Point lights.
+	{
+		for (uint l = 0; l < 512; ++l)
+		{
+			point_light light = pointLights[l];
+
+			float3 lightToP = light.worldSpacePositionAndRadius.xyz - IN.worldPosition;
+			float distance = length(lightToP);
+			float3 L = lightToP / distance;
+			float3 radiance = light.color.xyz * saturate(1.f - distance / light.worldSpacePositionAndRadius.w); // TODO: Attenuation.
+
+			totalLighting.xyz += calculateDirectLighting(albedo.xyz, radiance, N, L, V, F0, roughness, metallic);
+		}
+	}
+#endif
 
 
 	ps_output OUT;
