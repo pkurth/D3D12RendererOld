@@ -41,7 +41,20 @@ Texture2D<float> metallicTextures[64]	: register(t0, space4);
 // Shadow maps.
 Texture2D<float> sunShadowMapCascades[4]	: register(t0, space5);
 StructuredBuffer<point_light> pointLights	: register(t4, space5);
+StructuredBuffer<spherical_harmonics> shs	: register(t5, space5);
 
+
+static const spherical_harmonics sh = {
+	float4(0.445560, 0.264096, 0.266335, 0.0),
+	float4(-0.311523, -0.084572, 0.080637, 0.0),
+	float4(0.086516, 0.022305, -0.045806, 0.0),
+	float4(-0.091761, 0.026771, 0.100462, 0.0),
+	float4(0.063233, 0.061217, 0.087974, 0.0),
+	float4(0.003792, -0.022282, -0.050458, 0.0),
+	float4(-0.024107, -0.010575, -0.005569, 0.0),
+	float4(0.021007, 0.044164, 0.061526, 0.0),
+	float4(-0.000832, 0.012470, 0.024354, 0.0)
+};
 
 ps_output main(ps_input IN)
 {
@@ -153,6 +166,8 @@ ps_output main(ps_input IN)
 
 
 	ps_output OUT;
+	//OUT.color = irradianceTexture.Sample(brdfSampler, N);
+	//OUT.color = sampleSphericalHarmonics(shs[0], N);// totalLighting;
 	OUT.color = totalLighting;
 	return OUT;
 }

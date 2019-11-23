@@ -46,6 +46,7 @@ public:
 	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32);
 	void prefilterEnvironmentMap(dx_texture& environment, dx_texture& prefiltered, uint32 resolution = 128);
 	void integrateBRDF(dx_texture& brdf, uint32 resolution = 512);
+	void projectCubemapToSphericalHarmonics(dx_texture& cubemap, dx_structured_buffer& sh, uint32 srcMip);
 
 
 	// Pipeline.
@@ -185,6 +186,7 @@ private:
 	dx_cubemap_to_irradiance_pso		cubemapToIrradiancePSO;
 	dx_prefilter_environment_pso		prefilterEnvironmentPSO;
 	dx_integrate_brdf_pso				integrateBrdfPSO;
+	dx_cubemap_to_sh_pso				cubemapToSHPSO;
 };
 
 template<typename T>

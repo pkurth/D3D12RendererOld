@@ -32,6 +32,11 @@ struct point_light
 	float4 color;
 };
 
+struct spherical_harmonics
+{
+	float4 coefficients[9];
+};
+
 
 static float3 fresnelSchlick(float cosTheta, float3 F0)
 {
@@ -171,4 +176,23 @@ static float3 calculateDirectLighting(float3 albedo, float3 radiance, float3 N, 
 	return (kD * albedo * oneOverPI + specular) * radiance * NdotL;
 }
 
+float4 sampleSphericalHarmonics(spherical_harmonics sh, float3 normal)
+{
+	float x = normal.x;
+	float y = normal.y;
+	float z = normal.z;
 
+	float4 result =
+		sh.coefficients[0] +
+		sh.coefficients[1] * y +
+		sh.coefficients[2] * z +
+		sh.coefficients[3] * x +
+		sh.coefficients[4] * x * y +
+		sh.coefficients[5] * y * z +
+		sh.coefficients[6] * (3.f * z * z - 1.f) +
+		sh.coefficients[7] * z * x +
+		sh.coefficients[8] * (x * x - y * y)
+		;
+
+	return max(result, (float4)0);
+}

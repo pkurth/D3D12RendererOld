@@ -133,9 +133,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		CD3DX12_DESCRIPTOR_RANGE1 shadowMaps(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_NUM_SUN_SHADOW_CASCADES, 0, 5);
 		
 		CD3DX12_DESCRIPTOR_RANGE1 pointLights(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, MAX_NUM_SUN_SHADOW_CASCADES, 5);
+		CD3DX12_DESCRIPTOR_RANGE1 shs(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, MAX_NUM_SUN_SHADOW_CASCADES + 1, 5);
 
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[11];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[12];
 		rootParameters[INDIRECT_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_ALL); // Camera.
 		rootParameters[INDIRECT_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
 		rootParameters[INDIRECT_ROOTPARAM_MATERIAL].InitAsConstants(sizeof(material_cb) / sizeof(float), 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material.
@@ -155,6 +156,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		// Point lights.
 		rootParameters[INDIRECT_ROOTPARAM_POINTLIGHTS].InitAsDescriptorTable(1, &pointLights, D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[INDIRECT_ROOTPARAM_SHS].InitAsDescriptorTable(1, &shs, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		CD3DX12_STATIC_SAMPLER_DESC samplers[] =
 		{
@@ -285,8 +287,26 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		PROFILE_BLOCK("Sky, lighting, present pipeline");
 		sky.initialize(device, commandList, lightingRT);
-		lighting.initialize(device, commandList, lightingRT);
 		present.initialize(device, screenRTFormats);
+
+
+		commandList->integrateBRDF(brdf);
+		dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, MAX_NUM_SUN_SHADOW_CASCADES);
+		defaultShadowMapSRV = allocation.getDescriptorHandle(0);
+
+		for (uint32 i = 0; i < MAX_NUM_SUN_SHADOW_CASCADES; ++i)
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+			srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			srvDesc.Texture2D.MipLevels = 0;
+
+			device->CreateShaderResourceView(
+				nullptr, &srvDesc,
+				allocation.getDescriptorHandle(i)
+			);
+		}
 	}
 
 	{
@@ -450,11 +470,13 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		point_light& l = pointLights[i];
 		l.color = vec4(1, randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), 1);
-		l.worldSpacePositionAndRadius.xyz = vec3(i / 10, 1.f, i % 10);
+		l.worldSpacePositionAndRadius.xyz = vec3(i / 10.f, 1.f, (float)(i % 10));
 		l.worldSpacePositionAndRadius.w = 20.f;
 	}
 
-	pointLightBuffer.initialize(device, pointLights.data(), pointLights.size(), commandList);
+	pointLightBuffer.initialize(device, pointLights.data(), (uint32)pointLights.size(), commandList);
+
+	sphericalHarmonicsBuffer.initialize<spherical_harmonics>(device, nullptr, 1, commandList);
 
 	{
 		PROFILE_BLOCK("Load environment");
@@ -475,6 +497,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		{
 			PROFILE_BLOCK("Prefilter environment");
 			commandList->prefilterEnvironmentMap(cubemap, prefilteredEnvironment, 256);
+		}
+		{
+			PROFILE_BLOCK("Project SH");
+			commandList->projectCubemapToSphericalHarmonics(irradiance, sphericalHarmonicsBuffer, 0);
 		}
 	}
 
@@ -666,7 +692,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		// PBR.
 		commandList->bindCubemap(INDIRECT_ROOTPARAM_PBR_TEXTURES, 0, irradiance, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->bindCubemap(INDIRECT_ROOTPARAM_PBR_TEXTURES, 1, prefilteredEnvironment, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->setShaderResourceView(INDIRECT_ROOTPARAM_PBR_TEXTURES, 2, lighting.brdf, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->setShaderResourceView(INDIRECT_ROOTPARAM_PBR_TEXTURES, 2, brdf, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		// Materials.
 		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_ALBEDOS, albedosOffset);
@@ -679,10 +705,11 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		{
 			commandList->bindDepthTextureForReading(INDIRECT_ROOTPARAM_SHADOWMAPS, i, sunShadowMapTexture[i], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		}
-		commandList->stageDescriptors(INDIRECT_ROOTPARAM_SHADOWMAPS, sun.numShadowCascades, MAX_NUM_SUN_SHADOW_CASCADES - sun.numShadowCascades, lighting.defaultSRV);
+		commandList->stageDescriptors(INDIRECT_ROOTPARAM_SHADOWMAPS, sun.numShadowCascades, MAX_NUM_SUN_SHADOW_CASCADES - sun.numShadowCascades, defaultShadowMapSRV);
 		commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_DIRECTIONAL, sunCBAddress);
 
 		commandList->stageDescriptors(INDIRECT_ROOTPARAM_POINTLIGHTS, 0, 1, pointLightBuffer.srv);
+		commandList->stageDescriptors(INDIRECT_ROOTPARAM_SHS, 0, 1, sphericalHarmonicsBuffer.srv);
 
 
 		commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);

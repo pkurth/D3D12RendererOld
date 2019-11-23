@@ -40,6 +40,7 @@ struct dx_index_buffer : dx_buffer
 struct dx_structured_buffer : dx_buffer
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE srv;
+	D3D12_CPU_DESCRIPTOR_HANDLE uav;
 
 	void initialize(ComPtr<ID3D12Device2> device, uint32 count, uint32 elementSize, const void* data = nullptr, dx_command_list* commandList = nullptr);
 	template <typename T> void initialize(ComPtr<ID3D12Device2> device, const T* data, uint32 count, dx_command_list* commandList = nullptr)

@@ -8,12 +8,11 @@
 #include "camera.h"
 #include "render_target.h"
 #include "material.h"
-#include "light.h"
+#include "lighting.h"
 #include "debug_gui.h"
 #include "platform.h"
 
 #include "sky.h"
-#include "lighting.h"
 #include "present.h"
 
 #define INDIRECT_ROOTPARAM_CAMERA			0
@@ -27,6 +26,7 @@
 #define INDIRECT_ROOTPARAM_DIRECTIONAL		8
 #define INDIRECT_ROOTPARAM_SHADOWMAPS		9
 #define INDIRECT_ROOTPARAM_POINTLIGHTS		10
+#define INDIRECT_ROOTPARAM_SHS				11
 
 
 #define CAMERA_SENSITIVITY 4.f
@@ -60,7 +60,6 @@ private:
 
 	
 	sky_pipeline sky;
-	lighting_pipeline lighting;
 	present_pipeline present;
 
 
@@ -81,10 +80,14 @@ private:
 	directional_light sun;
 	std::vector<point_light> pointLights;
 	dx_structured_buffer pointLightBuffer;
+	dx_structured_buffer sphericalHarmonicsBuffer;
 
 	dx_texture cubemap;
 	dx_texture irradiance;
 	dx_texture prefilteredEnvironment;
+	dx_texture brdf;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE defaultShadowMapSRV;
 
 	vec3 inputMovement;
 	float inputSpeedModifier;

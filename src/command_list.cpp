@@ -29,6 +29,7 @@ void dx_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIS
 		cubemapToIrradiancePSO.initialize(device);
 		prefilterEnvironmentPSO.initialize(device);
 		integrateBrdfPSO.initialize(device);
+		cubemapToSHPSO.initialize(device);
 	}
 
 	for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
@@ -966,6 +967,32 @@ void dx_command_list::integrateBRDF(dx_texture& brdf, uint32 resolution)
 	{
 		copyResource(brdf, stagingTexture);
 	}
+}
+
+void dx_command_list::projectCubemapToSphericalHarmonics(dx_texture& cubemap, dx_structured_buffer& sh, uint32 srcMip)
+{
+	if (commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
+	{
+		if (!computeCommandList)
+		{
+			computeCommandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
+		}
+		computeCommandList->projectCubemapToSphericalHarmonics(cubemap, sh, srcMip);
+		return;
+	}
+
+	setPipelineState(cubemapToSHPSO.pipelineState);
+	setComputeRootSignature(cubemapToSHPSO.rootSignature);
+
+	cubemap_to_sh_cb cubemapToSHCB;
+	cubemapToSHCB.mipLevel = srcMip;
+
+	setCompute32BitConstants(cubemap_to_sh_param_constant_buffer, cubemapToSHCB);
+
+	bindCubemap(cubemap_to_sh_param_src, 0, cubemap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].stageDescriptors(cubemap_to_sh_param_out, 0, 1, sh.uav);
+
+	dispatch(1, 1, 1);
 }
 
 void dx_command_list::setPipelineState(ComPtr<ID3D12PipelineState> pipelineState)

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common.h"
+
 #define UNBOUNDED_DESCRIPTOR_RANGE -1
 
 extern CD3DX12_BLEND_DESC alphaBlendDesc;

@@ -190,7 +190,6 @@
     <ClInclude Include="src\generate_mips.h" />
     <ClInclude Include="src\graphics.h" />
     <ClInclude Include="src\input.h" />
-    <ClInclude Include="src\light.h" />
     <ClInclude Include="src\lighting.h" />
     <ClInclude Include="src\material.h" />
     <ClInclude Include="src\model.h" />
@@ -216,6 +215,14 @@
     <ClInclude Include="src\window.h" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="shaders\cubemap_to_sh.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">5.1</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
+    </FxCompile>
     <FxCompile Include="shaders\geometry_indirect_deferred_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>

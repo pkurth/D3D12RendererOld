@@ -42,4 +42,16 @@ void dx_structured_buffer::initialize(ComPtr<ID3D12Device2> device, uint32 count
 
 	srv = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV).getDescriptorHandle(0);
 	device->CreateShaderResourceView(resource.Get(), &srvDesc, srv);
+
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+	uavDesc.Buffer.FirstElement = 0;
+	uavDesc.Buffer.NumElements = count;
+	uavDesc.Buffer.StructureByteStride = elementSize;
+	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+	uav = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV).getDescriptorHandle(0);
+	device->CreateUnorderedAccessView(resource.Get(), nullptr, &uavDesc, uav);
 }

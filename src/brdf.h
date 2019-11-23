@@ -103,3 +103,27 @@ struct dx_integrate_brdf_pso
 	dx_root_signature rootSignature;
 	ComPtr<ID3D12PipelineState> pipelineState;
 };
+
+
+
+struct cubemap_to_sh_cb
+{
+	uint32 mipLevel;
+};
+
+enum cubemap_to_sh_root_parameter
+{
+	cubemap_to_sh_param_constant_buffer,
+	cubemap_to_sh_param_src,
+	cubemap_to_sh_param_out,
+
+	cubemap_to_sh_num_params
+};
+
+struct dx_cubemap_to_sh_pso
+{
+	void initialize(ComPtr<ID3D12Device2> device);
+
+	dx_root_signature rootSignature;
+	ComPtr<ID3D12PipelineState> pipelineState;
+};
