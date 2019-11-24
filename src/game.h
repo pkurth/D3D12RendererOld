@@ -116,8 +116,11 @@ private:
 
 	dx_render_target lightProbeRT;
 	dx_texture lightProbeHDRTexture;
+	dx_texture lightProbeIrradiance;
 	dx_texture lightProbeDepthTexture;
 	cubemap_camera lightProbeCamera;
+	uint32 lightProbeRenderIndex = 0;
+	float lightProbeTime = 0.f;
 
 	dx_render_target sunShadowMapRT[MAX_NUM_SUN_SHADOW_CASCADES];
 	dx_texture sunShadowMapTexture[MAX_NUM_SUN_SHADOW_CASCADES];

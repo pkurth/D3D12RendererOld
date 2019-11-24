@@ -782,21 +782,38 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		}
 	}
 
-	DEBUG_TAB(gui, "Stats")
+	lightProbeTime += dt;
+	vec3 lightProbePosition = vec3(sin(lightProbeTime * 0.5f) * 20.f, 10.f, 0.f);
+	{
+		// Render to cubemap. One index per frame.
+
+		commandList->setRenderTarget(lightProbeRT, lightProbeRenderIndex);
+		commandList->setViewport(lightProbeRT.viewport);
+		commandList->clearDepth(lightProbeRT.depthStencilAttachment->getDepthStencilView());
+
+		lightProbeCamera.initialize(lightProbePosition, lightProbeRenderIndex);
+		renderScene(commandList, lightProbeCamera);
+
+		lightProbeRenderIndex = (lightProbeRenderIndex + 1) % 6;
+	}
+
+	/*DEBUG_TAB(gui, "Stats")
 	{
 		if (gui.button("Render scene to cubemap"))
 		{
 			for (uint32 i = 0; i < 6; ++i)
 			{
-				commandList->setRenderTarget(lightProbeRT, i);
-				commandList->setViewport(lightProbeRT.viewport);
-				commandList->clearDepth(lightProbeRT.depthStencilAttachment->getDepthStencilView());
-
-				lightProbeCamera.initialize(vec3(0.f, 10.f, 0.f), i);
-				renderScene(commandList, lightProbeCamera);
+				
 			}
 		}
-	}
+		if (gui.button("Convert to irradiance"))
+		{
+			dx_command_list* computeList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
+			computeList->createIrradianceMap(lightProbeHDRTexture, lightProbeIrradiance);
+			uint64 fenceValue = dx_command_queue::computeCommandQueue.executeCommandList(computeList);
+			dx_command_queue::computeCommandQueue.waitForFenceValue(fenceValue);
+		}
+	}*/
 
 	commandList->setRenderTarget(lightingRT);
 	commandList->setViewport(viewport);
@@ -804,11 +821,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	renderScene(commandList, camera);
 
-	visualizeLightProbe.render(commandList, camera, vec3(0.f,  0.f, 0.f), cubemap);
-	visualizeLightProbe.render(commandList, camera, vec3(5.f,  0.f, 0.f), irradiance);
-	visualizeLightProbe.render(commandList, camera, vec3(10.f, 0.f, 0.f), prefilteredEnvironment);
-	visualizeLightProbe.render(commandList, camera, vec3(0.f, 10.f, 0.f), lightProbeHDRTexture, -1.f);
 
+	visualizeLightProbe.render(commandList, camera, lightProbePosition, lightProbeHDRTexture, -1.f);
 
 	// Resolve to screen.
 	// No need to clear RTV (or for a depth buffer), since we are blitting the whole lighting buffer.
