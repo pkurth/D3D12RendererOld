@@ -5,7 +5,7 @@
 
 struct dx_root_signature
 {
-	void initialize(ComPtr<ID3D12Device2> device, const D3D12_ROOT_SIGNATURE_DESC1& desc);
+	void initialize(ComPtr<ID3D12Device2> device, const D3D12_ROOT_SIGNATURE_DESC1& desc, bool parse = true);
 	void shutdown();
 
 	dx_root_signature() { desc = { }; }

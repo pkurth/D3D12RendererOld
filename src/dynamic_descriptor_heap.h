@@ -16,6 +16,8 @@ public:
 	void commitStagedDescriptorsForDraw(dx_command_list* commandList);
 	void commitStagedDescriptorsForDispatch(dx_command_list* commandList);
 
+	void setCurrentDescriptorHeap(dx_command_list* commandList);
+
 	D3D12_GPU_DESCRIPTOR_HANDLE copyDescriptor(dx_command_list* comandList, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor);
 
 	void parseRootSignature(const dx_root_signature& rootSignature);

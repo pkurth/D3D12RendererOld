@@ -27,7 +27,7 @@ SamplerComparisonState shadowMapSampler		: register(s2, space0);
 
 
 
-// PBR.
+// BRDF.
 TextureCube<float4> irradianceTexture		: register(t0, space0);
 TextureCube<float4> environmentTexture		: register(t1, space0);
 Texture2D<float4> brdf						: register(t2, space0);
@@ -40,8 +40,6 @@ Texture2D<float> metallicTextures[64]	: register(t0, space4);
 
 // Shadow maps.
 Texture2D<float> sunShadowMapCascades[4]	: register(t0, space5);
-StructuredBuffer<point_light> pointLights	: register(t4, space5);
-StructuredBuffer<spherical_harmonics> shs	: register(t5, space5);
 
 
 static const spherical_harmonics sh = {
@@ -146,23 +144,6 @@ ps_output main(ps_input IN)
 
 		totalLighting.xyz += calculateDirectLighting(albedo.xyz, radiance, N, L, V, F0, roughness, metallic) * visibility;
 	}
-
-#if 0
-	// Point lights.
-	{
-		for (uint l = 0; l < 512; ++l)
-		{
-			point_light light = pointLights[l];
-
-			float3 lightToP = light.worldSpacePositionAndRadius.xyz - IN.worldPosition;
-			float distance = length(lightToP);
-			float3 L = lightToP / distance;
-			float3 radiance = light.color.xyz * saturate(1.f - distance / light.worldSpacePositionAndRadius.w); // TODO: Attenuation.
-
-			totalLighting.xyz += calculateDirectLighting(albedo.xyz, radiance, N, L, V, F0, roughness, metallic);
-		}
-	}
-#endif
 
 
 	ps_output OUT;

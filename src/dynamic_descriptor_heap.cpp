@@ -100,6 +100,11 @@ void dx_dynamic_descriptor_heap::commitStagedDescriptorsForDispatch(dx_command_l
 	commitStagedDescriptors(commandList, &ID3D12GraphicsCommandList::SetComputeRootDescriptorTable);
 }
 
+void dx_dynamic_descriptor_heap::setCurrentDescriptorHeap(dx_command_list* commandList)
+{
+	commandList->setDescriptorHeap(descriptorHeapType, currentDescriptorHeap);
+}
+
 D3D12_GPU_DESCRIPTOR_HANDLE dx_dynamic_descriptor_heap::copyDescriptor(dx_command_list* comandList, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor)
 {
 	if (!currentDescriptorHeap || numFreeHandles < 1)

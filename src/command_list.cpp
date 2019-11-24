@@ -1265,3 +1265,8 @@ void dx_command_list::setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, Com
 		trackObject(heap);
 	}
 }
+
+void dx_command_list::resetToDynamicDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType)
+{
+	dynamicDescriptorHeaps[heapType].setCurrentDescriptorHeap(this);
+}

@@ -75,6 +75,7 @@ public:
 	
 
 	void setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, ComPtr<ID3D12DescriptorHeap> heap);
+	void resetToDynamicDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType);
 
 	void setShaderResourceView(uint32 rootParameterIndex,
 		uint32 descriptorOffset,

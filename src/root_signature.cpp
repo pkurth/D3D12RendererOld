@@ -2,7 +2,7 @@
 #include "root_signature.h"
 #include "error.h"
 
-void dx_root_signature::initialize(ComPtr<ID3D12Device2> device, const D3D12_ROOT_SIGNATURE_DESC1& desc)
+void dx_root_signature::initialize(ComPtr<ID3D12Device2> device, const D3D12_ROOT_SIGNATURE_DESC1& desc, bool parse)
 {
 	D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 	featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -40,27 +40,30 @@ void dx_root_signature::initialize(ComPtr<ID3D12Device2> device, const D3D12_ROO
 		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
 			uint32 numDescriptorRanges = rootParameter.DescriptorTable.NumDescriptorRanges;
-			
+
 			D3D12_DESCRIPTOR_RANGE1* descriptorRanges = numDescriptorRanges > 0 ? new D3D12_DESCRIPTOR_RANGE1[numDescriptorRanges] : nullptr;
 			memcpy(descriptorRanges, rootParameter.DescriptorTable.pDescriptorRanges, sizeof(D3D12_DESCRIPTOR_RANGE1) * numDescriptorRanges);
 			parameters[i].DescriptorTable.NumDescriptorRanges = numDescriptorRanges;
 			parameters[i].DescriptorTable.pDescriptorRanges = descriptorRanges;
 
-			if (numDescriptorRanges > 0)
+			if (parse)
 			{
-				switch (rootParameter.DescriptorTable.pDescriptorRanges[0].RangeType)
+				if (numDescriptorRanges > 0)
 				{
-				case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
-				case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
-				case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:
-					if (rootParameter.DescriptorTable.pDescriptorRanges[0].NumDescriptors != -1) // Only if bounded.
+					switch (rootParameter.DescriptorTable.pDescriptorRanges[0].RangeType)
 					{
-						descriptorTableBitMask |= (1 << i);
+					case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
+					case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
+					case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:
+						if (rootParameter.DescriptorTable.pDescriptorRanges[0].NumDescriptors != -1) // Only if bounded.
+						{
+							descriptorTableBitMask |= (1 << i);
+						}
+						break;
+					case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
+						samplerTableBitMask |= (1 << i);
+						break;
 					}
-					break;
-				case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
-					samplerTableBitMask |= (1 << i);
-					break;
 				}
 			}
 
@@ -85,7 +88,7 @@ void dx_root_signature::shutdown()
 		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
 			uint32 numDescriptorRanges = rootParameter.DescriptorTable.NumDescriptorRanges;
-			if (numDescriptorRanges > 0)
+			if (numDescriptorRanges != -1)
 			{
 				delete[] rootParameter.DescriptorTable.pDescriptorRanges;
 			}
