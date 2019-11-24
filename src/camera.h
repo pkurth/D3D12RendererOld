@@ -124,3 +124,28 @@ struct render_camera
 	}
 };
 
+struct cubemap_camera : render_camera
+{
+	void initialize(vec3 position, uint32 cubemapIndex)
+	{
+		this->position = position;
+
+		switch (cubemapIndex)
+		{
+		case 0: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(-90.f)); break;	// +X.
+		case 1: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(90.f)); break;		// -X.
+		case 2: this->rotation = createQuaternionFromAxisAngle(vec3::right, DirectX::XMConvertToRadians(90.f)); break;	// +Y.
+		case 3: this->rotation = createQuaternionFromAxisAngle(vec3::right, DirectX::XMConvertToRadians(-90.f)); break; // -Y.
+		case 4: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(180.f)); break;	// +Z.
+		case 5: this->rotation = quat::identity; break; 																// -Z.
+		default: assert(false);
+		}
+
+		this->fovY = DirectX::XMConvertToRadians(90.f);
+		this->nearPlane = 0.1f;
+		this->farPlane = 1000.f;
+
+		updateMatrices(1, 1);
+	}
+};
+

@@ -78,6 +78,8 @@ void main(cs_input IN)
 
 	// Rotate to cubemap face
 	dir = normalize(mul(rotateUV[texCoord.z], dir));
+	dir.z *= -1.f;
+
 
 	// Convert the world space direction into U,V texture coordinates in the panoramic texture.
 	// Source: http://gl.ict.usc.edu/Data/HighResProbes/

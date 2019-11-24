@@ -44,10 +44,10 @@ struct dx_texture : dx_resource
 		return checkFormatSupport(D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL);
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE getRenderTargetView() { return renderTargetView; }
+	D3D12_CPU_DESCRIPTOR_HANDLE getRenderTargetView(uint32 index = 0) { return renderTargetViews[index]; }
 	D3D12_CPU_DESCRIPTOR_HANDLE getDepthStencilView() { return depthStencilView; }
 
 private:
-	D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView;
+	D3D12_CPU_DESCRIPTOR_HANDLE renderTargetViews[6];
 	D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView;
 };

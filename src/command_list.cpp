@@ -113,7 +113,7 @@ void dx_command_list::setScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, u
 	commandList->OMSetRenderTargets(numRTVs, rtvs, FALSE, dsv);
 }
 
-void dx_command_list::setRenderTarget(dx_render_target& renderTarget)
+void dx_command_list::setRenderTarget(dx_render_target& renderTarget, uint32 arraySlice)
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvs[8];
 	uint32 numRTVs = 0;
@@ -123,7 +123,7 @@ void dx_command_list::setRenderTarget(dx_render_target& renderTarget)
 		if (tex && tex->resource)
 		{
 			transitionBarrier(*tex, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			rtvs[numRTVs++] = tex->getRenderTargetView();
+			rtvs[numRTVs++] = tex->getRenderTargetView(arraySlice);
 			trackObject(tex->resource);
 		}
 	}

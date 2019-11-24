@@ -6,6 +6,11 @@
 #include "camera.h"
 #include "texture.h"
 
+#include "buffer.h"
+#include "root_signature.h"
+#include "render_target.h"
+#include "command_list.h"
+
 
 #define MAX_NUM_SUN_SHADOW_CASCADES 4
 #define SHADOW_MAP_NEGATIVE_Z_OFFSET 100.f
@@ -66,5 +71,20 @@ struct point_light
 struct spherical_harmonics
 {
 	vec4 coefficients[9];
+};
+
+
+#define VISUALIZE_LIGHTPROBE_ROOTPARAM_MVP		0
+#define VISUALIZE_LIGHTPROBE_ROOTPARAM_TEXTURE	1
+
+struct visualize_light_probe_pipeline
+{
+	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget);
+	void render(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap);
+
+	dx_mesh mesh;
+
+	ComPtr<ID3D12PipelineState> pipelineState;
+	dx_root_signature rootSignature;
 };
 

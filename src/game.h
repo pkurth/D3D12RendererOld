@@ -47,6 +47,9 @@ public:
 
 private:
 
+	void renderScene(dx_command_list* commandList, render_camera& camera);
+
+
 	bool contentLoaded = false;
 	ComPtr<ID3D12Device2> device;
 
@@ -62,6 +65,8 @@ private:
 	sky_pipeline sky;
 	present_pipeline present;
 
+	visualize_light_probe_pipeline visualizeLightProbe;
+
 
 	dx_mesh indirectMesh;
 	std::vector<dx_material> indirectMaterials;
@@ -73,6 +78,7 @@ private:
 	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE roughnessesOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE metallicsOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE brdfOffset;
 
 	dx_mesh sceneMesh;
 	std::vector<submesh_info> sceneSubmeshes;
@@ -108,6 +114,11 @@ private:
 	dx_render_target lightingRT;
 	dx_texture hdrTexture;
 	dx_texture depthTexture;
+
+	dx_render_target lightProbeRT;
+	dx_texture lightProbeHDRTexture;
+	dx_texture lightProbeDepthTexture;
+	cubemap_camera lightProbeCamera;
 
 	dx_render_target sunShadowMapRT[MAX_NUM_SUN_SHADOW_CASCADES];
 	dx_texture sunShadowMapTexture[MAX_NUM_SUN_SHADOW_CASCADES];

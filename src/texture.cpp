@@ -10,9 +10,9 @@ dx_texture::dx_texture(const dx_texture& other)
 	: dx_resource(other)
 {
 	this->depthStencilView = other.depthStencilView;
-	this->renderTargetView = other.renderTargetView;
-	this->depthStencilView = other.depthStencilView;
-	this->renderTargetView = other.renderTargetView;
+	memcpy(this->renderTargetViews, other.renderTargetViews, sizeof(renderTargetViews));
+	this->shaderResourceViews = other.shaderResourceViews;
+	this->unorderedAccessViews = other.unorderedAccessViews;
 }
 
 dx_texture& dx_texture::operator=(const dx_texture& other)
@@ -25,9 +25,9 @@ dx_texture& dx_texture::operator=(const dx_texture& other)
 		clearValue = other.clearValue;
 	}
 	this->depthStencilView = other.depthStencilView;
-	this->renderTargetView = other.renderTargetView;
-	this->depthStencilView = other.depthStencilView;
-	this->renderTargetView = other.renderTargetView;
+	memcpy(this->renderTargetViews, other.renderTargetViews, sizeof(renderTargetViews));
+	this->shaderResourceViews = other.shaderResourceViews;
+	this->unorderedAccessViews = other.unorderedAccessViews;
 
 	return *this;
 }
@@ -63,8 +63,28 @@ void dx_texture::resize(uint32 width, uint32 height)
 		if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 &&
 			checkRTVSupport())
 		{
-			renderTargetView = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV).getDescriptorHandle(0);
-			device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetView);
+			if (resourceDesc.DepthOrArraySize > 1)
+			{
+				D3D12_RENDER_TARGET_VIEW_DESC rtvDesc;
+				rtvDesc.Format = resourceDesc.Format;
+				rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+				rtvDesc.Texture2DArray.ArraySize = 1;
+				rtvDesc.Texture2DArray.MipSlice = 0;
+				rtvDesc.Texture2DArray.PlaneSlice = 0;
+
+				dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, resourceDesc.DepthOrArraySize);
+				for (uint32 i = 0; i < resourceDesc.DepthOrArraySize; ++i)
+				{
+					rtvDesc.Texture2DArray.FirstArraySlice = i;
+					renderTargetViews[i] = allocation.getDescriptorHandle(i);
+					device->CreateRenderTargetView(resource.Get(), &rtvDesc, renderTargetViews[i]);
+				}
+			}
+			else
+			{
+				renderTargetViews[0] = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV).getDescriptorHandle(0);
+				device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetViews[0]);
+			}
 		}
 		if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
 			(checkDSVSupport() || isDepthFormat(format)))
@@ -101,8 +121,28 @@ void dx_texture::initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC re
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 &&
 		checkRTVSupport())
 	{
-		renderTargetView = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV).getDescriptorHandle(0);
-		device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetView);
+		if (resourceDesc.DepthOrArraySize > 1)
+		{
+			D3D12_RENDER_TARGET_VIEW_DESC rtvDesc;
+			rtvDesc.Format = resourceDesc.Format;
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+			rtvDesc.Texture2DArray.ArraySize = 1;
+			rtvDesc.Texture2DArray.MipSlice = 0;
+			rtvDesc.Texture2DArray.PlaneSlice = 0;
+
+			dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, resourceDesc.DepthOrArraySize);
+			for (uint32 i = 0; i < resourceDesc.DepthOrArraySize; ++i)
+			{
+				rtvDesc.Texture2DArray.FirstArraySlice = i;
+				renderTargetViews[i] = allocation.getDescriptorHandle(i);
+				device->CreateRenderTargetView(resource.Get(), &rtvDesc, renderTargetViews[i]);
+			}
+		}
+		else
+		{
+			renderTargetViews[0] = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV).getDescriptorHandle(0);
+			device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetViews[0]);
+		}
 	}
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
 		(checkDSVSupport() || isDepthFormat(format)))
@@ -136,8 +176,28 @@ void dx_texture::initialize(ComPtr<ID3D12Device2> device, ComPtr<ID3D12Resource>
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 &&
 		checkRTVSupport())
 	{
-		renderTargetView = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV).getDescriptorHandle(0);
-		device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetView);
+		if (resourceDesc.DepthOrArraySize > 1)
+		{
+			D3D12_RENDER_TARGET_VIEW_DESC rtvDesc;
+			rtvDesc.Format = resourceDesc.Format;
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+			rtvDesc.Texture2DArray.ArraySize = 1;
+			rtvDesc.Texture2DArray.MipSlice = 0;
+			rtvDesc.Texture2DArray.PlaneSlice = 0;
+
+			dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, resourceDesc.DepthOrArraySize);
+			for (uint32 i = 0; i < resourceDesc.DepthOrArraySize; ++i)
+			{
+				rtvDesc.Texture2DArray.FirstArraySlice = i;
+				renderTargetViews[i] = allocation.getDescriptorHandle(i);
+				device->CreateRenderTargetView(resource.Get(), &rtvDesc, renderTargetViews[i]);
+			}
+		}
+		else
+		{
+			renderTargetViews[0] = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV).getDescriptorHandle(0);
+			device->CreateRenderTargetView(resource.Get(), nullptr, renderTargetViews[0]);
+		}
 	}
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
 		(checkDSVSupport() || isDepthFormat(format)))
@@ -165,7 +225,7 @@ void dx_texture::initialize(const dx_texture& other)
 	this->shaderResourceViews = other.shaderResourceViews;
 	this->unorderedAccessViews = other.unorderedAccessViews;
 	this->depthStencilView = other.depthStencilView;
-	this->renderTargetView = other.renderTargetView;
+	memcpy(this->renderTargetViews, other.renderTargetViews, sizeof(renderTargetViews));
 }
 
 bool dx_texture::isUAVCompatibleFormat(DXGI_FORMAT format)

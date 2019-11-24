@@ -233,6 +233,8 @@
     <FxCompile Include="shaders\geometry_indirect_forward_ps.hlsl" />
     <FxCompile Include="shaders\light_culling.hlsl" />
     <FxCompile Include="shaders\cubemap_to_sh.hlsl" />
+    <FxCompile Include="shaders\visualize_light_probe_vs.hlsl" />
+    <FxCompile Include="shaders\visualize_light_probe_ps.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -62,6 +62,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 			hdrTexture.initialize(device, hdrTextureDesc, &hdrClearValue);
 			lightingRT.attachColorTexture(0, hdrTexture);
+
+
+			// Light probe cubemap.
+			CD3DX12_RESOURCE_DESC cubemapDesc(hdrTextureDesc);
+			cubemapDesc.Width = cubemapDesc.Height = 128;
+			cubemapDesc.DepthOrArraySize = 6;
+			cubemapDesc.MipLevels = 0;
+			cubemapDesc.Format = hdrFormat;
+
+			lightProbeHDRTexture.initialize(device, cubemapDesc);
+			lightProbeRT.attachColorTexture(0, lightProbeHDRTexture);
 		}
 
 		// Depth.
@@ -77,6 +88,12 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 			depthTexture.initialize(device, depthDesc, &depthClearValue);
 			lightingRT.attachDepthStencilTexture(depthTexture);
+
+
+			// Light probe depth.
+			depthDesc.Width = depthDesc.Height = 128;
+			lightProbeDepthTexture.initialize(device, depthDesc, &depthClearValue);
+			lightProbeRT.attachDepthStencilTexture(lightProbeDepthTexture);
 		}
 
 		// Sun shadow map.
@@ -289,6 +306,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		sky.initialize(device, commandList, lightingRT);
 		present.initialize(device, screenRTFormats);
 
+		visualizeLightProbe.initialize(device, commandList, lightingRT);
 
 		commandList->integrateBRDF(brdf);
 		dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, MAX_NUM_SUN_SHADOW_CASCADES);
@@ -352,50 +370,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 				commandList->loadTextureFromFile(indirectMaterials[i].normal, stringToWString(sponzaMaterials[i].normalName), texture_type_noncolor);
 				commandList->loadTextureFromFile(indirectMaterials[i].roughness, stringToWString(sponzaMaterials[i].roughnessName), texture_type_noncolor);
 				commandList->loadTextureFromFile(indirectMaterials[i].metallic, stringToWString(sponzaMaterials[i].metallicName), texture_type_noncolor);
-			}
-		}
-		{
-			PROFILE_BLOCK("Set up descriptor heap");
-
-			D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
-			descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			descriptorHeapDesc.NumDescriptors = (uint32)indirectMaterials.size() * 4;
-			descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-			checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&indirectDescriptorHeap)));
-
-			uint32 descriptorHandleIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-			CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(indirectDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-			CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(indirectDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-
-
-			albedosOffset = gpuHandle;
-			for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-			{
-				device->CreateShaderResourceView(indirectMaterials[i].albedo.resource.Get(), nullptr, cpuHandle);
-				cpuHandle.Offset(descriptorHandleIncrementSize);
-				gpuHandle.Offset(descriptorHandleIncrementSize);
-			}
-			normalsOffset = gpuHandle;
-			for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-			{
-				device->CreateShaderResourceView(indirectMaterials[i].normal.resource.Get(), nullptr, cpuHandle);
-				cpuHandle.Offset(descriptorHandleIncrementSize);
-				gpuHandle.Offset(descriptorHandleIncrementSize);
-			}
-			roughnessesOffset = gpuHandle;
-			for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-			{
-				device->CreateShaderResourceView(indirectMaterials[i].roughness.resource.Get(), nullptr, cpuHandle);
-				cpuHandle.Offset(descriptorHandleIncrementSize);
-				gpuHandle.Offset(descriptorHandleIncrementSize);
-			}
-			metallicsOffset = gpuHandle;
-			for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-			{
-				device->CreateShaderResourceView(indirectMaterials[i].metallic.resource.Get(), nullptr, cpuHandle);
-				cpuHandle.Offset(descriptorHandleIncrementSize);
-				gpuHandle.Offset(descriptorHandleIncrementSize);
 			}
 		}
 
@@ -505,6 +479,51 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	}
 
 	{
+		PROFILE_BLOCK("Set up indirect descriptor heap");
+
+		D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
+		descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		descriptorHeapDesc.NumDescriptors = (uint32)indirectMaterials.size() * 4;
+		descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&indirectDescriptorHeap)));
+
+		uint32 descriptorHandleIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+		CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(indirectDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+		CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(indirectDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+
+
+		albedosOffset = gpuHandle;
+		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+		{
+			device->CreateShaderResourceView(indirectMaterials[i].albedo.resource.Get(), nullptr, cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+		}
+		normalsOffset = gpuHandle;
+		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+		{
+			device->CreateShaderResourceView(indirectMaterials[i].normal.resource.Get(), nullptr, cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+		}
+		roughnessesOffset = gpuHandle;
+		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+		{
+			device->CreateShaderResourceView(indirectMaterials[i].roughness.resource.Get(), nullptr, cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+		}
+		metallicsOffset = gpuHandle;
+		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+		{
+			device->CreateShaderResourceView(indirectMaterials[i].metallic.resource.Get(), nullptr, cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+		}
+	}
+
+	{
 		PROFILE_BLOCK("Execute copy command list");
 
 		uint64 fenceValue = copyCommandQueue.executeCommandList(commandList);
@@ -599,56 +618,13 @@ void dx_game::update(float dt)
 	}
 }
 
-void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
+void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 {
-	PIXSetMarker(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 0, 0), "Frame start.");
-
 	camera_cb cameraCB;
 	camera.fillConstantBuffer(cameraCB);
 
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress = commandList->uploadDynamicConstantBuffer(cameraCB);
 	D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress = commandList->uploadDynamicConstantBuffer(sun);
-
-
-	commandList->setScissor(scissorRect);
-
-
-	// Render to sun shadow map.
-	{
-		PROFILE_BLOCK("Record shadow map commands");
-
-		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sun shadow map.");
-
-		commandList->setViewport(sunShadowMapRT[0].viewport);
-
-		// If more is than the static scene is rendered here, this stuff must go in the loop.
-		commandList->setPipelineState(indirectDepthOnlyPipelineState);
-		commandList->setGraphicsRootSignature(indirectDepthOnlyRootSignature);
-
-		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);
-		commandList->setIndexBuffer(indirectMesh.indexBuffer);
-
-		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
-		{
-			commandList->setRenderTarget(sunShadowMapRT[i]);
-			commandList->clearDepth(sunShadowMapRT[i].depthStencilAttachment->getDepthStencilView());
-
-			// This only works, because the vertex shader expects the vp matrix as the first argument.
-			commandList->setGraphics32BitConstants(INDIRECT_ROOTPARAM_CAMERA, sun.vp[i]);
-
-			// Static scene.
-			commandList->drawIndirect(
-				indirectDepthOnlyCommandSignature,
-				numIndirectDrawCalls,
-				indirectDepthOnlyCommandBuffer);
-		}
-	}
-
-	commandList->setRenderTarget(lightingRT);
-	commandList->setViewport(viewport);
-	commandList->clearDepth(lightingRT.depthStencilAttachment->getDepthStencilView());
 
 #if DEPTH_PREPASS
 	// Depth pre pass.
@@ -724,6 +700,68 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	// Sky.
 	sky.render(commandList, camera, cubemap);
+}
+
+void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
+{
+	PIXSetMarker(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 0, 0), "Frame start.");
+
+	commandList->setScissor(scissorRect);
+
+
+	// Render to sun shadow map.
+	{
+		PROFILE_BLOCK("Record shadow map commands");
+
+		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sun shadow map.");
+
+		commandList->setViewport(sunShadowMapRT[0].viewport);
+
+		// If more than the static scene is rendered here, this stuff must go in the loop.
+		commandList->setPipelineState(indirectDepthOnlyPipelineState);
+		commandList->setGraphicsRootSignature(indirectDepthOnlyRootSignature);
+
+		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);
+		commandList->setIndexBuffer(indirectMesh.indexBuffer);
+
+		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
+		{
+			commandList->setRenderTarget(sunShadowMapRT[i]);
+			commandList->clearDepth(sunShadowMapRT[i].depthStencilAttachment->getDepthStencilView());
+
+			// This only works, because the vertex shader expects the vp matrix as the first argument.
+			commandList->setGraphics32BitConstants(INDIRECT_ROOTPARAM_CAMERA, sun.vp[i]);
+
+			// Static scene.
+			commandList->drawIndirect(
+				indirectDepthOnlyCommandSignature,
+				numIndirectDrawCalls,
+				indirectDepthOnlyCommandBuffer);
+		}
+	}
+
+	/*for (uint32 i = 0; i < 6; ++i)
+	{
+		commandList->setRenderTarget(lightProbeRT, i);
+		commandList->setViewport(lightProbeRT.viewport);
+		commandList->clearDepth(lightProbeRT.depthStencilAttachment->getDepthStencilView());
+
+		lightProbeCamera.initialize(vec3(0.f, 60.f, 0.f), i);
+		renderScene(commandList, lightProbeCamera);
+	}*/
+
+	commandList->setRenderTarget(lightingRT);
+	commandList->setViewport(viewport);
+	commandList->clearDepth(lightingRT.depthStencilAttachment->getDepthStencilView());
+
+	renderScene(commandList, camera);
+
+	visualizeLightProbe.render(commandList, camera, vec3(0.f,  0.f, 0.f), cubemap);
+	visualizeLightProbe.render(commandList, camera, vec3(5.f,  0.f, 0.f), irradiance);
+	visualizeLightProbe.render(commandList, camera, vec3(10.f, 0.f, 0.f), prefilteredEnvironment);
+	visualizeLightProbe.render(commandList, camera, vec3(15.f, 0.f, 0.f), lightProbeHDRTexture);
 
 
 	// Resolve to screen.
