@@ -9,6 +9,8 @@
 
 #define DEPTH_PREPASS 1
 
+#define LIGHT_PROBE_RESOLUTION 256
+
 #pragma pack(push, 1)
 struct indirect_command
 {
@@ -66,7 +68,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 			// Light probe cubemap.
 			CD3DX12_RESOURCE_DESC cubemapDesc(hdrTextureDesc);
-			cubemapDesc.Width = cubemapDesc.Height = 128;
+			cubemapDesc.Width = cubemapDesc.Height = LIGHT_PROBE_RESOLUTION;
 			cubemapDesc.DepthOrArraySize = 6;
 			cubemapDesc.MipLevels = 0;
 			cubemapDesc.Format = hdrFormat;
@@ -91,7 +93,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 			// Light probe depth.
-			depthDesc.Width = depthDesc.Height = 128;
+			depthDesc.Width = depthDesc.Height = LIGHT_PROBE_RESOLUTION;
 			lightProbeDepthTexture.initialize(device, depthDesc, &depthClearValue);
 			lightProbeRT.attachDepthStencilTexture(lightProbeDepthTexture);
 		}
@@ -805,7 +807,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	visualizeLightProbe.render(commandList, camera, vec3(0.f,  0.f, 0.f), cubemap);
 	visualizeLightProbe.render(commandList, camera, vec3(5.f,  0.f, 0.f), irradiance);
 	visualizeLightProbe.render(commandList, camera, vec3(10.f, 0.f, 0.f), prefilteredEnvironment);
-	visualizeLightProbe.render(commandList, camera, vec3(0.f, 10.f, 0.f), lightProbeHDRTexture);
+	visualizeLightProbe.render(commandList, camera, vec3(0.f, 10.f, 0.f), lightProbeHDRTexture, -1.f);
 
 
 	// Resolve to screen.

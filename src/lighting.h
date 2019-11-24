@@ -74,13 +74,13 @@ struct spherical_harmonics
 };
 
 
-#define VISUALIZE_LIGHTPROBE_ROOTPARAM_MVP		0
+#define VISUALIZE_LIGHTPROBE_ROOTPARAM_CB		0
 #define VISUALIZE_LIGHTPROBE_ROOTPARAM_TEXTURE	1
 
 struct visualize_light_probe_pipeline
 {
 	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget);
-	void render(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap);
+	void render(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap, float uvzScale = 1.f);
 
 	dx_mesh mesh;
 

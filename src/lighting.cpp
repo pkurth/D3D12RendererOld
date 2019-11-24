@@ -28,7 +28,7 @@ void visualize_light_probe_pipeline::initialize(ComPtr<ID3D12Device2> device, dx
 	CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-	rootParameters[VISUALIZE_LIGHTPROBE_ROOTPARAM_MVP].InitAsConstants(sizeof(mat4) / sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // VP matrix.
+	rootParameters[VISUALIZE_LIGHTPROBE_ROOTPARAM_CB].InitAsConstants(sizeof(mat4) / sizeof(float) + 1, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // VP matrix.
 	rootParameters[VISUALIZE_LIGHTPROBE_ROOTPARAM_TEXTURE].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
@@ -73,11 +73,12 @@ void visualize_light_probe_pipeline::initialize(ComPtr<ID3D12Device2> device, dx
 
 
 	cpu_mesh<vertex_3P> cube;
-	cube.pushCube(1.f);
+	cube.pushSphere(51, 51, 1.f);
 	mesh.initialize(device, commandList, cube);
 }
 
-void visualize_light_probe_pipeline::render(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap)
+void visualize_light_probe_pipeline::render(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap,
+	float uvzScale)
 {
 	PROFILE_FUNCTION();
 
@@ -89,9 +90,15 @@ void visualize_light_probe_pipeline::render(dx_command_list* commandList, const 
 	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 
-	mat4 mvp = camera.projectionMatrix * camera.viewMatrix * createModelMatrix(position, quat::identity);
-
-	commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_MVP, mvp);
+	struct
+	{
+		mat4 mvp;
+		float uvzScale;
+	} cb = {
+		camera.projectionMatrix * camera.viewMatrix * createModelMatrix(position, quat::identity),
+		uvzScale
+	};
+	commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, cb);
 
 	commandList->setVertexBuffer(0, mesh.vertexBuffer);
 	commandList->setIndexBuffer(mesh.indexBuffer);

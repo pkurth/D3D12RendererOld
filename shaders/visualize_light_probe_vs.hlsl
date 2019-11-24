@@ -1,10 +1,11 @@
 
-struct mvp_cb
+struct visualize_cb
 {
 	matrix mvp;
+	float uvzScale;
 };
 
-ConstantBuffer<mvp_cb> mvpCB : register(b0);
+ConstantBuffer<visualize_cb> visualizeCB : register(b0);
 
 struct vs_input
 {
@@ -22,7 +23,8 @@ vs_output main(vs_input IN)
 	vs_output OUT;
 
 	OUT.uv = IN.position;
-	OUT.position = mul(mvpCB.mvp, float4(IN.position, 1.f));
+	OUT.uv.z *= visualizeCB.uvzScale;
+	OUT.position = mul(visualizeCB.mvp, float4(IN.position, 1.f));
 
 	return OUT;
 }
