@@ -130,14 +130,16 @@ struct cubemap_camera : render_camera
 	{
 		this->position = position;
 
+		// We flip to z order here, to account for our right-handed coordinate system.
+		// Unfortunately this means, we need to again flip the z coordinate of our texture coordinates in the shader.
 		switch (cubemapIndex)
 		{
 		case 0: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(-90.f)); break;	// +X.
 		case 1: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(90.f)); break;		// -X.
 		case 2: this->rotation = createQuaternionFromAxisAngle(vec3::right, DirectX::XMConvertToRadians(90.f)); break;	// +Y.
 		case 3: this->rotation = createQuaternionFromAxisAngle(vec3::right, DirectX::XMConvertToRadians(-90.f)); break; // -Y.
-		case 5: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(180.f)); break;	// +Z.
 		case 4: this->rotation = quat::identity; break; 																// -Z.
+		case 5: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(180.f)); break;	// +Z.
 		default: assert(false);
 		}
 
