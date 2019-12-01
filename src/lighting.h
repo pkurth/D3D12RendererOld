@@ -107,6 +107,7 @@ struct light_probe_system
 
 	// Visualizations of single probe.
 	void visualizeCubemap(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap, float uvzScale = 1.f);
+	void visualizeSH(dx_command_list* commandList, const render_camera& camera, vec3 position, const spherical_harmonics& sh, float uvzScale = 1.f);
 
 	// Visualize whole system.
 	void visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh);
@@ -119,12 +120,6 @@ struct light_probe_system
 
 	dx_mesh lightProbeMesh;
 
-	ComPtr<ID3D12PipelineState> visualizeCubemapPipeline;
-	dx_root_signature visualizeCubemapRootSignature;
-
-	ComPtr<ID3D12PipelineState> visualizeSHPipeline;
-	dx_root_signature visualizeSHRootSignature;
-
 	std::vector<vec3> lightProbePositions;
 	std::vector<light_probe_tetrahedron> lightProbeTetrahedra;
 
@@ -135,5 +130,14 @@ struct light_probe_system
 	dx_mesh tetrahedronMesh;
 	ComPtr<ID3D12PipelineState> unlitPipeline;
 	dx_root_signature unlitRootSignature;
+
+	ComPtr<ID3D12PipelineState> visualizeCubemapPipeline;
+	dx_root_signature visualizeCubemapRootSignature;
+
+	ComPtr<ID3D12PipelineState> visualizeSHBufferPipeline;
+	dx_root_signature visualizeSHBufferRootSignature;
+
+	ComPtr<ID3D12PipelineState> visualizeSHDirectPipeline;
+	dx_root_signature visualizeSHDirectRootSignature;
 };
 

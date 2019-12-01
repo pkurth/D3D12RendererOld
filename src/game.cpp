@@ -845,6 +845,13 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity);
 
+	vec3 position(cos(lightProbeTime * 0.3f) * 20.f, 20.f + sin(lightProbeTime * 0.3f) * 10.f, 0.f);
+	lightProbeTime += dt;
+
+	vec4 barycentric;
+	lastTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(position, lastTetrahedronIndex, barycentric);
+	lightProbeSystem.visualizeSH(commandList, camera, position,
+		lightProbeSystem.getInterpolatedSphericalHarmonics(lightProbeSystem.lightProbeTetrahedra[lastTetrahedronIndex], barycentric));
 
 	commandList->transitionBarrier(lightProbeHDRTexture, D3D12_RESOURCE_STATE_COMMON);
 

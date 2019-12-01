@@ -122,6 +122,9 @@ private:
 	bool showLightProbes = false;
 	bool showLightProbeConnectivity = false;
 
+	uint32 lastTetrahedronIndex = 0;
+	float lightProbeTime = 0.f;
+
 	light_probe_system lightProbeSystem;
 
 	dx_render_target sunShadowMapRT[MAX_NUM_SUN_SHADOW_CASCADES];

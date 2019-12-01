@@ -81,7 +81,7 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 
 	{
 		ComPtr<ID3DBlob> pixelShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/visualize_light_probe_sh_ps.cso", &pixelShaderBlob));
+		checkResult(D3DReadFileToBlob(L"shaders/bin/visualize_light_probe_sh_buffer_ps.cso", &pixelShaderBlob));
 
 		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -108,7 +108,7 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 		rootSignatureDesc.NumParameters = arraysize(rootParameters);
 		rootSignatureDesc.pStaticSamplers = nullptr;
 		rootSignatureDesc.NumStaticSamplers = 0;
-		visualizeSHRootSignature.initialize(device, rootSignatureDesc);
+		visualizeSHBufferRootSignature.initialize(device, rootSignatureDesc);
 
 
 		struct pipeline_state_stream
@@ -123,7 +123,7 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 			CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
 		} pipelineStateStream;
 
-		pipelineStateStream.rootSignature = visualizeSHRootSignature.rootSignature.Get();
+		pipelineStateStream.rootSignature = visualizeSHBufferRootSignature.rootSignature.Get();
 		pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
 		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
@@ -135,10 +135,69 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
 			sizeof(pipeline_state_stream), &pipelineStateStream
 		};
-		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&visualizeSHPipeline)));
+		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&visualizeSHBufferPipeline)));
 
-		SET_NAME(visualizeSHRootSignature.rootSignature, "Visualize SH Light Probe Root Signature");
-		SET_NAME(visualizeSHPipeline, "Visualize SH Light Probe Pipeline");
+		SET_NAME(visualizeSHBufferRootSignature.rootSignature, "Visualize SH Light Probe Buffer Root Signature");
+		SET_NAME(visualizeSHBufferPipeline, "Visualize SH Light Probe Buffer Pipeline");
+	}
+
+	{
+		ComPtr<ID3DBlob> pixelShaderBlob;
+		checkResult(D3DReadFileToBlob(L"shaders/bin/visualize_light_probe_sh_direct_ps.cso", &pixelShaderBlob));
+
+		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		// Root signature.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		rootParameters[VISUALIZE_LIGHTPROBE_ROOTPARAM_CB].InitAsConstants(sizeof(mat4) / sizeof(float) + 1, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // MVP matrix.
+		rootParameters[VISUALIZE_LIGHTPROBE_ROOTPARAM_SH].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.pParameters = rootParameters;
+		rootSignatureDesc.NumParameters = arraysize(rootParameters);
+		rootSignatureDesc.pStaticSamplers = nullptr;
+		rootSignatureDesc.NumStaticSamplers = 0;
+		visualizeSHDirectRootSignature.initialize(device, rootSignatureDesc);
+
+
+		struct pipeline_state_stream
+		{
+			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
+			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
+			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
+			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
+			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
+			CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
+		} pipelineStateStream;
+
+		pipelineStateStream.rootSignature = visualizeSHDirectRootSignature.rootSignature.Get();
+		pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
+		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+		pipelineStateStream.dsvFormat = renderTarget.depthStencilFormat;
+		pipelineStateStream.rtvFormats = renderTarget.renderTargetFormat;
+		pipelineStateStream.rasterizer = defaultRasterizerDesc;
+
+		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+			sizeof(pipeline_state_stream), &pipelineStateStream
+		};
+		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&visualizeSHDirectPipeline)));
+
+		SET_NAME(visualizeSHDirectRootSignature.rootSignature, "Visualize SH Light Probe Direct Root Signature");
+		SET_NAME(visualizeSHDirectPipeline, "Visualize SH Light Probe Direct Pipeline");
 	}
 
 	cpu_triangle_mesh<vertex_3P> sphere;
@@ -149,8 +208,11 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 
 
 
+	this->lightProbePositions = lightProbePositions;
 
-	spherical_harmonics sh = { // Texture pink.
+#if 0
+	spherical_harmonics pinkSH = 
+	{
 		vec4(1.f, 0.f, 1.f, 0.f),
 		vec4(0.f, 0.f, 0.f, 0.f),
 		vec4(0.f, 0.f, 0.f, 0.f),
@@ -162,9 +224,15 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 		vec4(0.f, 0.f, 0.f, 0.f),
 	};
 
-	this->lightProbePositions = lightProbePositions;
-	sphericalHarmonics.resize(lightProbePositions.size(), sh);
-
+	sphericalHarmonics.resize(lightProbePositions.size(), pinkSH);
+#else
+	sphericalHarmonics.resize(lightProbePositions.size());
+	memset(sphericalHarmonics.data(), 0, sphericalHarmonics.size() * sizeof(spherical_harmonics));
+	for (uint32 i = 0; i < sphericalHarmonics.size(); ++i)
+	{
+		sphericalHarmonics[i].coefficients[0] = vec4(randomFloat(-0.5f, 0.5f), randomFloat(-0.5f, 0.5f), randomFloat(-0.5f, 0.5f), 0.f);
+	}
+#endif
 
 	sphericalHarmonicsBuffer.initialize(device, sphericalHarmonics.data(), (uint32)sphericalHarmonics.size(), commandList);
 
@@ -323,6 +391,8 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 
 vec4 light_probe_system::calculateBarycentricCoordinates(const light_probe_tetrahedron& tet, vec3 position)
 {
+	PROFILE_FUNCTION();
+
 	vec4 barycentric = tet.matrix * (position - lightProbePositions[tet.d]);
 	barycentric.w = 1.f - barycentric.x - barycentric.y - barycentric.z;
 	return barycentric;
@@ -330,6 +400,8 @@ vec4 light_probe_system::calculateBarycentricCoordinates(const light_probe_tetra
 
 spherical_harmonics light_probe_system::getInterpolatedSphericalHarmonics(const light_probe_tetrahedron& tet, vec4 barycentric)
 {
+	PROFILE_FUNCTION();
+
 	const spherical_harmonics& a = sphericalHarmonics[tet.a];
 	const spherical_harmonics& b = sphericalHarmonics[tet.b];
 	const spherical_harmonics& c = sphericalHarmonics[tet.c];
@@ -348,6 +420,8 @@ spherical_harmonics light_probe_system::getInterpolatedSphericalHarmonics(const 
 
 uint32 light_probe_system::getEnclosingTetrahedron(vec3 position, uint32 lastTetrahedron, vec4& barycentric)
 {
+	PROFILE_FUNCTION();
+
 	barycentric = calculateBarycentricCoordinates(lightProbeTetrahedra[lastTetrahedron], position);
 
 	while (!(barycentric.x >= 0.f && barycentric.y >= 0.f && barycentric.z >= 0.f && barycentric.w >= 0.f))
@@ -410,6 +484,37 @@ void light_probe_system::visualizeCubemap(dx_command_list* commandList, const re
 	commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 }
 
+void light_probe_system::visualizeSH(dx_command_list* commandList, const render_camera& camera, vec3 position, const spherical_harmonics& sh, float uvzScale)
+{
+	PROFILE_FUNCTION();
+
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Visualize SH light probe.");
+
+	commandList->setPipelineState(visualizeSHDirectPipeline);
+	commandList->setGraphicsRootSignature(visualizeSHDirectRootSignature);
+
+	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+
+	struct
+	{
+		mat4 mvp;
+		float uvzScale;
+	} cb = {
+		camera.projectionMatrix * camera.viewMatrix * createModelMatrix(position, quat::identity),
+		uvzScale
+	};
+	commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, cb);
+
+	commandList->setVertexBuffer(0, lightProbeMesh.vertexBuffer);
+	commandList->setIndexBuffer(lightProbeMesh.indexBuffer);
+
+	D3D12_GPU_VIRTUAL_ADDRESS shCBAddress = commandList->uploadDynamicConstantBuffer(sh);
+	commandList->setGraphicsDynamicConstantBuffer(VISUALIZE_LIGHTPROBE_ROOTPARAM_TEXTURE, shCBAddress);
+
+	commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
+}
+
 void light_probe_system::visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh)
 {
 	PROFILE_FUNCTION();
@@ -436,8 +541,8 @@ void light_probe_system::visualizeLightProbes(dx_command_list* commandList, cons
 	{
 		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Visualize SH light probe.");
 
-		commandList->setPipelineState(visualizeSHPipeline);
-		commandList->setGraphicsRootSignature(visualizeSHRootSignature);
+		commandList->setPipelineState(visualizeSHBufferPipeline);
+		commandList->setGraphicsRootSignature(visualizeSHBufferRootSignature);
 
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
