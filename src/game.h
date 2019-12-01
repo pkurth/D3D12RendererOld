@@ -36,7 +36,7 @@ public:
 	void initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth = color_depth_8);
 	void resize(uint32 width, uint32 height);
 
-	void update(float dt);
+	void update(uint64 frameIndex, float dt);
 	void render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV);
 
 	bool keyDownCallback(keyboard_event event);
@@ -85,7 +85,6 @@ private:
 	directional_light sun;
 	std::vector<point_light> pointLights;
 	dx_structured_buffer pointLightBuffer;
-	dx_structured_buffer sphericalHarmonicsBuffer;
 
 	dx_texture cubemap;
 	dx_texture irradiance;
@@ -119,8 +118,13 @@ private:
 	dx_texture lightProbeIrradiance;
 	dx_texture lightProbeDepthTexture;
 	cubemap_camera lightProbeCamera;
-	uint32 lightProbeRenderIndex = 0;
-	float lightProbeTime = 0.f;
+	uint32 lightProbeFaceIndex = 0;
+	uint32 lightProbeGlobalIndex = 0;
+	bool lightProbeRecording = true;
+
+	std::vector<spherical_harmonics> lightProbeSHs;
+	std::vector<vec3> lightProbePositions;
+	dx_structured_buffer sphericalHarmonicsBuffer;
 
 	dx_render_target sunShadowMapRT[MAX_NUM_SUN_SHADOW_CASCADES];
 	dx_texture sunShadowMapTexture[MAX_NUM_SUN_SHADOW_CASCADES];

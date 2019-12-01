@@ -969,7 +969,7 @@ void dx_command_list::integrateBRDF(dx_texture& brdf, uint32 resolution)
 	}
 }
 
-void dx_command_list::projectCubemapToSphericalHarmonics(dx_texture& cubemap, dx_structured_buffer& sh, uint32 srcMip)
+void dx_command_list::projectCubemapToSphericalHarmonics(dx_texture& cubemap, dx_structured_buffer& sh, uint32 srcMip, uint32 shIndex)
 {
 	if (commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
 	{
@@ -977,7 +977,7 @@ void dx_command_list::projectCubemapToSphericalHarmonics(dx_texture& cubemap, dx
 		{
 			computeCommandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
 		}
-		computeCommandList->projectCubemapToSphericalHarmonics(cubemap, sh, srcMip);
+		computeCommandList->projectCubemapToSphericalHarmonics(cubemap, sh, srcMip, shIndex);
 		return;
 	}
 
@@ -986,6 +986,7 @@ void dx_command_list::projectCubemapToSphericalHarmonics(dx_texture& cubemap, dx
 
 	cubemap_to_sh_cb cubemapToSHCB;
 	cubemapToSHCB.mipLevel = srcMip;
+	cubemapToSHCB.outIndex = shIndex;
 
 	setCompute32BitConstants(cubemap_to_sh_param_constant_buffer, cubemapToSHCB);
 

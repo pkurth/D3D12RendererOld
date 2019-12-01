@@ -109,6 +109,7 @@ struct dx_integrate_brdf_pso
 struct cubemap_to_sh_cb
 {
 	uint32 mipLevel;
+	uint32 outIndex;
 };
 
 enum cubemap_to_sh_root_parameter

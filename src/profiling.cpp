@@ -49,8 +49,8 @@ struct profile_thread
 };
 
 static profile_frame recordedProfileFrames[MAX_NUM_RECORDED_FRAMES];
-static uint32 currentProfileFrame = -1;
-static uint32 highlightFrameIndex = -1;
+static uint64 currentProfileFrame = -1;
+static uint64 highlightFrameIndex = -1;
 
 
 static profile_thread recordedProfileThreads[MAX_NUM_RECORDED_THREADS];
@@ -428,8 +428,6 @@ static void displayProfileInfo(debug_gui& gui)
 void processAndDisplayProfileEvents(debug_gui& gui)
 {
 	PROFILE_FUNCTION();
-
-	static bool performanceFrequencyQueried = QueryPerformanceFrequency((LARGE_INTEGER*)& performanceFrequency);
 
 	uint64 currentArrayAndEventIndex = profileArrayAndEventIndex; // We are only interested in upper 32 bits, so don't worry about thread safety.
 	uint32 arrayIndex = (uint32)(!(currentArrayAndEventIndex >> 32));

@@ -14,6 +14,7 @@ struct cs_input
 cbuffer cubemap_to_sh_cb : register(b0)
 {
 	uint mipLevel;
+	uint outIndex;
 };
 
 RWStructuredBuffer<spherical_harmonics> sh : register(u0);
@@ -190,15 +191,15 @@ void main(cs_input IN)
 	{
 		float scale = 4.f * pi / gs_totalWeight[0];
 
-		sh[0].coefficients[0] = gs_p0[0] * scale;
-		sh[0].coefficients[1] = gs_p1[0] * scale;
-		sh[0].coefficients[2] = gs_p2[0] * scale;
-		sh[0].coefficients[3] = gs_p3[0] * scale;
-		sh[0].coefficients[4] = gs_p4[0] * scale;
-		sh[0].coefficients[5] = gs_p5[0] * scale;
-		sh[0].coefficients[6] = gs_p6[0] * scale;
-		sh[0].coefficients[7] = gs_p7[0] * scale;
-		sh[0].coefficients[8] = gs_p8[0] * scale;
+		sh[outIndex].coefficients[0] = gs_p0[0] * scale;
+		sh[outIndex].coefficients[1] = gs_p1[0] * scale;
+		sh[outIndex].coefficients[2] = gs_p2[0] * scale;
+		sh[outIndex].coefficients[3] = gs_p3[0] * scale;
+		sh[outIndex].coefficients[4] = gs_p4[0] * scale;
+		sh[outIndex].coefficients[5] = gs_p5[0] * scale;
+		sh[outIndex].coefficients[6] = gs_p6[0] * scale;
+		sh[outIndex].coefficients[7] = gs_p7[0] * scale;
+		sh[outIndex].coefficients[8] = gs_p8[0] * scale;
 
 		/*sh[0].coefficients[0] = float4(0.445560, 0.264096, 0.266335, 0.0);
 		sh[0].coefficients[1] = float4(-0.311523, -0.084572, 0.080637, 0.0);

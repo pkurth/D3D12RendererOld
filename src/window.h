@@ -2,7 +2,7 @@
 
 
 #include "common.h"
-
+#include "platform.h"
 
 
 class dx_window
@@ -12,8 +12,6 @@ public:
 		uint32 clientWidth, uint32 clientHeight, color_depth colorDepth = color_depth_8, bool exclusiveFullscreen = false);
 
 public:
-	static const uint32 numFrames = 3;
-
 	void resize(uint32 width, uint32 height);
 	void toggleFullscreen();
 	void onMove();
@@ -39,7 +37,7 @@ private:
 	ComPtr<IDXGIFactory4> factory;
 	ComPtr<ID3D12Device2> device;
 	ComPtr<IDXGISwapChain4> swapChain;
-	ComPtr<ID3D12Resource> backBuffers[numFrames];
+	ComPtr<ID3D12Resource> backBuffers[NUM_BUFFERED_FRAMES];
 	ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap;
 	uint32 rtvDescriptorSize;
 	uint32 currentBackBufferIndex;

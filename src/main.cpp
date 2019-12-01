@@ -507,8 +507,8 @@ int main()
 
 	game.initialize(device, initialWidth, initialHeight, colorDepth);
 
-	uint64 fenceValues[dx_window::numFrames] = {};
-	uint64 frameValues[dx_window::numFrames] = {};
+	uint64 fenceValues[NUM_BUFFERED_FRAMES] = {};
+	uint64 frameValues[NUM_BUFFERED_FRAMES] = {};
 
 	uint64 frameID = 0;
 
@@ -557,7 +557,7 @@ int main()
 			float dt = (now - lastBeforeUpdate).count() * 1e-9f;
 			lastBeforeUpdate = now;
 
-			game.update(dt);
+			game.update(frameID, dt);
 		}
 
 

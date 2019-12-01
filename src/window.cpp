@@ -256,10 +256,10 @@ void dx_window::initialize(const TCHAR* windowClassName, ComPtr<ID3D12Device2> d
 	SetWindowLongPtr(windowHandle, GWLP_USERDATA, (LONG_PTR)this);
 	
 	const dx_command_queue& commandQueue = dx_command_queue::renderCommandQueue;
-	swapChain = createSwapChain(windowHandle, factory, commandQueue.getD3D12CommandQueue(), clientWidth, clientHeight, numFrames, tearingSupported, colorDepth, exclusiveFullscreen);
+	swapChain = createSwapChain(windowHandle, factory, commandQueue.getD3D12CommandQueue(), clientWidth, clientHeight, NUM_BUFFERED_FRAMES, tearingSupported, colorDepth, exclusiveFullscreen);
 	currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
 
-	rtvDescriptorHeap = createDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, numFrames);
+	rtvDescriptorHeap = createDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NUM_BUFFERED_FRAMES);
 	rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 	GetWindowRect(windowHandle, &windowRect);
@@ -279,7 +279,7 @@ void dx_window::updateRenderTargetViews()
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
-	for (int i = 0; i < numFrames; ++i)
+	for (int i = 0; i < NUM_BUFFERED_FRAMES; ++i)
 	{
 		ComPtr<ID3D12Resource> backBuffer;
 		checkResult(swapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)));
@@ -305,7 +305,7 @@ void dx_window::resize(uint32 width, uint32 height)
 		// are not being referenced by an in-flight command list.
 		flushApplication();
 
-		for (uint32 i = 0; i < numFrames; ++i)
+		for (uint32 i = 0; i < NUM_BUFFERED_FRAMES; ++i)
 		{
 			dx_resource_state_tracker::removeGlobalResourceState(backBuffers[i].Get());
 			backBuffers[i].Reset();
@@ -313,7 +313,7 @@ void dx_window::resize(uint32 width, uint32 height)
 
 		DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
 		checkResult(swapChain->GetDesc(&swapChainDesc));
-		checkResult(swapChain->ResizeBuffers(numFrames, clientWidth, clientHeight,
+		checkResult(swapChain->ResizeBuffers(NUM_BUFFERED_FRAMES, clientWidth, clientHeight,
 			swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
 
 		RECT windowRect;
