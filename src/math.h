@@ -64,6 +64,47 @@ union mat4
 	static const mat4 identity;
 };
 
+union mat3x4
+{
+	DirectX::XMFLOAT3X4 dxmatrix;
+
+	struct
+	{
+		float m00;
+		float m10;
+		float m20;
+
+		float m01;
+		float m11;
+		float m21;
+
+		float m02;
+		float m12;
+		float m22;
+
+		float m03;
+		float m13;
+		float m23;
+	};
+
+	float data[16];
+
+	inline mat3x4() {}
+	inline mat3x4(const DirectX::XMFLOAT3X4A& m) { dxmatrix = m; }
+	inline mat3x4(const DirectX::XMMATRIX& m) { DirectX::XMStoreFloat3x4(&dxmatrix, m); }
+	inline mat3x4(float m00, float m01, float m02, float m03,
+		float m10, float m11, float m12, float m13,
+		float m20, float m21, float m22, float m23)
+	{
+		this->m00 = m00; this->m01 = m01; this->m02 = m02; this->m03 = m03;
+		this->m10 = m10; this->m11 = m11; this->m12 = m12; this->m13 = m13;
+		this->m20 = m20; this->m21 = m21; this->m22 = m22; this->m23 = m23;
+	}
+
+	inline operator const DirectX::XMFLOAT3X4& () const { return dxmatrix; }
+	inline operator DirectX::XMMATRIX() const { return DirectX::XMLoadFloat3x4(&dxmatrix); }
+};
+
 union vec2
 {
 	DirectX::XMFLOAT2 dxvector;
@@ -187,7 +228,8 @@ struct alignas(16) comp_mat
 
 	inline comp_mat() {}
 	inline comp_mat(const DirectX::XMMATRIX& m) { dxmatrix = m; }
-	inline comp_mat(const mat4 & m) { dxmatrix = m; }
+	inline comp_mat(const mat4& m) { dxmatrix = m; }
+	inline comp_mat(const mat3x4& m) { dxmatrix = m; }
 
 	inline operator const DirectX::XMMATRIX& () const { return dxmatrix; }
 	inline operator mat4() const { return dxmatrix; }
@@ -201,7 +243,7 @@ struct alignas(16) comp_vec
 	DirectX::XMVECTOR dxvector;
 
 	inline comp_vec() {}
-	inline comp_vec(const DirectX::XMVECTOR & v) { dxvector = v; }
+	inline comp_vec(const DirectX::XMVECTOR& v) { dxvector = v; }
 	inline comp_vec(float x, float y, float z, float w = 0.f) { dxvector = DirectX::XMVectorSet(x, y, z, w); }
 	inline comp_vec(const vec4 & v) { dxvector = v; }
 	inline comp_vec(const vec3 & v) { dxvector = v; }

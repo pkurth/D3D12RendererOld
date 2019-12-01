@@ -639,7 +639,7 @@ void dx_game::resize(uint32 width, uint32 height)
 	}
 }
 
-void dx_game::update(uint64 frameIndex, float dt)
+void dx_game::update(float dt)
 {
 	camera.rotation = createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw)
 		* createQuaternionFromAxisAngle(comp_vec(1.f, 0.f, 0.f), camera.pitch);
@@ -651,13 +651,19 @@ void dx_game::update(uint64 frameIndex, float dt)
 
 	this->dt = dt;
 
-	DEBUG_TAB(gui, "Stats")
+	DEBUG_TAB(gui, "General")
 	{
 		gui.textF("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
 		DEBUG_GROUP(gui, "Camera")
 		{
 			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
 			gui.textF("Input movement: %.2f, %.2f, %.2f", inputMovement.x, inputMovement.y, inputMovement.z);
+		}
+
+		DEBUG_GROUP(gui, "Lighting")
+		{
+			gui.toggle("Show light probes", showLightProbes);
+			gui.toggle("Show light probe connectivity", showLightProbeConnectivity);
 		}
 		gui.textF("%u draw calls", numIndirectDrawCalls);
 	}
@@ -837,7 +843,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	renderScene(commandList, camera);
 
-	lightProbeSystem.visualizeLightProbes(commandList, camera, true, true);
+	lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity);
 
 
 	commandList->transitionBarrier(lightProbeHDRTexture, D3D12_RESOURCE_STATE_COMMON);

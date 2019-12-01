@@ -75,8 +75,23 @@ struct spherical_harmonics
 
 struct light_probe_tetrahedron
 {
-	int a, b, c, d;
-	int na, nb, nc, nd;
+	union
+	{
+		struct
+		{
+			int a, b, c, d;
+		};
+		int indices[4];
+	};
+	union
+	{
+		struct
+		{
+			int na, nb, nc, nd;
+		};
+		int neighbors[4];
+	};
+	mat3x4 matrix;
 };
 
 
@@ -90,13 +105,16 @@ struct light_probe_system
 	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget,
 		const std::vector<vec3>& lightProbePositions);
 
-	// Visualizations of single probes.
+	// Visualizations of single probe.
 	void visualizeCubemap(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap, float uvzScale = 1.f);
-	void visualizeSphericalHarmonics(dx_command_list* commandList, const render_camera& camera, vec3 position,
-		dx_structured_buffer& shBuffer, uint32 index, float uvzScale = 1.f);
 
-
+	// Visualize whole system.
 	void visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh);
+
+	vec4 calculateBarycentricCoordinates(const light_probe_tetrahedron& tet, vec3 position);
+	spherical_harmonics getInterpolatedSphericalHarmonics(const light_probe_tetrahedron& tet, vec4 barycentric);
+	uint32 getEnclosingTetrahedron(vec3 position, uint32 lastTetrahedron, vec4& barycentric);
+
 
 
 	dx_mesh lightProbeMesh;
@@ -110,7 +128,7 @@ struct light_probe_system
 	std::vector<vec3> lightProbePositions;
 	std::vector<light_probe_tetrahedron> lightProbeTetrahedra;
 
-	std::vector<spherical_harmonics> lightProbeSHs;
+	std::vector<spherical_harmonics> sphericalHarmonics;
 	dx_structured_buffer sphericalHarmonicsBuffer;
 
 

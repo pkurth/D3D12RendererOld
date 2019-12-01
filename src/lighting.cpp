@@ -163,10 +163,10 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 	};
 
 	this->lightProbePositions = lightProbePositions;
-	lightProbeSHs.resize(lightProbePositions.size(), sh);
+	sphericalHarmonics.resize(lightProbePositions.size(), sh);
 
 
-	sphericalHarmonicsBuffer.initialize(device, lightProbeSHs.data(), (uint32)lightProbeSHs.size(), commandList);
+	sphericalHarmonicsBuffer.initialize(device, sphericalHarmonics.data(), (uint32)sphericalHarmonics.size(), commandList);
 
 	{
 		tetgenio tetgenIn, tetgenOut;
@@ -230,6 +230,17 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 			tet.nb = tetgenOut.neighborlist[i * 4 + 1];
 			tet.nc = tetgenOut.neighborlist[i * 4 + 2];
 			tet.nd = tetgenOut.neighborlist[i * 4 + 3];
+
+			vec3 c0 = lightProbePositions[tet.a] - lightProbePositions[tet.d];
+			vec3 c1 = lightProbePositions[tet.b] - lightProbePositions[tet.d];
+			vec3 c2 = lightProbePositions[tet.c] - lightProbePositions[tet.d];
+
+			mat4 mat(c0.x, c1.x, c2.x, 0.f,
+				c0.y, c1.y, c2.y, 0.f,
+				c0.z, c1.z, c2.z, 0.f,
+				0.f, 0.f, 0.f, 1.f);
+
+			tet.matrix = mat.invert();
 		}
 
 		std::vector<indexed_line16> edgeList(tetgenOut.numberofedges);
@@ -308,10 +319,66 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 		SET_NAME(unlitRootSignature.rootSignature, "Unlit Line Root Signature");
 		SET_NAME(unlitPipeline, "Unlit Line Pipeline");
 	}
-
 }
 
+vec4 light_probe_system::calculateBarycentricCoordinates(const light_probe_tetrahedron& tet, vec3 position)
+{
+	vec4 barycentric = tet.matrix * (position - lightProbePositions[tet.d]);
+	barycentric.w = 1.f - barycentric.x - barycentric.y - barycentric.z;
+	return barycentric;
+}
 
+spherical_harmonics light_probe_system::getInterpolatedSphericalHarmonics(const light_probe_tetrahedron& tet, vec4 barycentric)
+{
+	const spherical_harmonics& a = sphericalHarmonics[tet.a];
+	const spherical_harmonics& b = sphericalHarmonics[tet.b];
+	const spherical_harmonics& c = sphericalHarmonics[tet.c];
+	const spherical_harmonics& d = sphericalHarmonics[tet.d];
+
+	spherical_harmonics result;
+	for (uint32 i = 0; i < 9; ++i)
+	{
+		result.coefficients[i] = barycentric.x * a.coefficients[i]
+			+ barycentric.y * b.coefficients[i]
+			+ barycentric.z * c.coefficients[i]
+			+ barycentric.w * d.coefficients[i];
+	}
+	return result;
+}
+
+uint32 light_probe_system::getEnclosingTetrahedron(vec3 position, uint32 lastTetrahedron, vec4& barycentric)
+{
+	barycentric = calculateBarycentricCoordinates(lightProbeTetrahedra[lastTetrahedron], position);
+
+	while (!(barycentric.x >= 0.f && barycentric.y >= 0.f && barycentric.z >= 0.f && barycentric.w >= 0.f))
+	{
+		uint32 smallestIndex = 0;
+		float smallest = barycentric.x;
+		for (uint32 i = 1; i < 4; ++i)
+		{
+			if (barycentric.data[i] < smallest)
+			{
+				smallest = barycentric.data[i];
+				smallestIndex = i;
+			}
+		}
+		assert(smallest < 0.f);
+
+		int neighbor = lightProbeTetrahedra[lastTetrahedron].neighbors[smallestIndex];
+
+		if (neighbor != -1)
+		{
+			lastTetrahedron = (uint32)neighbor;
+			barycentric = calculateBarycentricCoordinates(lightProbeTetrahedra[lastTetrahedron], position);
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	return lastTetrahedron;
+}
 
 void light_probe_system::visualizeCubemap(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap,
 	float uvzScale)
@@ -341,14 +408,6 @@ void light_probe_system::visualizeCubemap(dx_command_list* commandList, const re
 	commandList->bindCubemap(VISUALIZE_LIGHTPROBE_ROOTPARAM_TEXTURE, 0, cubemap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
-}
-
-void light_probe_system::visualizeSphericalHarmonics(dx_command_list* commandList, const render_camera& camera, vec3 position,
-	dx_structured_buffer& shBuffer, uint32 index, float uvzScale)
-{
-	PROFILE_FUNCTION();
-
-	
 }
 
 void light_probe_system::visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh)
