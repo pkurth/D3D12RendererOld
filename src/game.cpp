@@ -304,8 +304,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		sky.initialize(device, commandList, lightingRT);
 		present.initialize(device, screenRTFormats);
 
-		visualizeLightProbe.initialize(device, commandList, lightingRT);
-
 		commandList->integrateBRDF(brdf);
 		dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, MAX_NUM_SUN_SHADOW_CASCADES);
 		defaultShadowMapSRV = allocation.getDescriptorHandle(0);
@@ -340,7 +338,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		{
 			PROFILE_BLOCK("Load sponza mesh");
 
-			cpu_mesh<vertex_3PUNT> indirect;
+			cpu_triangle_mesh<vertex_3PUNT> indirect;
 
 			{
 				PROFILE_BLOCK("Load from file");
@@ -448,28 +446,14 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	pointLightBuffer.initialize(device, pointLights.data(), (uint32)pointLights.size(), commandList);
 
-	lightProbePositions.resize(50);
-	lightProbeSHs.resize(50);
-
+	std::vector<vec3> lightProbePositions(50);
 	for (uint32 i = 0; i < lightProbePositions.size(); ++i)
 	{
 		lightProbePositions[i] = vec3(randomFloat(-35.f, 35.f), randomFloat(0.f, 30.f), randomFloat(-18.f, 18.f));
-
-		lightProbeSHs[i] = {
-			vec4(1.f, 0.f, 1.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-		};
 	}
 
-	sphericalHarmonicsBuffer.initialize(device, lightProbeSHs.data(), (uint32)lightProbeSHs.size(), commandList);
-
+	lightProbeSystem.initialize(device, commandList, lightingRT, lightProbePositions);
+	
 	{
 		PROFILE_BLOCK("Load environment");
 
@@ -802,14 +786,14 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		}
 	}
 
-#if 1
+#if 0
 	if (lightProbeRecording)
 	{
-		if (lightProbeGlobalIndex < lightProbePositions.size())
+		if (lightProbeGlobalIndex < lightProbeSystem.lightProbePositions.size())
 		{
 			// Render to cubemap. One index per frame.
 			
-			vec3 lightProbePosition = lightProbePositions[lightProbeGlobalIndex];
+			vec3 lightProbePosition = lightProbeSystem.lightProbePositions[lightProbeGlobalIndex];
 
 			commandList->setRenderTarget(lightProbeRT, lightProbeFaceIndex);
 			commandList->setViewport(lightProbeRT.viewport);
@@ -827,7 +811,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		}
 	}
 
-	if (lightProbeGlobalIndex >= lightProbePositions.size() && lightProbeFaceIndex > NUM_BUFFERED_FRAMES)
+	if (lightProbeGlobalIndex >= lightProbeSystem.lightProbePositions.size() && lightProbeFaceIndex > NUM_BUFFERED_FRAMES)
 	{
 		lightProbeRecording = false;
 	}
@@ -838,7 +822,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		//computeList->generateMips(lightProbeHDRTexture);
 		computeList->createIrradianceMap(lightProbeHDRTexture, lightProbeIrradiance, LIGHT_PROBE_RESOLUTION);
-		computeList->projectCubemapToSphericalHarmonics(lightProbeIrradiance, sphericalHarmonicsBuffer, 0, lightProbeGlobalIndex - 1);
+		computeList->projectCubemapToSphericalHarmonics(lightProbeIrradiance, lightProbeSystem.sphericalHarmonicsBuffer, 0, lightProbeGlobalIndex - 1);
 
 		computeList->transitionBarrier(lightProbeHDRTexture, D3D12_RESOURCE_STATE_COMMON);
 
@@ -853,10 +837,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	renderScene(commandList, camera);
 
-	for (uint32 i = 0; i < lightProbePositions.size(); ++i)
-	{
-		visualizeLightProbe.renderSphericalHarmonics(commandList, camera, lightProbePositions[i], sphericalHarmonicsBuffer, i, -1.f);
-	}
+	lightProbeSystem.visualizeLightProbes(commandList, camera, true, true);
+
 
 	commandList->transitionBarrier(lightProbeHDRTexture, D3D12_RESOURCE_STATE_COMMON);
 

@@ -54,7 +54,7 @@ struct dx_mesh
 	dx_vertex_buffer vertexBuffer;
 	dx_index_buffer indexBuffer;
 
-	template <typename vertex_t> void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const cpu_mesh<vertex_t>& cpuMesh);
+	template <typename vertex_t> void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const cpu_triangle_mesh<vertex_t>& cpuMesh);
 };
 
 
@@ -80,7 +80,7 @@ inline void dx_index_buffer::initialize(ComPtr<ID3D12Device2> device, index_t* i
 }
 
 template<typename vertex_t>
-inline void dx_mesh::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const cpu_mesh<vertex_t>& cpuMesh)
+inline void dx_mesh::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const cpu_triangle_mesh<vertex_t>& cpuMesh)
 {
 	vertexBuffer.initialize(device, cpuMesh.vertices.data(), (uint32)cpuMesh.vertices.size(), commandList);
 	indexBuffer.initialize(device, (decltype(cpuMesh.triangles.data()->a)*)cpuMesh.triangles.data(), (uint32)cpuMesh.triangles.size() * 3, commandList);

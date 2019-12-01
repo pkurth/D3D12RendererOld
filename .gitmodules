@@ -1,3 +1,6 @@
 [submodule "ext/DirectXTex"]
 	path = ext/DirectXTex
 	url = git@github.com:microsoft/DirectXTex.git
+[submodule "ext/tetgen"]
+	path = ext/tetgen
+	url = git@github.com:ufz/tetgen.git

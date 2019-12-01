@@ -72,7 +72,7 @@ void sky_pipeline::initialize(ComPtr<ID3D12Device2> device, dx_command_list* com
 	SET_NAME(pipelineState, "Sky Pipeline");
 
 
-	cpu_mesh<vertex_3P> skybox;
+	cpu_triangle_mesh<vertex_3P> skybox;
 	skybox.pushCube(1.f, true);
 	mesh.initialize(device, commandList, skybox);
 }

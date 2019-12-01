@@ -236,6 +236,8 @@
     <FxCompile Include="shaders\visualize_light_probe_vs.hlsl" />
     <FxCompile Include="shaders\visualize_light_probe_sh_ps.hlsl" />
     <FxCompile Include="shaders\visualize_light_probe_cubemap_ps.hlsl" />
+    <FxCompile Include="shaders\unlit_flat_vs.hlsl" />
+    <FxCompile Include="shaders\unlit_flat_ps.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

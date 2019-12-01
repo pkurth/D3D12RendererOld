@@ -63,8 +63,6 @@ private:
 	sky_pipeline sky;
 	present_pipeline present;
 
-	visualize_light_probe_pipeline visualizeLightProbe;
-
 
 	dx_mesh indirectMesh;
 	std::vector<dx_material> indirectMaterials;
@@ -122,9 +120,7 @@ private:
 	uint32 lightProbeGlobalIndex = 0;
 	bool lightProbeRecording = true;
 
-	std::vector<spherical_harmonics> lightProbeSHs;
-	std::vector<vec3> lightProbePositions;
-	dx_structured_buffer sphericalHarmonicsBuffer;
+	light_probe_system lightProbeSystem;
 
 	dx_render_target sunShadowMapRT[MAX_NUM_SUN_SHADOW_CASCADES];
 	dx_texture sunShadowMapTexture[MAX_NUM_SUN_SHADOW_CASCADES];

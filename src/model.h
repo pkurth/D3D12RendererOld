@@ -38,6 +38,15 @@ struct indexed_triangle32
 	uint32 a, b, c;
 };
 
+struct indexed_line16
+{
+	uint16 a, b;
+};
+
+struct indexed_line32
+{
+	uint32 a, b, c;
+};
 
 defineHasMember(position);
 defineHasMember(normal);
@@ -98,7 +107,7 @@ struct submesh_material_info
 };
 
 template <typename vertex_t>
-struct cpu_mesh
+struct cpu_triangle_mesh
 {
 	std::vector<vertex_t> vertices;
 	std::vector<indexed_triangle16> triangles;
@@ -118,7 +127,7 @@ private:
 };
 
 template<typename vertex_t>
-inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> cpu_mesh<vertex_t>::pushFromFile(const std::string& filename)
+inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> cpu_triangle_mesh<vertex_t>::pushFromFile(const std::string& filename)
 {
 	fs::path path(filename);
 	assert(fs::exists(path));
@@ -188,7 +197,7 @@ inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> 
 }
 
 template<typename vertex_t>
-inline submesh_info cpu_mesh<vertex_t>::loadAssimpMesh(const aiMesh* mesh)
+inline submesh_info cpu_triangle_mesh<vertex_t>::loadAssimpMesh(const aiMesh* mesh)
 {
 	uint32 baseVertex = (uint32)vertices.size();
 	uint32 firstTriangle = (uint32)triangles.size();
@@ -242,7 +251,7 @@ inline submesh_info cpu_mesh<vertex_t>::loadAssimpMesh(const aiMesh* mesh)
 }
 
 template<typename vertex_t>
-inline submesh_material_info cpu_mesh<vertex_t>::loadAssimpMaterial(const aiMaterial* material, const fs::path& parent)
+inline submesh_material_info cpu_triangle_mesh<vertex_t>::loadAssimpMaterial(const aiMaterial* material, const fs::path& parent)
 {
 	aiString diffuse, normal, roughness, metallic;
 	aiReturn hasDiffuse = material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuse);
@@ -260,7 +269,7 @@ inline submesh_material_info cpu_mesh<vertex_t>::loadAssimpMaterial(const aiMate
 }
 
 template<typename vertex_t>
-inline submesh_info cpu_mesh<vertex_t>::pushQuad(float radius)
+inline submesh_info cpu_triangle_mesh<vertex_t>::pushQuad(float radius)
 {
 	vertex_3PUN vertices[] = {
 		{ { -radius, -radius, 0.f }, { 0.f, 0.f }, { 0.f, 0.f, 1.f } },
@@ -294,7 +303,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushQuad(float radius)
 }
 
 template<typename vertex_t>
-inline submesh_info cpu_mesh<vertex_t>::pushCube(float radius, bool invertWindingOrder)
+inline submesh_info cpu_triangle_mesh<vertex_t>::pushCube(float radius, bool invertWindingOrder)
 {
 	if constexpr (hasMember(vertex_t, position) && !hasMember(vertex_t, uv) && !hasMember(vertex_t, normal))
 	{
@@ -432,7 +441,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushCube(float radius, bool invertWindin
 }
 
 template<typename vertex_t>
-inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint16 slices, uint16 rows, float radius)
+inline submesh_info cpu_triangle_mesh<vertex_t>::pushSphere(uint16 slices, uint16 rows, float radius)
 {
 	assert(slices > 2);
 	assert(rows > 0);
@@ -534,7 +543,7 @@ inline submesh_info cpu_mesh<vertex_t>::pushSphere(uint16 slices, uint16 rows, f
 }
 
 template<typename vertex_t>
-inline submesh_info cpu_mesh<vertex_t>::pushCapsule(uint16 slices, uint16 rows, float height, float radius)
+inline submesh_info cpu_triangle_mesh<vertex_t>::pushCapsule(uint16 slices, uint16 rows, float height, float radius)
 {
 	assert(slices > 2);
 	assert(rows > 0);
@@ -733,7 +742,7 @@ static void splitSubmeshHelper(submesh_info submesh, const std::vector<vertex_t>
 }
 
 template<typename vertex_t>
-inline std::vector<submesh_info> cpu_mesh<vertex_t>::splitSubmesh(submesh_info submesh, float maxDim, uint32 maxNumTriangles)
+inline std::vector<submesh_info> cpu_triangle_mesh<vertex_t>::splitSubmesh(submesh_info submesh, float maxDim, uint32 maxNumTriangles)
 {
 	std::vector<submesh_info> result;
 	result.reserve(1000);

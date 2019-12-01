@@ -73,25 +73,49 @@ struct spherical_harmonics
 	vec4 coefficients[9];
 };
 
+struct light_probe_tetrahedron
+{
+	int a, b, c, d;
+	int na, nb, nc, nd;
+};
+
 
 #define VISUALIZE_LIGHTPROBE_ROOTPARAM_CB		0
 #define VISUALIZE_LIGHTPROBE_ROOTPARAM_TEXTURE	1
 #define VISUALIZE_LIGHTPROBE_ROOTPARAM_SH		1
 #define VISUALIZE_LIGHTPROBE_ROOTPARAM_SH_INDEX 2
 
-struct visualize_light_probe_pipeline
+struct light_probe_system
 {
-	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget);
-	void renderCubemap(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap, float uvzScale = 1.f);
-	void renderSphericalHarmonics(dx_command_list* commandList, const render_camera& camera, vec3 position,
+	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget,
+		const std::vector<vec3>& lightProbePositions);
+
+	// Visualizations of single probes.
+	void visualizeCubemap(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap, float uvzScale = 1.f);
+	void visualizeSphericalHarmonics(dx_command_list* commandList, const render_camera& camera, vec3 position,
 		dx_structured_buffer& shBuffer, uint32 index, float uvzScale = 1.f);
 
-	dx_mesh mesh;
 
-	ComPtr<ID3D12PipelineState> cubemapPipeline;
-	dx_root_signature cubemapRootSignature;
+	void visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh);
 
-	ComPtr<ID3D12PipelineState> shPipeline;
-	dx_root_signature shRootSignature;
+
+	dx_mesh lightProbeMesh;
+
+	ComPtr<ID3D12PipelineState> visualizeCubemapPipeline;
+	dx_root_signature visualizeCubemapRootSignature;
+
+	ComPtr<ID3D12PipelineState> visualizeSHPipeline;
+	dx_root_signature visualizeSHRootSignature;
+
+	std::vector<vec3> lightProbePositions;
+	std::vector<light_probe_tetrahedron> lightProbeTetrahedra;
+
+	std::vector<spherical_harmonics> lightProbeSHs;
+	dx_structured_buffer sphericalHarmonicsBuffer;
+
+
+	dx_mesh tetrahedronMesh;
+	ComPtr<ID3D12PipelineState> unlitPipeline;
+	dx_root_signature unlitRootSignature;
 };
 
