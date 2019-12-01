@@ -28,6 +28,15 @@ struct vertex_3PUNT
 	vec3 tangent;
 };
 
+struct vertex_3PUNTL
+{
+	vec3 position;
+	vec2 uv;
+	vec3 normal;
+	vec3 tangent;
+	uint32 lightProbeTetrahedronIndex;
+};
+
 struct indexed_triangle16
 {
 	uint16 a, b, c;

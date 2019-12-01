@@ -325,7 +325,7 @@ static void displayProfileInfo(debug_gui& gui)
 			}
 			else
 			{
-				if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Frame %llu", frame->globalFrameID))
+				if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Frame %llu (%f ms)", frame->globalFrameID, frame->timeInSeconds * 1000.f))
 				{
 					highlightFrameIndex = frameIndex;
 				}
@@ -358,7 +358,7 @@ static void displayProfileInfo(debug_gui& gui)
 				}
 				else
 				{
-					gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %llu", frame->globalFrameID);
+					gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %llu (%f ms)", frame->globalFrameID, frame->timeInSeconds * 1000.f);
 				}
 
 				profile_display_state state;

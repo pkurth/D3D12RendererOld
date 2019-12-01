@@ -110,10 +110,12 @@ struct light_probe_system
 	void visualizeSH(dx_command_list* commandList, const render_camera& camera, vec3 position, const spherical_harmonics& sh, float uvzScale = 1.f);
 
 	// Visualize whole system.
-	void visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh);
+	void visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh,
+		uint32 highlightTetrahedron);
 
 	vec4 calculateBarycentricCoordinates(const light_probe_tetrahedron& tet, vec3 position);
 	spherical_harmonics getInterpolatedSphericalHarmonics(const light_probe_tetrahedron& tet, vec4 barycentric);
+	spherical_harmonics getInterpolatedSphericalHarmonics(uint32 tetrahedronIndex, vec4 barycentric);
 	uint32 getEnclosingTetrahedron(vec3 position, uint32 lastTetrahedron, vec4& barycentric);
 
 

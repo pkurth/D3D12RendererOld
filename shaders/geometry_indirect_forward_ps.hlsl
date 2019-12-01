@@ -147,8 +147,6 @@ ps_output main(ps_input IN)
 
 
 	ps_output OUT;
-	//OUT.color = irradianceTexture.Sample(brdfSampler, N);
-	//OUT.color = sampleSphericalHarmonics(shs[0], N);// totalLighting;
 	OUT.color = totalLighting;
 	return OUT;
 }

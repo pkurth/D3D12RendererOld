@@ -15,6 +15,7 @@ struct vs_input
 	float2 uv		: TEXCOORDS;
 	float3 normal   : NORMAL;
 	float3 tangent  : TANGENT;
+	uint lightProbeTetrahedron : LIGHTPROBE_TETRAHEDRON;
 };
 
 struct vs_output
@@ -38,7 +39,6 @@ vs_output main(vs_input IN)
 	float3 tangent = normalize(mul(model.m, float4(IN.tangent, 0.f)).xyz);
 	float3 bitangent = normalize(cross(normal, tangent)); 
 	OUT.tbn = float3x3(tangent, bitangent, normal);
-
 	return OUT;
 }
 

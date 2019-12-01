@@ -391,7 +391,7 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 
 vec4 light_probe_system::calculateBarycentricCoordinates(const light_probe_tetrahedron& tet, vec3 position)
 {
-	PROFILE_FUNCTION();
+	//PROFILE_FUNCTION();
 
 	vec4 barycentric = tet.matrix * (position - lightProbePositions[tet.d]);
 	barycentric.w = 1.f - barycentric.x - barycentric.y - barycentric.z;
@@ -418,13 +418,22 @@ spherical_harmonics light_probe_system::getInterpolatedSphericalHarmonics(const 
 	return result;
 }
 
+spherical_harmonics light_probe_system::getInterpolatedSphericalHarmonics(uint32 tetrahedronIndex, vec4 barycentric)
+{
+	return getInterpolatedSphericalHarmonics(lightProbeTetrahedra[tetrahedronIndex], barycentric);
+}
+
 uint32 light_probe_system::getEnclosingTetrahedron(vec3 position, uint32 lastTetrahedron, vec4& barycentric)
 {
-	PROFILE_FUNCTION();
+	//PROFILE_FUNCTION();
 
 	barycentric = calculateBarycentricCoordinates(lightProbeTetrahedra[lastTetrahedron], position);
 
-	while (!(barycentric.x >= 0.f && barycentric.y >= 0.f && barycentric.z >= 0.f && barycentric.w >= 0.f))
+	const uint32 maxNumIterations = 512;
+
+	uint32 iterations = 0;
+
+	while (!(barycentric.x >= 0.f && barycentric.y >= 0.f && barycentric.z >= 0.f && barycentric.w >= 0.f) && iterations < maxNumIterations)
 	{
 		uint32 smallestIndex = 0;
 		float smallest = barycentric.x;
@@ -449,6 +458,8 @@ uint32 light_probe_system::getEnclosingTetrahedron(vec3 position, uint32 lastTet
 		{
 			break;
 		}
+
+		++iterations;
 	}
 
 	return lastTetrahedron;
@@ -515,7 +526,8 @@ void light_probe_system::visualizeSH(dx_command_list* commandList, const render_
 	commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 }
 
-void light_probe_system::visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh)
+void light_probe_system::visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh,
+	uint32 highlightTetrahedron)
 {
 	PROFILE_FUNCTION();
 
@@ -553,9 +565,19 @@ void light_probe_system::visualizeLightProbes(dx_command_list* commandList, cons
 		commandList->transitionBarrier(sphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->stageDescriptors(VISUALIZE_LIGHTPROBE_ROOTPARAM_SH, 0, 1, sphericalHarmonicsBuffer.srv);
 
+		uint32 a = lightProbeTetrahedra[highlightTetrahedron].a;
+		uint32 b = lightProbeTetrahedra[highlightTetrahedron].b;
+		uint32 c = lightProbeTetrahedra[highlightTetrahedron].c;
+		uint32 d = lightProbeTetrahedra[highlightTetrahedron].d;
+
 		// TODO: This could be rendered instanced.
 		for (uint32 i = 0; i < lightProbePositions.size(); ++i)
 		{
+			if (i == a || i == b || i == c || i == d)
+			{
+				continue;
+			}
+
 			struct
 			{
 				mat4 mvp;
@@ -570,5 +592,23 @@ void light_probe_system::visualizeLightProbes(dx_command_list* commandList, cons
 
 			commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 		}
+
+		spherical_harmonics pinkSH =
+		{
+			vec4(1.f, 0.f, 1.f, 0.f),
+			vec4(0.f, 0.f, 0.f, 0.f),
+			vec4(0.f, 0.f, 0.f, 0.f),
+			vec4(0.f, 0.f, 0.f, 0.f),
+			vec4(0.f, 0.f, 0.f, 0.f),
+			vec4(0.f, 0.f, 0.f, 0.f),
+			vec4(0.f, 0.f, 0.f, 0.f),
+			vec4(0.f, 0.f, 0.f, 0.f),
+			vec4(0.f, 0.f, 0.f, 0.f),
+		};
+
+		visualizeSH(commandList, camera, lightProbePositions[a], pinkSH);
+		visualizeSH(commandList, camera, lightProbePositions[b], pinkSH);
+		visualizeSH(commandList, camera, lightProbePositions[c], pinkSH);
+		visualizeSH(commandList, camera, lightProbePositions[d], pinkSH);
 	}
 }

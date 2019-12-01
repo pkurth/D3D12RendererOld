@@ -132,6 +132,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "LIGHTPROBE_TETRAHEDRON", 0, DXGI_FORMAT_R32_UINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
 
@@ -324,6 +325,18 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	}
 
 	{
+		PROFILE_BLOCK("Light probe system");
+
+		std::vector<vec3> lightProbePositions(150);
+		for (uint32 i = 0; i < lightProbePositions.size(); ++i)
+		{
+			lightProbePositions[i] = vec3(randomFloat(-70.f, 70.f), randomFloat(0.f, 50.f), randomFloat(-30.f, 30.f));
+		}
+
+		lightProbeSystem.initialize(device, commandList, lightingRT, lightProbePositions);
+	}
+
+	{
 		PROFILE_BLOCK("Init gui");
 		gui.initialize(device, commandList, screenRTFormats);
 	}
@@ -338,7 +351,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		{
 			PROFILE_BLOCK("Load sponza mesh");
 
-			cpu_triangle_mesh<vertex_3PUNT> indirect;
+			cpu_triangle_mesh<vertex_3PUNTL> indirect;
 
 			{
 				PROFILE_BLOCK("Load from file");
@@ -348,6 +361,14 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 				sphereSubmesh = indirect.pushSphere(21, 21, 1.f);
 
 				sponzaMaterials = std::move(sponzaMaterials_);
+
+
+				for (auto& vertex : indirect.vertices)
+				{
+					vec4 barycentric;
+					vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
+				}
+
 			}
 
 			{
@@ -445,14 +466,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	}
 
 	pointLightBuffer.initialize(device, pointLights.data(), (uint32)pointLights.size(), commandList);
-
-	std::vector<vec3> lightProbePositions(50);
-	for (uint32 i = 0; i < lightProbePositions.size(); ++i)
-	{
-		lightProbePositions[i] = vec3(randomFloat(-35.f, 35.f), randomFloat(0.f, 30.f), randomFloat(-18.f, 18.f));
-	}
-
-	lightProbeSystem.initialize(device, commandList, lightingRT, lightProbePositions);
 	
 	{
 		PROFILE_BLOCK("Load environment");
@@ -843,15 +856,17 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	renderScene(commandList, camera);
 
-	lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity);
+	{
+		vec3 position(cos(lightProbeTime * 0.3f) * 20.f, 20.f + sin(lightProbeTime * 0.3f) * 10.f, 0.f);
+		lightProbeTime += dt;
 
-	vec3 position(cos(lightProbeTime * 0.3f) * 20.f, 20.f + sin(lightProbeTime * 0.3f) * 10.f, 0.f);
-	lightProbeTime += dt;
+		vec4 barycentric;
+		lastTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(position, lastTetrahedronIndex, barycentric);
+		lightProbeSystem.visualizeSH(commandList, camera, position,
+			lightProbeSystem.getInterpolatedSphericalHarmonics(lastTetrahedronIndex, barycentric));
+	}
 
-	vec4 barycentric;
-	lastTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(position, lastTetrahedronIndex, barycentric);
-	lightProbeSystem.visualizeSH(commandList, camera, position,
-		lightProbeSystem.getInterpolatedSphericalHarmonics(lightProbeSystem.lightProbeTetrahedra[lastTetrahedronIndex], barycentric));
+	lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity, lastTetrahedronIndex);
 
 	commandList->transitionBarrier(lightProbeHDRTexture, D3D12_RESOURCE_STATE_COMMON);
 
