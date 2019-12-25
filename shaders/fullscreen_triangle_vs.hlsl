@@ -1,4 +1,4 @@
-#include "camera.h"
+#include "camera.hlsli"
 
 ConstantBuffer<camera_cb> camera : register(b0);
 

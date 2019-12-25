@@ -1,5 +1,5 @@
-#include "camera.h"
-#include "pbr.h"
+#include "camera.hlsli"
+#include "pbr.hlsli"
 
 #define BLOCK_SIZE 16
 

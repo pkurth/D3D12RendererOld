@@ -1,8 +1,8 @@
 // This shader is supposed to be called with only one group, as to avoid global atomic adds.
 // This is because InterlockedAdd only supports integers. Within a thread group, we can simply reduce.
 
-#include "pbr.h"
-#include "light_probe.h"
+#include "pbr.hlsli"
+#include "light_probe.hlsli"
 
 struct cs_input
 {

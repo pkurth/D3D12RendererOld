@@ -1,6 +1,6 @@
 #define BLOCK_SIZE 16
 
-#include "pbr.h"
+#include "pbr.hlsli"
 
 struct cs_input
 {

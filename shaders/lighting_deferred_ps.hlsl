@@ -1,6 +1,6 @@
-#include "pbr.h"
-#include "normals.h"
-#include "camera.h"
+#include "pbr.hlsli"
+#include "normals.hlsli"
+#include "camera.hlsli"
 
 ConstantBuffer<camera_cb> camera : register(b0);
 

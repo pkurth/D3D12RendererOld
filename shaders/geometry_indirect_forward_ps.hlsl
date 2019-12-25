@@ -1,8 +1,8 @@
-#include "normals.h"
-#include "material.h"
-#include "pbr.h"
-#include "camera.h"
-#include "light_probe.h"
+#include "normals.hlsli"
+#include "material.hlsli"
+#include "pbr.hlsli"
+#include "camera.hlsli"
+#include "light_probe.hlsli"
 
 struct ps_input
 {

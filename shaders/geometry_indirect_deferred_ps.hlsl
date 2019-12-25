@@ -1,5 +1,5 @@
-#include "normals.h"
-#include "material.h"
+#include "normals.hlsli"
+#include "material.hlsli"
 
 struct ps_input
 {

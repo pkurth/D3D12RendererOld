@@ -125,29 +125,32 @@ static uint getEnclosingTetrahedron(StructuredBuffer<float4> lightProbePositions
 {
 	barycentric = calculateBarycentricCoordinates(lightProbePositions, lightProbeTetrahedra[lastTetrahedron], position);
 
-	const uint maxNumIterations = 4;
+	const uint maxNumIterations = 32;
 
 	uint iterations = 0;
 
+	//uint lastTestedTetrahedron = lastTetrahedron;
+
 	while (any(barycentric < 0) && iterations < maxNumIterations)
 	{
-		uint smallestIndex = 0;
-		float smallest = barycentric.x;
-		for (uint i = 1; i < 4; ++i)
-		{
-			if (barycentric[i] < smallest)
-			{
-				smallest = barycentric[i];
-				smallestIndex = i;
-			}
-		}
-
+		float4 v = barycentric;
+		uint smallestIndex = (v.x < v.y) ? ((v.x < v.z) ? (v.x < v.w ? 0 : 3) : (v.z < v.w ? 2 : 3)) 
+										 : ((v.y < v.z) ? (v.y < v.w ? 1 : 3) : (v.z < v.w ? 2 : 3));
+		
 		int neighbor = lightProbeTetrahedra[lastTetrahedron].neighbors[smallestIndex];
 
 		if (neighbor != -1)
 		{
 			lastTetrahedron = (uint)neighbor;
 			barycentric = calculateBarycentricCoordinates(lightProbePositions, lightProbeTetrahedra[lastTetrahedron], position);
+
+#if 0
+			if (lastTetrahedron == lastTestedTetrahedron)
+			{
+				// We are "inbetween" two tetrahedra.
+				break;
+			}
+#endif
 		}
 		else
 		{

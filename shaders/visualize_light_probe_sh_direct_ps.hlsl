@@ -1,4 +1,4 @@
-#include "light_probe.h"
+#include "light_probe.hlsli"
 
 struct ps_input
 {

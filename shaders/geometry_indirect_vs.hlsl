@@ -1,4 +1,4 @@
-#include "camera.h"
+#include "camera.hlsli"
 
 struct model_cb
 {

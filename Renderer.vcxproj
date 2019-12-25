@@ -173,12 +173,12 @@
     <ClCompile Include="src\window.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="shaders\inc\camera.h" />
-    <ClInclude Include="shaders\inc\light_probe.h" />
-    <ClInclude Include="shaders\inc\material.h" />
-    <ClInclude Include="shaders\inc\normals.h" />
-    <ClInclude Include="shaders\inc\pbr.h" />
-    <ClInclude Include="shaders\inc\quaternion.h" />
+    <ClInclude Include="shaders\inc\camera.hlsli" />
+    <ClInclude Include="shaders\inc\light_probe.hlsli" />
+    <ClInclude Include="shaders\inc\material.hlsli" />
+    <ClInclude Include="shaders\inc\normals.hlsli" />
+    <ClInclude Include="shaders\inc\pbr.hlsli" />
+    <ClInclude Include="shaders\inc\quaternion.hlsli" />
     <ClInclude Include="src\aligned_allocator.h" />
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\camera.h" />

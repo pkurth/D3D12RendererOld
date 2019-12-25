@@ -412,6 +412,16 @@ inline comp_vec cross(comp_vec a, comp_vec b)
 	return DirectX::XMVector3Cross(a, b);
 }
 
+struct trs
+{
+	quat rotation;
+	vec3 position;
+	float scale;
+
+	trs(vec3 position, quat rotation, float scale = 1.f)
+		: position(position), rotation(rotation), scale(scale) { }
+};
+
 
 template <typename T>
 inline T bucketize(T value, size_t alignment)
