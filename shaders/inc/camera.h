@@ -1,4 +1,5 @@
-
+#ifndef CAMERA_H
+#define CAMERA_H
 
 struct camera_cb
 {
@@ -54,3 +55,5 @@ static float depthBufferDepthToLinearWorldDepthEyeToFarPlane(float depthBufferDe
 {
 	return depthBufferDepthToLinearNormalizedDepthEyeToFarPlane(depthBufferDepth, projectionParams) * projectionParams.y;
 }
+
+#endif

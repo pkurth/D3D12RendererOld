@@ -1,4 +1,4 @@
-#include "pbr.h"
+#include "light_probe.h"
 
 struct ps_input
 {

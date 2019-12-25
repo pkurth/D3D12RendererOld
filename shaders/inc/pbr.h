@@ -1,3 +1,8 @@
+#ifndef PBR_H
+#define PBR_H
+
+#include "light_probe.h"
+
 
 static const float pi = 3.141592653589793238462643383279f;
 static const float oneOverPI = 1.f / pi;
@@ -30,11 +35,6 @@ struct point_light
 {
 	float4 worldSpacePositionAndRadius;
 	float4 color;
-};
-
-struct spherical_harmonics
-{
-	float4 coefficients[9];
 };
 
 
@@ -109,13 +109,13 @@ static float3 importanceSampleGGX(float2 Xi, float3 N, float roughness)
 	float cosTheta = sqrt((1.f - Xi.y) / (1.f + (a * a - 1.f) * Xi.y));
 	float sinTheta = sqrt(1.f - cosTheta * cosTheta);
 
-	// from spherical coordinates to cartesian coordinates
+	// From spherical coordinates to cartesian coordinates.
 	float3 H;
 	H.x = cos(phi) * sinTheta;
 	H.y = sin(phi) * sinTheta;
 	H.z = cosTheta;
 
-	// from tangent-space vector to world-space sample vector
+	// From tangent-space vector to world-space sample vector.
 	float3 up = abs(N.z) < 0.999 ? float3(0.f, 0.f, 1.f) : float3(1.f, 0.f, 0.f);
 	float3 tangent = normalize(cross(up, N));
 	float3 bitangent = cross(N, tangent);
@@ -124,8 +124,8 @@ static float3 importanceSampleGGX(float2 Xi, float3 N, float roughness)
 	return normalize(sampleVec);
 }
 
-static float3 calculateAmbientLighting(float3 albedo, 
-	TextureCube<float4> irradianceTexture, TextureCube<float4> environmentTexture, Texture2D<float4> brdf, SamplerState brdfSampler,
+static float3 calculateAmbientLighting(float3 albedo, float3 irradiance,
+	TextureCube<float4> environmentTexture, Texture2D<float4> brdf, SamplerState brdfSampler,
 	float3 N, float3 V, float3 F0, float roughness, float metallic, float ao)
 {
 	// Common.
@@ -136,7 +136,6 @@ static float3 calculateAmbientLighting(float3 albedo,
 	kD *= 1.f - metallic;
 
 	// Diffuse.
-	float3 irradiance = irradianceTexture.Sample(brdfSampler, N).rgb;
 	float3 diffuse = irradiance * albedo;
 
 	// Specular.
@@ -152,6 +151,42 @@ static float3 calculateAmbientLighting(float3 albedo,
 	float3 ambient = (kD * diffuse + specular) * ao;
 
 	return ambient;
+}
+
+static float3 calculateAmbientLighting(float3 albedo, 
+	TextureCube<float4> irradianceTexture, TextureCube<float4> environmentTexture, Texture2D<float4> brdf, SamplerState brdfSampler,
+	float3 N, float3 V, float3 F0, float roughness, float metallic, float ao)
+{
+	float3 irradiance = irradianceTexture.Sample(brdfSampler, N).rgb;
+	return calculateAmbientLighting(albedo, irradiance, environmentTexture, brdf, brdfSampler, N, V, F0, roughness, metallic, ao);
+}
+
+static float3 calculateAmbientLighting(float3 albedo,
+	StructuredBuffer<float4> lightProbePositions, StructuredBuffer<light_probe_tetrahedron> lightProbeTetrahedra, float3 worldPosition, uint tetrahedronIndex,
+	StructuredBuffer<packed_spherical_harmonics> sphericalHarmonics,
+	TextureCube<float4> environmentTexture, 
+	Texture2D<float4> brdf, SamplerState brdfSampler,
+	float3 N, float3 V, float3 F0, float roughness, float metallic, float ao)
+{
+	float4 barycentric;
+	tetrahedronIndex = getEnclosingTetrahedron(lightProbePositions, lightProbeTetrahedra, worldPosition, tetrahedronIndex, barycentric);
+	int4 shIndices = lightProbeTetrahedra[tetrahedronIndex].indices;
+	float3 irradiance = sampleInterpolatedSphericalHarmonics(sphericalHarmonics, shIndices, barycentric, N).xyz;
+	return calculateAmbientLighting(albedo, irradiance, environmentTexture, brdf, brdfSampler, N, V, F0, roughness, metallic, ao);
+}
+
+static float3 calculateAmbientLighting(float3 albedo,
+	StructuredBuffer<float4> lightProbePositions, StructuredBuffer<light_probe_tetrahedron> lightProbeTetrahedra, float3 worldPosition, uint tetrahedronIndex,
+	StructuredBuffer<spherical_harmonics> sphericalHarmonics,
+	TextureCube<float4> environmentTexture,
+	Texture2D<float4> brdf, SamplerState brdfSampler,
+	float3 N, float3 V, float3 F0, float roughness, float metallic, float ao)
+{
+	float4 barycentric;
+	tetrahedronIndex = getEnclosingTetrahedron(lightProbePositions, lightProbeTetrahedra, worldPosition, tetrahedronIndex, barycentric);
+	int4 shIndices = lightProbeTetrahedra[tetrahedronIndex].indices;
+	float3 irradiance = sampleInterpolatedSphericalHarmonics(sphericalHarmonics, shIndices, barycentric, N).xyz;
+	return calculateAmbientLighting(albedo, irradiance, environmentTexture, brdf, brdfSampler, N, V, F0, roughness, metallic, ao);
 }
 
 static float3 calculateDirectLighting(float3 albedo, float3 radiance, float3 N, float3 L, float3 V, float3 F0, float roughness, float metallic)
@@ -176,23 +211,4 @@ static float3 calculateDirectLighting(float3 albedo, float3 radiance, float3 N, 
 	return (kD * albedo * oneOverPI + specular) * radiance * NdotL;
 }
 
-float4 sampleSphericalHarmonics(spherical_harmonics sh, float3 normal)
-{
-	float x = normal.x;
-	float y = normal.y;
-	float z = normal.z;
-
-	float4 result =
-		sh.coefficients[0] +
-		sh.coefficients[1] * y +
-		sh.coefficients[2] * z +
-		sh.coefficients[3] * x +
-		sh.coefficients[4] * x * y +
-		sh.coefficients[5] * y * z +
-		sh.coefficients[6] * (3.f * z * z - 1.f) +
-		sh.coefficients[7] * z * x +
-		sh.coefficients[8] * (x * x - y * y)
-		;
-
-	return max(result, (float4)0);
-}
+#endif

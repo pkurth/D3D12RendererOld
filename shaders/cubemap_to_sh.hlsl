@@ -2,6 +2,7 @@
 // This is because InterlockedAdd only supports integers. Within a thread group, we can simply reduce.
 
 #include "pbr.h"
+#include "light_probe.h"
 
 struct cs_input
 {

@@ -25,6 +25,7 @@
 #define INDIRECT_ROOTPARAM_METALLICS		7
 #define INDIRECT_ROOTPARAM_DIRECTIONAL		8
 #define INDIRECT_ROOTPARAM_SHADOWMAPS		9
+#define INDIRECT_ROOTPARAM_LIGHTPROBES		10
 
 
 #define CAMERA_SENSITIVITY 4.f
@@ -76,6 +77,7 @@ private:
 	CD3DX12_GPU_DESCRIPTOR_HANDLE metallicsOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE brdfOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE shadowCascadesOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE lightProbeOffset;
 
 	dx_mesh sceneMesh;
 	std::vector<submesh_info> sceneSubmeshes;

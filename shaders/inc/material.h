@@ -1,3 +1,6 @@
+#ifndef MATERIAL_H
+#define MATERIAL_H
+
 #define USE_ALBEDO_TEXTURE		(1 << 0)
 #define USE_NORMAL_TEXTURE		(1 << 1)
 #define USE_ROUGHNESS_TEXTURE	(1 << 2)
@@ -16,3 +19,5 @@ struct material_cb
 
 	uint drawID;
 };
+
+#endif

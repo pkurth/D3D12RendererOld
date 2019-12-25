@@ -87,7 +87,7 @@ union mat3x4
 		float m23;
 	};
 
-	float data[16];
+	float data[12];
 
 	inline mat3x4() {}
 	inline mat3x4(const DirectX::XMFLOAT3X4A& m) { dxmatrix = m; }

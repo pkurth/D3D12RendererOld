@@ -153,10 +153,15 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		CD3DX12_DESCRIPTOR_RANGE1 shadowMaps(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_NUM_SUN_SHADOW_CASCADES, 0, 5);
 		
 		CD3DX12_DESCRIPTOR_RANGE1 pointLights(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, MAX_NUM_SUN_SHADOW_CASCADES, 5);
-		CD3DX12_DESCRIPTOR_RANGE1 shs(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, MAX_NUM_SUN_SHADOW_CASCADES + 1, 5);
 
+		CD3DX12_DESCRIPTOR_RANGE1 lightProbes[] =
+		{
+			CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 6), // Positions.
+			CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 6), // Spherical harmonics.
+			CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 6), // Tetrahedra.
+		};
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[10];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[11];
 		rootParameters[INDIRECT_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_ALL); // Camera.
 		rootParameters[INDIRECT_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
 		rootParameters[INDIRECT_ROOTPARAM_MATERIAL].InitAsConstants(sizeof(material_cb) / sizeof(float), 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material.
@@ -173,6 +178,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		// Sun.
 		rootParameters[INDIRECT_ROOTPARAM_DIRECTIONAL].InitAsConstantBufferView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[INDIRECT_ROOTPARAM_SHADOWMAPS].InitAsDescriptorTable(1, &shadowMaps, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		// Light probes.
+		rootParameters[INDIRECT_ROOTPARAM_LIGHTPROBES].InitAsDescriptorTable(arraysize(lightProbes), lightProbes, D3D12_SHADER_VISIBILITY_PIXEL);
+
 
 		CD3DX12_STATIC_SAMPLER_DESC samplers[] =
 		{
@@ -327,11 +336,20 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		PROFILE_BLOCK("Light probe system");
 
-		std::vector<vec3> lightProbePositions(150);
+		std::vector<vec4> lightProbePositions(150);
 		for (uint32 i = 0; i < lightProbePositions.size(); ++i)
 		{
-			lightProbePositions[i] = vec3(randomFloat(-70.f, 70.f), randomFloat(0.f, 50.f), randomFloat(-30.f, 30.f));
+			lightProbePositions[i] = vec4(randomFloat(-70.f, 70.f), randomFloat(0.f, 50.f), randomFloat(-30.f, 30.f), 1.f);
 		}
+
+		lightProbePositions.push_back(vec4(-1, -1, -1, 1) * 180);
+		lightProbePositions.push_back(vec4( 1, -1, -1, 1) * 180);
+		lightProbePositions.push_back(vec4(-1,  1, -1, 1) * 180);
+		lightProbePositions.push_back(vec4( 1,  1, -1, 1) * 180);
+		lightProbePositions.push_back(vec4(-1, -1,  1, 1) * 180);
+		lightProbePositions.push_back(vec4( 1, -1,  1, 1) * 180);
+		lightProbePositions.push_back(vec4(-1,  1,  1, 1) * 180);
+		lightProbePositions.push_back(vec4( 1,  1,  1, 1) * 180);
 
 		lightProbeSystem.initialize(device, commandList, lightingRT, lightProbePositions);
 	}
@@ -498,7 +516,12 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
 		descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		descriptorHeapDesc.NumDescriptors = (uint32)indirectMaterials.size() * 4 + 3 + MAX_NUM_SUN_SHADOW_CASCADES;
+		descriptorHeapDesc.NumDescriptors =
+			(uint32)indirectMaterials.size() * 4	// Materials.
+			+ 3										// PBR Textures.
+			+ MAX_NUM_SUN_SHADOW_CASCADES			// Shadow map cascades.
+			+ 3										// Light probes.
+			;
 		descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&indirectDescriptorHeap)));
 
@@ -528,6 +551,50 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			cpuHandle.Offset(descriptorHandleIncrementSize);
 			gpuHandle.Offset(descriptorHandleIncrementSize);
 		}
+		shadowCascadesOffset = gpuHandle;
+		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+			srvDesc.Format = dx_texture::getReadFormatFromTypeless(depthTexture.resource->GetDesc().Format);
+			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+			srvDesc.Texture2D.MipLevels = 1;
+
+			device->CreateShaderResourceView(sunShadowMapTexture[i].resource.Get(), &srvDesc, cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+		}
+		for (uint32 i = 0; i < MAX_NUM_SUN_SHADOW_CASCADES - sun.numShadowCascades; ++i)
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+			srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			srvDesc.Texture2D.MipLevels = 0;
+
+			device->CreateShaderResourceView(nullptr, &srvDesc,	cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+		}
+
+		lightProbeOffset = gpuHandle;
+		{
+			lightProbeSystem.lightProbePositionBuffer.createShaderResourceView(device, cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+
+			lightProbeSystem.packedSphericalHarmonicsBuffer.createShaderResourceView(device, cpuHandle);
+			//lightProbeSystem.sphericalHarmonicsBuffer.createShaderResourceView(device, cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+
+			lightProbeSystem.lightProbeTetrahedraBuffer.createShaderResourceView(device, cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+		}
+
+		// I am putting the material textures at the very end of the descriptor heap, since they are variably sized and the shader complains if there
+		// is a buffer coming after them.
 		albedosOffset = gpuHandle;
 		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 		{
@@ -555,29 +622,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			device->CreateShaderResourceView(indirectMaterials[i].metallic.resource.Get(), nullptr, cpuHandle);
 			cpuHandle.Offset(descriptorHandleIncrementSize);
 			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-		shadowCascadesOffset = gpuHandle;
-		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = dx_texture::getReadFormatFromTypeless(depthTexture.resource->GetDesc().Format);
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D.MipLevels = 1;
-
-			device->CreateShaderResourceView(sunShadowMapTexture[i].resource.Get(), &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-		for (uint32 i = 0; i < MAX_NUM_SUN_SHADOW_CASCADES - sun.numShadowCascades; ++i)
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.Texture2D.MipLevels = 0;
-
-			device->CreateShaderResourceView(nullptr, &srvDesc,	cpuHandle);
 		}
 	}
 
@@ -720,6 +764,13 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 
 		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Geometry.");
 
+
+		commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(lightProbeSystem.sphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(lightProbeSystem.lightProbePositionBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(lightProbeSystem.lightProbeTetrahedraBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+
 		commandList->setPipelineState(indirectGeometryPipelineState);
 		commandList->setGraphicsRootSignature(indirectGeometryRootSignature);
 
@@ -740,8 +791,10 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 
 		// Sun.
 		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_SHADOWMAPS, shadowCascadesOffset);
-		
 		commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_DIRECTIONAL, sunCBAddress);
+
+		// Light probes.
+		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_LIGHTPROBES, lightProbeOffset);
 
 		commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);
 		commandList->setIndexBuffer(indirectMesh.indexBuffer);

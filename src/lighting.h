@@ -73,6 +73,11 @@ struct spherical_harmonics
 	vec4 coefficients[9];
 };
 
+struct packed_spherical_harmonics
+{
+	uint32 coefficients[9]; // Each int is 11 bits red, 11 bits green, 10 bits blue.
+};
+
 struct light_probe_tetrahedron
 {
 	union
@@ -91,7 +96,8 @@ struct light_probe_tetrahedron
 		};
 		int neighbors[4];
 	};
-	mat3x4 matrix;
+
+	mat4 matrix;
 };
 
 
@@ -103,7 +109,7 @@ struct light_probe_tetrahedron
 struct light_probe_system
 {
 	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget,
-		const std::vector<vec3>& lightProbePositions);
+		const std::vector<vec4>& lightProbePositions);
 
 	// Visualizations of single probe.
 	void visualizeCubemap(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap, float uvzScale = 1.f);
@@ -122,11 +128,15 @@ struct light_probe_system
 
 	dx_mesh lightProbeMesh;
 
-	std::vector<vec3> lightProbePositions;
+	std::vector<vec4> lightProbePositions;
+	dx_structured_buffer lightProbePositionBuffer;
+
 	std::vector<light_probe_tetrahedron> lightProbeTetrahedra;
+	dx_structured_buffer lightProbeTetrahedraBuffer;
 
 	std::vector<spherical_harmonics> sphericalHarmonics;
 	dx_structured_buffer sphericalHarmonicsBuffer;
+	dx_structured_buffer packedSphericalHarmonicsBuffer;
 
 
 	dx_mesh tetrahedronMesh;

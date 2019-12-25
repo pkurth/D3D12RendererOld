@@ -1,3 +1,6 @@
+#ifndef NORMALS_H
+#define NORMALS_H
+
 
 float2 signNotZero(float2 v) 
 {
@@ -17,3 +20,5 @@ float3 decodeNormal(float2 packedNormal)
 	if (v.z < 0.f) v.xy = (1.f - abs(v.yx)) * signNotZero(v.xy);
 	return normalize(v);
 }
+
+#endif

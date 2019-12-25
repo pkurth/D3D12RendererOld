@@ -3,7 +3,7 @@
 #include "input.h"
 #include <functional>
 
-#define NUM_BUFFERED_FRAMES 3
+#define NUM_BUFFERED_FRAMES 2
 
 void flushApplication();
 void registerKeyDownCallback(std::function<bool(keyboard_event)> func);

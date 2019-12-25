@@ -2,13 +2,14 @@
 #include "material.h"
 #include "pbr.h"
 #include "camera.h"
-
+#include "light_probe.h"
 
 struct ps_input
 {
 	float2 uv				: TEXCOORDS;
 	float3x3 tbn			: TANGENT_FRAME;
 	float3 worldPosition	: POSITION;
+	nointerpolation uint lightProbeTetrahedron : LIGHTPROBE_TETRAHEDRON;
 };
 
 struct ps_output
@@ -33,26 +34,20 @@ TextureCube<float4> environmentTexture		: register(t1, space0);
 Texture2D<float4> brdf						: register(t2, space0);
 
 // Materials.
-Texture2D<float4> albedoTextures[64]	: register(t0, space1);
-Texture2D<float4> normalTextures[64]	: register(t0, space2);
-Texture2D<float> roughnessTextures[64]	: register(t0, space3);
-Texture2D<float> metallicTextures[64]	: register(t0, space4);
+Texture2D<float4> albedoTextures[]	: register(t0, space1);
+Texture2D<float4> normalTextures[]	: register(t0, space2);
+Texture2D<float> roughnessTextures[]	: register(t0, space3);
+Texture2D<float> metallicTextures[]	: register(t0, space4);
 
 // Shadow maps.
 Texture2D<float> sunShadowMapCascades[4]	: register(t0, space5);
 
+// Light probes.
+StructuredBuffer<float4> lightProbePositions					: register(t0, space6);
+StructuredBuffer<packed_spherical_harmonics> sphericalHarmonics	: register(t1, space6);
+//StructuredBuffer<spherical_harmonics> sphericalHarmonics		: register(t1, space6);
+StructuredBuffer<light_probe_tetrahedron> lightProbeTetrahedra	: register(t2, space6);
 
-static const spherical_harmonics sh = {
-	float4(0.445560, 0.264096, 0.266335, 0.0),
-	float4(-0.311523, -0.084572, 0.080637, 0.0),
-	float4(0.086516, 0.022305, -0.045806, 0.0),
-	float4(-0.091761, 0.026771, 0.100462, 0.0),
-	float4(0.063233, 0.061217, 0.087974, 0.0),
-	float4(0.003792, -0.022282, -0.050458, 0.0),
-	float4(-0.024107, -0.010575, -0.005569, 0.0),
-	float4(0.021007, 0.044164, 0.061526, 0.0),
-	float4(-0.000832, 0.012470, 0.024354, 0.0)
-};
 
 ps_output main(ps_input IN)
 {
@@ -84,9 +79,16 @@ ps_output main(ps_input IN)
 
 
 	// Ambient.
+	
+#if 0
 	totalLighting.xyz += calculateAmbientLighting(albedo.xyz, irradianceTexture, environmentTexture, brdf, brdfSampler, N, V, F0, roughness, metallic, ao);
+#else
+	totalLighting.xyz += calculateAmbientLighting(albedo.xyz,
+		lightProbePositions, lightProbeTetrahedra, IN.worldPosition, IN.lightProbeTetrahedron, sphericalHarmonics,
+		environmentTexture, brdf, brdfSampler, N, V, F0, roughness, metallic, ao);
+#endif
 
-
+#if 1
 	// Sun.
 	{
 		float visibility = 1.f;
@@ -144,7 +146,7 @@ ps_output main(ps_input IN)
 
 		totalLighting.xyz += calculateDirectLighting(albedo.xyz, radiance, N, L, V, F0, roughness, metallic) * visibility;
 	}
-
+#endif
 
 	ps_output OUT;
 	OUT.color = totalLighting;

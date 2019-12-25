@@ -1,3 +1,6 @@
+#ifndef QUATERNION_H
+#define QUATERNION_H
+
 
 typedef float4 quat;
 
@@ -66,3 +69,5 @@ float4x4 quatTo4x4(in quat q)
 		m3x3._m20, m3x3._m21, m3x3._m22, 0.0f,
 		0.0f, 0.0f, 0.0f, 1.0f);
 }
+
+#endif

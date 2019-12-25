@@ -8,8 +8,46 @@
 
 #include <pix3.h>
 
+static uint32 packColorR11G11B10(vec4 c)
+{
+	const uint32 rMax = (1 << 11) - 1;
+	const uint32 gMax = (1 << 11) - 1;
+	const uint32 bMax = (1 << 10) - 1;
 
-void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget, const std::vector<vec3>& lightProbePositions)
+	uint32 r = (uint32)remap(c.x, 0.f, 3.f, 0.f, rMax);
+	uint32 g = (uint32)remap(c.y, 0.f, 3.f, 0.f, rMax);
+	uint32 b = (uint32)remap(c.z, 0.f, 3.f, 0.f, rMax);
+
+	uint32 result = (r << 21) | (g << 10) | b;
+	return result;
+}
+
+static vec4 unpackColorR11G11B10(uint32 c)
+{
+	const uint32 rMax = (1 << 11) - 1;
+	const uint32 gMax = (1 << 11) - 1;
+	const uint32 bMax = (1 << 10) - 1;
+
+	float b = (float)(c & bMax);
+	c >>= 10;
+	float g = (float)(c & gMax);
+	c >>= 11;
+	float r = (float)c;
+
+	return vec4(r * 6.f / rMax - 3.f, g * 6.f / gMax - 3.f, b * 6.f / bMax - 3.f, 1.f);
+}
+
+static packed_spherical_harmonics packSphericalHarmonics(const spherical_harmonics& sh)
+{
+	packed_spherical_harmonics result;
+	for (uint32 i = 0; i < 9; ++i)
+	{
+		result.coefficients[i] = packColorR11G11B10(sh.coefficients[i]);
+	}
+	return result;
+}
+
+void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget, const std::vector<vec4>& lightProbePositions)
 {
 	// Visualization pipelines.
 
@@ -230,11 +268,19 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 	memset(sphericalHarmonics.data(), 0, sphericalHarmonics.size() * sizeof(spherical_harmonics));
 	for (uint32 i = 0; i < sphericalHarmonics.size(); ++i)
 	{
-		sphericalHarmonics[i].coefficients[0] = vec4(randomFloat(-0.5f, 0.5f), randomFloat(-0.5f, 0.5f), randomFloat(-0.5f, 0.5f), 0.f);
+		sphericalHarmonics[i].coefficients[0] = vec4(randomFloat(0.f, 1.5f), randomFloat(0.f, 1.5f), randomFloat(0.f, 1.5f), 0.f);
 	}
 #endif
 
 	sphericalHarmonicsBuffer.initialize(device, sphericalHarmonics.data(), (uint32)sphericalHarmonics.size(), commandList);
+
+	std::vector<packed_spherical_harmonics> packedSHs(sphericalHarmonics.size());
+	for (uint32 i = 0; i < (uint32)sphericalHarmonics.size(); ++i)
+	{
+		packedSHs[i] = packSphericalHarmonics(sphericalHarmonics[i]);
+	}
+
+	packedSphericalHarmonicsBuffer.initialize(device, packedSHs.data(), (uint32)packedSHs.size(), commandList);
 
 	{
 		tetgenio tetgenIn, tetgenOut;
@@ -320,6 +366,10 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 
 		tetrahedronMesh.vertexBuffer.initialize(device, lightProbePositions.data(), (uint32)lightProbePositions.size(), commandList);
 		tetrahedronMesh.indexBuffer.initialize(device, (uint16*)edgeList.data(), (uint32)edgeList.size() * 2, commandList);
+
+
+		lightProbeTetrahedraBuffer.initialize(device, lightProbeTetrahedra.data(), (uint32)lightProbeTetrahedra.size(), commandList);
+		lightProbePositionBuffer.initialize(device, lightProbePositions.data(), (uint32)lightProbePositions.size(), commandList);
 	}
 
 
@@ -606,9 +656,9 @@ void light_probe_system::visualizeLightProbes(dx_command_list* commandList, cons
 			vec4(0.f, 0.f, 0.f, 0.f),
 		};
 
-		visualizeSH(commandList, camera, lightProbePositions[a], pinkSH);
-		visualizeSH(commandList, camera, lightProbePositions[b], pinkSH);
-		visualizeSH(commandList, camera, lightProbePositions[c], pinkSH);
-		visualizeSH(commandList, camera, lightProbePositions[d], pinkSH);
+		visualizeSH(commandList, camera, lightProbePositions[a].xyz, pinkSH);
+		visualizeSH(commandList, camera, lightProbePositions[b].xyz, pinkSH);
+		visualizeSH(commandList, camera, lightProbePositions[c].xyz, pinkSH);
+		visualizeSH(commandList, camera, lightProbePositions[d].xyz, pinkSH);
 	}
 }

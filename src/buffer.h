@@ -42,11 +42,16 @@ struct dx_structured_buffer : dx_buffer
 	D3D12_CPU_DESCRIPTOR_HANDLE srv;
 	D3D12_CPU_DESCRIPTOR_HANDLE uav;
 
+	uint32 count;
+	uint32 elementSize;
+
 	void initialize(ComPtr<ID3D12Device2> device, uint32 count, uint32 elementSize, const void* data = nullptr, dx_command_list* commandList = nullptr);
 	template <typename T> void initialize(ComPtr<ID3D12Device2> device, const T* data, uint32 count, dx_command_list* commandList = nullptr)
 	{
 		initialize(device, count, (uint32)sizeof(T), data, commandList);
 	}
+
+	void createShaderResourceView(ComPtr<ID3D12Device2> device, D3D12_CPU_DESCRIPTOR_HANDLE srv);
 };
 
 struct dx_mesh
