@@ -10,7 +10,7 @@ dx_texture::dx_texture(const dx_texture& other)
 	: dx_resource(other)
 {
 	this->depthStencilView = other.depthStencilView;
-	memcpy(this->renderTargetViews, other.renderTargetViews, sizeof(renderTargetViews));
+	this->renderTargetViews = other.renderTargetViews;
 	this->shaderResourceViews = other.shaderResourceViews;
 	this->unorderedAccessViews = other.unorderedAccessViews;
 }
@@ -25,7 +25,7 @@ dx_texture& dx_texture::operator=(const dx_texture& other)
 		clearValue = other.clearValue;
 	}
 	this->depthStencilView = other.depthStencilView;
-	memcpy(this->renderTargetViews, other.renderTargetViews, sizeof(renderTargetViews));
+	this->renderTargetViews = other.renderTargetViews;
 	this->shaderResourceViews = other.shaderResourceViews;
 	this->unorderedAccessViews = other.unorderedAccessViews;
 
@@ -121,6 +121,8 @@ void dx_texture::initialize(ComPtr<ID3D12Device2> device, D3D12_RESOURCE_DESC re
 	if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 &&
 		checkRTVSupport())
 	{
+		renderTargetViews.resize(resourceDesc.DepthOrArraySize);
+
 		if (resourceDesc.DepthOrArraySize > 1)
 		{
 			D3D12_RENDER_TARGET_VIEW_DESC rtvDesc;
@@ -225,7 +227,7 @@ void dx_texture::initialize(const dx_texture& other)
 	this->shaderResourceViews = other.shaderResourceViews;
 	this->unorderedAccessViews = other.unorderedAccessViews;
 	this->depthStencilView = other.depthStencilView;
-	memcpy(this->renderTargetViews, other.renderTargetViews, sizeof(renderTargetViews));
+	this->renderTargetViews = other.renderTargetViews;
 }
 
 bool dx_texture::isUAVCompatibleFormat(DXGI_FORMAT format)

@@ -15,6 +15,8 @@
 #define MAX_NUM_SUN_SHADOW_CASCADES 4
 #define SHADOW_MAP_NEGATIVE_Z_OFFSET 100.f
 
+#define LIGHT_PROBE_RESOLUTION 128
+
 struct directional_light
 {
 	mat4 vp[MAX_NUM_SUN_SHADOW_CASCADES];
@@ -112,12 +114,12 @@ struct light_probe_system
 		const std::vector<vec4>& lightProbePositions);
 
 	// Visualizations of single probe.
+	void visualizeLightProbeCubemaps(dx_command_list* commandList, const render_camera& camera, float uvzScale = 1.f);
 	void visualizeCubemap(dx_command_list* commandList, const render_camera& camera, vec3 position, dx_texture& cubemap, float uvzScale = 1.f);
 	void visualizeSH(dx_command_list* commandList, const render_camera& camera, vec3 position, const spherical_harmonics& sh, float uvzScale = 1.f);
 
 	// Visualize whole system.
-	void visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh,
-		uint32 highlightTetrahedron);
+	void visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh);
 
 	vec4 calculateBarycentricCoordinates(const light_probe_tetrahedron& tet, vec3 position);
 	spherical_harmonics getInterpolatedSphericalHarmonics(const light_probe_tetrahedron& tet, vec4 barycentric);
@@ -151,5 +153,13 @@ struct light_probe_system
 
 	ComPtr<ID3D12PipelineState> visualizeSHDirectPipeline;
 	dx_root_signature visualizeSHDirectRootSignature;
+
+
+	// Light probe rendering.
+	dx_render_target lightProbeRT;
+	dx_texture lightProbeHDRTexture;
+	dx_texture lightProbeDepthTexture;
+	//cubemap_camera lightProbeCamera;
+
 };
 

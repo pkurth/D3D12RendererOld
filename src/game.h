@@ -113,19 +113,11 @@ private:
 	dx_texture hdrTexture;
 	dx_texture depthTexture;
 
-	dx_render_target lightProbeRT;
-	dx_texture lightProbeHDRTexture;
-	dx_texture lightProbeIrradiance;
-	dx_texture lightProbeDepthTexture;
-	cubemap_camera lightProbeCamera;
 	uint32 lightProbeFaceIndex = 0;
 	uint32 lightProbeGlobalIndex = 0;
-	bool lightProbeRecording = true;
+	bool lightProbeRecording = false;
 	bool showLightProbes = false;
 	bool showLightProbeConnectivity = false;
-
-	uint32 lastTetrahedronIndex = 0;
-	float lightProbeTime = 0.f;
 
 	light_probe_system lightProbeSystem;
 

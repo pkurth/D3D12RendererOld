@@ -49,6 +49,42 @@ static packed_spherical_harmonics packSphericalHarmonics(const spherical_harmoni
 
 void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget, const std::vector<vec4>& lightProbePositions)
 {
+	DXGI_FORMAT hdrFormat = renderTarget.colorAttachments[0]->format;
+	DXGI_FORMAT depthFormat = renderTarget.depthStencilAttachment->format;
+
+	// Light probe cubemaps.
+	CD3DX12_RESOURCE_DESC hdrTextureDesc = CD3DX12_RESOURCE_DESC::Tex2D(hdrFormat, LIGHT_PROBE_RESOLUTION, LIGHT_PROBE_RESOLUTION);
+	hdrTextureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	hdrTextureDesc.DepthOrArraySize = 6 * (uint32)lightProbePositions.size();
+	hdrTextureDesc.MipLevels = 1;
+
+	D3D12_CLEAR_VALUE hdrClearValue;
+	hdrClearValue.Format = hdrTextureDesc.Format;
+	hdrClearValue.Color[0] = 0.f;
+	hdrClearValue.Color[1] = 0.f;
+	hdrClearValue.Color[2] = 0.f;
+	hdrClearValue.Color[3] = 0.f;
+
+	lightProbeHDRTexture.initialize(device, hdrTextureDesc, &hdrClearValue);
+	lightProbeRT.attachColorTexture(0, lightProbeHDRTexture);
+
+
+	// Light probe depth.
+	DXGI_FORMAT depthBufferFormat = depthFormat;
+	CD3DX12_RESOURCE_DESC depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, LIGHT_PROBE_RESOLUTION, LIGHT_PROBE_RESOLUTION);
+	depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	depthDesc.MipLevels = 1;
+
+	D3D12_CLEAR_VALUE depthClearValue;
+	depthClearValue.Format = depthDesc.Format;
+	depthClearValue.DepthStencil = { 1.f, 0 };
+
+	lightProbeDepthTexture.initialize(device, depthDesc, &depthClearValue);
+	lightProbeRT.attachDepthStencilTexture(lightProbeDepthTexture);
+
+
+
+
 	// Visualization pipelines.
 
 	ComPtr<ID3DBlob> vertexShaderBlob;
@@ -248,10 +284,10 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 
 	this->lightProbePositions = lightProbePositions;
 
-#if 0
-	spherical_harmonics pinkSH = 
+#if 1
+	spherical_harmonics defaultSH = 
 	{
-		vec4(1.f, 0.f, 1.f, 0.f),
+		vec4(0.f, 0.f, 0.f, 0.f),
 		vec4(0.f, 0.f, 0.f, 0.f),
 		vec4(0.f, 0.f, 0.f, 0.f),
 		vec4(0.f, 0.f, 0.f, 0.f),
@@ -262,7 +298,7 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 		vec4(0.f, 0.f, 0.f, 0.f),
 	};
 
-	sphericalHarmonics.resize(lightProbePositions.size(), pinkSH);
+	sphericalHarmonics.resize(lightProbePositions.size(), defaultSH);
 #else
 	sphericalHarmonics.resize(lightProbePositions.size());
 	memset(sphericalHarmonics.data(), 0, sphericalHarmonics.size() * sizeof(spherical_harmonics));
@@ -545,6 +581,49 @@ void light_probe_system::visualizeCubemap(dx_command_list* commandList, const re
 	commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 }
 
+void light_probe_system::visualizeLightProbeCubemaps(dx_command_list* commandList, const render_camera& camera, float uvzScale)
+{
+	PROFILE_FUNCTION();
+
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Visualize light probe cubemaps.");
+
+	commandList->setPipelineState(visualizeCubemapPipeline);
+	commandList->setGraphicsRootSignature(visualizeCubemapRootSignature);
+
+	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	commandList->setVertexBuffer(0, lightProbeMesh.vertexBuffer);
+	commandList->setIndexBuffer(lightProbeMesh.indexBuffer);
+
+	commandList->transitionBarrier(lightProbeHDRTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+	for (uint32 i = 0; i < lightProbePositions.size(); ++i)
+	{
+		struct
+		{
+			mat4 mvp;
+			float uvzScale;
+		} cb = {
+			camera.projectionMatrix * camera.viewMatrix * createModelMatrix(lightProbePositions[i].xyz, quat::identity),
+			uvzScale
+		};
+		commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, cb);
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format = lightProbeHDRTexture.resource->GetDesc().Format;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+		srvDesc.TextureCubeArray.MipLevels = 1;
+		srvDesc.TextureCubeArray.NumCubes = 1;
+		srvDesc.TextureCubeArray.First2DArrayFace = i * 6;
+
+		commandList->setShaderResourceView(VISUALIZE_LIGHTPROBE_ROOTPARAM_TEXTURE, 0, lightProbeHDRTexture, 
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
+
+		commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
+	}
+}
+
 void light_probe_system::visualizeSH(dx_command_list* commandList, const render_camera& camera, vec3 position, const spherical_harmonics& sh, float uvzScale)
 {
 	PROFILE_FUNCTION();
@@ -576,8 +655,7 @@ void light_probe_system::visualizeSH(dx_command_list* commandList, const render_
 	commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 }
 
-void light_probe_system::visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh,
-	uint32 highlightTetrahedron)
+void light_probe_system::visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh)
 {
 	PROFILE_FUNCTION();
 
@@ -615,19 +693,9 @@ void light_probe_system::visualizeLightProbes(dx_command_list* commandList, cons
 		commandList->transitionBarrier(sphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->stageDescriptors(VISUALIZE_LIGHTPROBE_ROOTPARAM_SH, 0, 1, sphericalHarmonicsBuffer.srv);
 
-		uint32 a = lightProbeTetrahedra[highlightTetrahedron].a;
-		uint32 b = lightProbeTetrahedra[highlightTetrahedron].b;
-		uint32 c = lightProbeTetrahedra[highlightTetrahedron].c;
-		uint32 d = lightProbeTetrahedra[highlightTetrahedron].d;
-
 		// TODO: This could be rendered instanced.
 		for (uint32 i = 0; i < lightProbePositions.size(); ++i)
 		{
-			if (i == a || i == b || i == c || i == d)
-			{
-				continue;
-			}
-
 			struct
 			{
 				mat4 mvp;
@@ -642,23 +710,5 @@ void light_probe_system::visualizeLightProbes(dx_command_list* commandList, cons
 
 			commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 		}
-
-		spherical_harmonics pinkSH =
-		{
-			vec4(1.f, 0.f, 1.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-			vec4(0.f, 0.f, 0.f, 0.f),
-		};
-
-		visualizeSH(commandList, camera, lightProbePositions[a].xyz, pinkSH);
-		visualizeSH(commandList, camera, lightProbePositions[b].xyz, pinkSH);
-		visualizeSH(commandList, camera, lightProbePositions[c].xyz, pinkSH);
-		visualizeSH(commandList, camera, lightProbePositions[d].xyz, pinkSH);
 	}
 }

@@ -9,8 +9,6 @@
 
 #define DEPTH_PREPASS 1
 
-#define LIGHT_PROBE_RESOLUTION 256
-
 #pragma pack(push, 1)
 struct indirect_command
 {
@@ -64,17 +62,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 			hdrTexture.initialize(device, hdrTextureDesc, &hdrClearValue);
 			lightingRT.attachColorTexture(0, hdrTexture);
-
-
-			// Light probe cubemap.
-			CD3DX12_RESOURCE_DESC cubemapDesc(hdrTextureDesc);
-			cubemapDesc.Width = cubemapDesc.Height = LIGHT_PROBE_RESOLUTION;
-			cubemapDesc.DepthOrArraySize = 6;
-			cubemapDesc.MipLevels = 0;
-			cubemapDesc.Format = hdrFormat;
-
-			lightProbeHDRTexture.initialize(device, cubemapDesc);
-			lightProbeRT.attachColorTexture(0, lightProbeHDRTexture);
 		}
 
 		// Depth.
@@ -91,11 +78,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			depthTexture.initialize(device, depthDesc, &depthClearValue);
 			lightingRT.attachDepthStencilTexture(depthTexture);
 
-
-			// Light probe depth.
-			depthDesc.Width = depthDesc.Height = LIGHT_PROBE_RESOLUTION;
-			lightProbeDepthTexture.initialize(device, depthDesc, &depthClearValue);
-			lightProbeRT.attachDepthStencilTexture(lightProbeDepthTexture);
 		}
 
 		// Sun shadow map.
@@ -721,6 +703,7 @@ void dx_game::update(float dt)
 		{
 			gui.toggle("Show light probes", showLightProbes);
 			gui.toggle("Show light probe connectivity", showLightProbeConnectivity);
+			gui.toggle("Record light probes", lightProbeRecording);
 		}
 		gui.textF("%u draw calls", numIndirectDrawCalls);
 	}
@@ -858,19 +841,20 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		}
 	}
 
-#if 0
+
 	if (lightProbeRecording)
 	{
+		commandList->transitionBarrier(lightProbeSystem.lightProbeHDRTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		commandList->transitionBarrier(lightProbeSystem.lightProbeDepthTexture, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 		if (lightProbeGlobalIndex < lightProbeSystem.lightProbePositions.size())
 		{
-			// Render to cubemap. One index per frame.
-			
-			vec3 lightProbePosition = lightProbeSystem.lightProbePositions[lightProbeGlobalIndex];
+			vec3 lightProbePosition = lightProbeSystem.lightProbePositions[lightProbeGlobalIndex].xyz;
 
-			commandList->setRenderTarget(lightProbeRT, lightProbeFaceIndex);
-			commandList->setViewport(lightProbeRT.viewport);
-			commandList->clearDepth(lightProbeRT.depthStencilAttachment->getDepthStencilView());
+			commandList->setRenderTarget(lightProbeSystem.lightProbeRT, 6 * lightProbeGlobalIndex + lightProbeFaceIndex);
+			commandList->setViewport(lightProbeSystem.lightProbeRT.viewport);
+			commandList->clearDepth(lightProbeSystem.lightProbeRT.depthStencilAttachment->getDepthStencilView());
 
+			cubemap_camera lightProbeCamera;
 			lightProbeCamera.initialize(lightProbePosition, lightProbeFaceIndex);
 			renderScene(commandList, lightProbeCamera);
 		}
@@ -883,45 +867,15 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		}
 	}
 
-	if (lightProbeGlobalIndex >= lightProbeSystem.lightProbePositions.size() && lightProbeFaceIndex > NUM_BUFFERED_FRAMES)
-	{
-		lightProbeRecording = false;
-	}
-
-	if (lightProbeGlobalIndex > 0 && lightProbeFaceIndex == NUM_BUFFERED_FRAMES)
-	{
-		dx_command_list* computeList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
-
-		//computeList->generateMips(lightProbeHDRTexture);
-		computeList->createIrradianceMap(lightProbeHDRTexture, lightProbeIrradiance, LIGHT_PROBE_RESOLUTION);
-		computeList->projectCubemapToSphericalHarmonics(lightProbeIrradiance, lightProbeSystem.sphericalHarmonicsBuffer, 0, lightProbeGlobalIndex - 1);
-
-		computeList->transitionBarrier(lightProbeHDRTexture, D3D12_RESOURCE_STATE_COMMON);
-
-		uint64 fenceValue = dx_command_queue::computeCommandQueue.executeCommandList(computeList);
-		dx_command_queue::computeCommandQueue.waitForFenceValue(fenceValue);
-	}
-#endif
-
 	commandList->setRenderTarget(lightingRT);
 	commandList->setViewport(viewport);
 	commandList->clearDepth(lightingRT.depthStencilAttachment->getDepthStencilView());
 
 	renderScene(commandList, camera);
 
-	{
-		vec3 position(cos(lightProbeTime * 0.3f) * 20.f, 20.f + sin(lightProbeTime * 0.3f) * 10.f, 0.f);
-		lightProbeTime += dt;
 
-		vec4 barycentric;
-		lastTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(position, lastTetrahedronIndex, barycentric);
-		lightProbeSystem.visualizeSH(commandList, camera, position,
-			lightProbeSystem.getInterpolatedSphericalHarmonics(lastTetrahedronIndex, barycentric));
-	}
-
-	lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity, lastTetrahedronIndex);
-
-	commandList->transitionBarrier(lightProbeHDRTexture, D3D12_RESOURCE_STATE_COMMON);
+	//lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity);
+	lightProbeSystem.visualizeLightProbeCubemaps(commandList, camera, -1.f);
 
 	// Resolve to screen.
 	// No need to clear RTV (or for a depth buffer), since we are blitting the whole lighting buffer.

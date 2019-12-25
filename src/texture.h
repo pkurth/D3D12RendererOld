@@ -48,6 +48,6 @@ struct dx_texture : dx_resource
 	D3D12_CPU_DESCRIPTOR_HANDLE getDepthStencilView() { return depthStencilView; }
 
 private:
-	D3D12_CPU_DESCRIPTOR_HANDLE renderTargetViews[6];
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> renderTargetViews;
 	D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView;
 };
