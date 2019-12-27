@@ -45,7 +45,6 @@ Texture2D<float> sunShadowMapCascades[4]	: register(t0, space5);
 // Light probes.
 StructuredBuffer<float4> lightProbePositions					: register(t0, space6);
 StructuredBuffer<packed_spherical_harmonics> sphericalHarmonics	: register(t1, space6);
-//StructuredBuffer<spherical_harmonics> sphericalHarmonics		: register(t1, space6);
 StructuredBuffer<light_probe_tetrahedron> lightProbeTetrahedra	: register(t2, space6);
 
 

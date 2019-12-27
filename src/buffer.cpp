@@ -3,10 +3,13 @@
 #include "error.h"
 #include "resource_state_tracker.h"
 #include "command_list.h"
+#include "command_queue.h"
 
 void dx_buffer::initialize(ComPtr<ID3D12Device2> device, uint32 size, const void* data, dx_command_list* commandList,
 	D3D12_RESOURCE_FLAGS flags)
 {
+	this->device = device;
+
 	// Create a committed resource for the GPU resource in a default heap.
 	checkResult(device->CreateCommittedResource(
 		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
@@ -23,6 +26,35 @@ void dx_buffer::initialize(ComPtr<ID3D12Device2> device, uint32 size, const void
 		assert(commandList);
 		commandList->uploadBufferData(resource, data, size);
 	}
+}
+
+void dx_buffer::copyBackToCPU(void* buffer, uint32 size)
+{
+	D3D12_RESOURCE_DESC readbackBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
+	ComPtr<ID3D12Resource> readbackBuffer;
+	checkResult(device->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK),
+		D3D12_HEAP_FLAG_NONE,
+		&readbackBufferDesc,
+		D3D12_RESOURCE_STATE_COPY_DEST,
+		nullptr,
+		IID_PPV_ARGS(&readbackBuffer)));
+
+	dx_command_list* commandList = dx_command_queue::copyCommandQueue.getAvailableCommandList();
+
+	commandList->copyResource(readbackBuffer, resource, false);
+
+	uint64 fenceValue = dx_command_queue::copyCommandQueue.executeCommandList(commandList);
+	dx_command_queue::copyCommandQueue.waitForFenceValue(fenceValue);
+
+	D3D12_RANGE readbackBufferRange{ 0, size };
+	void* data;
+	checkResult(readbackBuffer->Map(0, &readbackBufferRange, &data));
+
+	memcpy(buffer, data, size);
+
+	D3D12_RANGE emptyRange{ 0, 0 };
+	readbackBuffer->Unmap(0, &emptyRange);
 }
 
 void dx_structured_buffer::initialize(ComPtr<ID3D12Device2> device, uint32 count, uint32 elementSize, const void* data, dx_command_list* commandList)

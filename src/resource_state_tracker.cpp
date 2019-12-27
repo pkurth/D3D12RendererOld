@@ -157,7 +157,7 @@ uint32 dx_resource_state_tracker::flushPendingResourceBarriers(ComPtr<ID3D12Grap
 	}
 
 	pendingResourceBarriers.clear();
-
+	
 	return numBarriers;
 }
 

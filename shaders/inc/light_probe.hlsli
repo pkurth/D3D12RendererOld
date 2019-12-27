@@ -2,6 +2,16 @@
 #define LIGHT_PROBE_H
 
 
+inline float inverseLerp(float lo, float hi, float x)
+{
+	return (x - lo) / (hi - lo);
+}
+
+inline float remap(float x, float curLo, float curHi, float newLo, float newHi)
+{
+	return lerp(newLo, newHi, inverseLerp(curLo, curHi, x));
+}
+
 struct spherical_harmonics
 {
 	float4 coefficients[9];
@@ -45,7 +55,11 @@ static float3 unpackColorR11G11B10(uint c)
 	c >>= 11;
 	float r = c;
 
-	return float3(r * 3.f / rMax, g * 3.f / gMax, b * 3.f / bMax);
+	return float3(
+		remap(r, 0.f, rMax, -1.f, 1.f),
+		remap(g, 0.f, gMax, -1.f, 1.f),
+		remap(b, 0.f, bMax, -1.f, 1.f)
+		);
 }
 
 static float4 sampleSphericalHarmonics(packed_spherical_harmonics sh, float3 normal)

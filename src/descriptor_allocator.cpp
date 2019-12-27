@@ -19,19 +19,22 @@ dx_descriptor_allocation dx_descriptor_allocator::allocateDescriptorsInternal(ui
 
 	for (auto iter = freePages.begin(); iter != freePages.end(); ++iter)
 	{
-		dx_descriptor_allocator_page& page = **iter;
+		dx_descriptor_allocator_page& page = pages[*iter];
 
-		allocation = page.allocateDescriptors(count);
-
-		if (page.numFreeHandles == 0)
+		if (page.numFreeHandles >= count)
 		{
-			iter = freePages.erase(iter);
-		}
+			allocation = page.allocateDescriptors(count);
 
-		// A valid allocation has been found.
-		if (!allocation.isNull())
-		{
-			break;
+			if (page.numFreeHandles == 0)
+			{
+				iter = freePages.erase(iter);
+			}
+
+			// A valid allocation has been found.
+			if (!allocation.isNull())
+			{
+				break;
+			}
 		}
 	}
 
@@ -51,7 +54,7 @@ void dx_descriptor_allocator::releaseStaleDescriptorsInternal(uint64 frameNumber
 {
 	std::lock_guard<std::mutex> lock(allocationMutex);
 
-	for (size_t i = 0; i < pages.size(); ++i)
+	for (uint32 i = 0; i < (uint32)pages.size(); ++i)
 	{
 		dx_descriptor_allocator_page& page = pages[i];
 
@@ -59,7 +62,7 @@ void dx_descriptor_allocator::releaseStaleDescriptorsInternal(uint64 frameNumber
 
 		if (page.numFreeHandles > 0)
 		{
-			freePages.insert(&page);
+			freePages.insert(i);
 		}
 	}
 }
@@ -68,7 +71,7 @@ dx_descriptor_allocator_page& dx_descriptor_allocator::createPage()
 {
 	pages.emplace_back(device, type, numDescriptorsPerHeap);
 	dx_descriptor_allocator_page& result = pages.back();
-	freePages.insert(&result);
+	freePages.insert((uint32)pages.size() - 1);
 	return result;
 }
 

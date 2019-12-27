@@ -15,7 +15,7 @@
 #define MAX_NUM_SUN_SHADOW_CASCADES 4
 #define SHADOW_MAP_NEGATIVE_Z_OFFSET 100.f
 
-#define LIGHT_PROBE_RESOLUTION 128
+#define LIGHT_PROBE_RESOLUTION 32
 
 struct directional_light
 {
@@ -112,6 +112,10 @@ struct light_probe_system
 {
 	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget,
 		const std::vector<vec4>& lightProbePositions);
+	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget,
+		const std::vector<vec4>& lightProbePositions, const std::vector<spherical_harmonics>& sphericalHarmonics);
+
+	void setSphericalHarmonics(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const std::vector<spherical_harmonics>& sphericalHarmonics);
 
 	// Visualizations of single probe.
 	void visualizeLightProbeCubemaps(dx_command_list* commandList, const render_camera& camera, float uvzScale = 1.f);
@@ -137,8 +141,9 @@ struct light_probe_system
 	dx_structured_buffer lightProbeTetrahedraBuffer;
 
 	std::vector<spherical_harmonics> sphericalHarmonics;
-	dx_structured_buffer sphericalHarmonicsBuffer;
 	dx_structured_buffer packedSphericalHarmonicsBuffer;
+
+	dx_structured_buffer tempSphericalHarmonicsBuffer;
 
 
 	dx_mesh tetrahedronMesh;
@@ -159,7 +164,6 @@ struct light_probe_system
 	dx_render_target lightProbeRT;
 	dx_texture lightProbeHDRTexture;
 	dx_texture lightProbeDepthTexture;
-	//cubemap_camera lightProbeCamera;
 
 };
 

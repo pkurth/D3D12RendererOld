@@ -28,8 +28,8 @@ public:
 
 
 	// Buffer copy.
-	void copyResource(ComPtr<ID3D12Resource> dstRes, ComPtr<ID3D12Resource> srcRes);
-	void copyResource(dx_resource& dstRes, const dx_resource& srcRes);
+	void copyResource(ComPtr<ID3D12Resource> dstRes, ComPtr<ID3D12Resource> srcRes, bool transitionDst = true);
+	void copyResource(dx_resource& dstRes, const dx_resource& srcRes, bool transitionDst = true);
 
 	void uploadBufferData(ComPtr<ID3D12Resource> destinationResource, const void* bufferData, uint32 bufferSize);
 	void updateBufferDataRange(ComPtr<ID3D12Resource> destinationResource, const void* data, uint32 offset, uint32 size);
@@ -44,7 +44,7 @@ public:
 
 	// BRDF.
 	void convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
-	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32);
+	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32, uint32 sourceSlice = 0, float uvzScale = 1.f);
 	void prefilterEnvironmentMap(dx_texture& environment, dx_texture& prefiltered, uint32 resolution = 128);
 	void integrateBRDF(dx_texture& brdf, uint32 resolution = 512);
 	void projectCubemapToSphericalHarmonics(dx_texture& cubemap, dx_structured_buffer& sh, uint32 srcMip, uint32 shIndex);

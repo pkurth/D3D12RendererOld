@@ -34,6 +34,7 @@ struct dx_equirectangular_to_cubemap_pso
 struct cubemap_to_irradiance_cb
 {
 	uint32 irradianceMapSize;
+	float uvzScale;
 };
 
 enum cubemap_to_irradiance_root_parameter

@@ -73,7 +73,7 @@ void dx_cubemap_to_irradiance_pso::initialize(ComPtr<ID3D12Device2> device)
 	CD3DX12_DESCRIPTOR_RANGE1 outMip(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[cubemap_to_irradiance_num_params];
-	rootParameters[cubemap_to_irradiance_param_constant_buffer].InitAsConstants(1, 0);
+	rootParameters[cubemap_to_irradiance_param_constant_buffer].InitAsConstants(sizeof(cubemap_to_irradiance_cb) / sizeof(float), 0);
 	rootParameters[cubemap_to_irradiance_param_src].InitAsDescriptorTable(1, &srcMip);
 	rootParameters[cubemap_to_irradiance_param_out].InitAsDescriptorTable(1, &outMip);
 

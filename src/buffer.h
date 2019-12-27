@@ -12,6 +12,7 @@ class dx_command_list;
 struct dx_buffer
 {
 	ComPtr<ID3D12Resource> resource;
+	ComPtr<ID3D12Device2> device;
 
 	void initialize(ComPtr<ID3D12Device2> device, uint32 size, const void* data = nullptr, dx_command_list* commandList = nullptr, 
 		D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
@@ -20,6 +21,8 @@ struct dx_buffer
 	{ 
 		initialize(device, sizeof(T) * count, data, commandList, flags); 
 	}
+
+	void copyBackToCPU(void* buffer, uint32 size);
 };
 
 struct dx_vertex_buffer : dx_buffer

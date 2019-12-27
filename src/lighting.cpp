@@ -10,13 +10,18 @@
 
 static uint32 packColorR11G11B10(vec4 c)
 {
+	// For now. Let's see what the range will be.
+	assert(c.x >= -1.f && c.x <= 1.f);
+	assert(c.y >= -1.f && c.y <= 1.f);
+	assert(c.z >= -1.f && c.z <= 1.f);
+
 	const uint32 rMax = (1 << 11) - 1;
 	const uint32 gMax = (1 << 11) - 1;
 	const uint32 bMax = (1 << 10) - 1;
 
-	uint32 r = (uint32)remap(c.x, 0.f, 3.f, 0.f, rMax);
-	uint32 g = (uint32)remap(c.y, 0.f, 3.f, 0.f, rMax);
-	uint32 b = (uint32)remap(c.z, 0.f, 3.f, 0.f, rMax);
+	uint32 r = (uint32)remap(c.x, -1.f, 1.f, 0.f, rMax);
+	uint32 g = (uint32)remap(c.y, -1.f, 1.f, 0.f, gMax);
+	uint32 b = (uint32)remap(c.z, -1.f, 1.f, 0.f, bMax);
 
 	uint32 result = (r << 21) | (g << 10) | b;
 	return result;
@@ -34,7 +39,11 @@ static vec4 unpackColorR11G11B10(uint32 c)
 	c >>= 11;
 	float r = (float)c;
 
-	return vec4(r * 6.f / rMax - 3.f, g * 6.f / gMax - 3.f, b * 6.f / bMax - 3.f, 1.f);
+	return vec4(
+		remap(r, 0.f, rMax, -1.f, 1.f),
+		remap(g, 0.f, gMax, -1.f, 1.f),
+		remap(b, 0.f, bMax, -1.f, 1.f), 
+		1.f);
 }
 
 static packed_spherical_harmonics packSphericalHarmonics(const spherical_harmonics& sh)
@@ -47,7 +56,8 @@ static packed_spherical_harmonics packSphericalHarmonics(const spherical_harmoni
 	return result;
 }
 
-void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget, const std::vector<vec4>& lightProbePositions)
+void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget,
+	const std::vector<vec4>& lightProbePositions, const std::vector<spherical_harmonics>& sphericalHarmonics)
 {
 	DXGI_FORMAT hdrFormat = renderTarget.colorAttachments[0]->format;
 	DXGI_FORMAT depthFormat = renderTarget.depthStencilAttachment->format;
@@ -281,42 +291,9 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 
 
 
-
 	this->lightProbePositions = lightProbePositions;
-
-#if 1
-	spherical_harmonics defaultSH = 
-	{
-		vec4(0.f, 0.f, 0.f, 0.f),
-		vec4(0.f, 0.f, 0.f, 0.f),
-		vec4(0.f, 0.f, 0.f, 0.f),
-		vec4(0.f, 0.f, 0.f, 0.f),
-		vec4(0.f, 0.f, 0.f, 0.f),
-		vec4(0.f, 0.f, 0.f, 0.f),
-		vec4(0.f, 0.f, 0.f, 0.f),
-		vec4(0.f, 0.f, 0.f, 0.f),
-		vec4(0.f, 0.f, 0.f, 0.f),
-	};
-
-	sphericalHarmonics.resize(lightProbePositions.size(), defaultSH);
-#else
-	sphericalHarmonics.resize(lightProbePositions.size());
-	memset(sphericalHarmonics.data(), 0, sphericalHarmonics.size() * sizeof(spherical_harmonics));
-	for (uint32 i = 0; i < sphericalHarmonics.size(); ++i)
-	{
-		sphericalHarmonics[i].coefficients[0] = vec4(randomFloat(0.f, 1.5f), randomFloat(0.f, 1.5f), randomFloat(0.f, 1.5f), 0.f);
-	}
-#endif
-
-	sphericalHarmonicsBuffer.initialize(device, sphericalHarmonics.data(), (uint32)sphericalHarmonics.size(), commandList);
-
-	std::vector<packed_spherical_harmonics> packedSHs(sphericalHarmonics.size());
-	for (uint32 i = 0; i < (uint32)sphericalHarmonics.size(); ++i)
-	{
-		packedSHs[i] = packSphericalHarmonics(sphericalHarmonics[i]);
-	}
-
-	packedSphericalHarmonicsBuffer.initialize(device, packedSHs.data(), (uint32)packedSHs.size(), commandList);
+	
+	setSphericalHarmonics(device, commandList, sphericalHarmonics);
 
 	{
 		tetgenio tetgenIn, tetgenOut;
@@ -473,6 +450,54 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 		SET_NAME(unlitRootSignature.rootSignature, "Unlit Line Root Signature");
 		SET_NAME(unlitPipeline, "Unlit Line Pipeline");
 	}
+}
+
+void light_probe_system::setSphericalHarmonics(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const std::vector<spherical_harmonics>& sphericalHarmonics)
+{
+	this->sphericalHarmonics = sphericalHarmonics;
+
+	std::vector<packed_spherical_harmonics> packedSHs(sphericalHarmonics.size());
+	for (uint32 i = 0; i < (uint32)sphericalHarmonics.size(); ++i)
+	{
+		packedSHs[i] = packSphericalHarmonics(sphericalHarmonics[i]);
+	}
+
+	if (!packedSphericalHarmonicsBuffer.resource)
+	{
+		packedSphericalHarmonicsBuffer.initialize(device, packedSHs.data(), (uint32)packedSHs.size(), commandList);
+	}
+	else
+	{
+		commandList->uploadBufferData(packedSphericalHarmonicsBuffer.resource, packedSHs.data(), (uint32)packedSHs.size() * sizeof(packed_spherical_harmonics));
+	}
+}
+
+void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget, 
+	const std::vector<vec4>& lightProbePositions)
+{
+	spherical_harmonics defaultSH =
+	{
+		vec4(0.f, 0.f, 0.f, 0.f),
+		vec4(0.f, 0.f, 0.f, 0.f),
+		vec4(0.f, 0.f, 0.f, 0.f),
+		vec4(0.f, 0.f, 0.f, 0.f),
+		vec4(0.f, 0.f, 0.f, 0.f),
+		vec4(0.f, 0.f, 0.f, 0.f),
+		vec4(0.f, 0.f, 0.f, 0.f),
+		vec4(0.f, 0.f, 0.f, 0.f),
+		vec4(0.f, 0.f, 0.f, 0.f),
+	};
+
+	std::vector<spherical_harmonics> sphericalHarmonics(lightProbePositions.size(), defaultSH);
+
+#if 0
+	for (uint32 i = 0; i < sphericalHarmonics.size(); ++i)
+	{
+		sphericalHarmonics[i].coefficients[0] = vec4(randomFloat(0.f, 1.5f), randomFloat(0.f, 1.5f), randomFloat(0.f, 1.5f), 0.f);
+	}
+#endif
+
+	initialize(device, commandList, renderTarget, lightProbePositions, sphericalHarmonics);
 }
 
 vec4 light_probe_system::calculateBarycentricCoordinates(const light_probe_tetrahedron& tet, vec3 position)
@@ -690,8 +715,8 @@ void light_probe_system::visualizeLightProbes(dx_command_list* commandList, cons
 		commandList->setVertexBuffer(0, lightProbeMesh.vertexBuffer);
 		commandList->setIndexBuffer(lightProbeMesh.indexBuffer);
 
-		commandList->transitionBarrier(sphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->stageDescriptors(VISUALIZE_LIGHTPROBE_ROOTPARAM_SH, 0, 1, sphericalHarmonicsBuffer.srv);
+		commandList->transitionBarrier(tempSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		commandList->stageDescriptors(VISUALIZE_LIGHTPROBE_ROOTPARAM_SH, 0, 1, tempSphericalHarmonicsBuffer.srv);
 
 		// TODO: This could be rendered instanced.
 		for (uint32 i = 0; i < lightProbePositions.size(); ++i)

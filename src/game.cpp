@@ -318,11 +318,18 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		PROFILE_BLOCK("Light probe system");
 
-		std::vector<vec4> lightProbePositions(150);
-		for (uint32 i = 0; i < lightProbePositions.size(); ++i)
+		std::vector<vec4> lightProbePositions;
+		for (float z = -20; z < 20; z += 10.f)
 		{
-			lightProbePositions[i] = vec4(randomFloat(-70.f, 70.f), randomFloat(0.f, 50.f), randomFloat(-30.f, 30.f), 1.f);
+			for (float y = 0; y < 30; y += 10.f)
+			{
+				for (float x = -70; x < 70; x += 10.f)
+				{
+					lightProbePositions.push_back(vec4(x, y, z, 1.f));
+				}
+			}
 		}
+
 
 		lightProbePositions.push_back(vec4(-1, -1, -1, 1) * 180);
 		lightProbePositions.push_back(vec4( 1, -1, -1, 1) * 180);
@@ -333,7 +340,28 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		lightProbePositions.push_back(vec4(-1,  1,  1, 1) * 180);
 		lightProbePositions.push_back(vec4( 1,  1,  1, 1) * 180);
 
-		lightProbeSystem.initialize(device, commandList, lightingRT, lightProbePositions);
+		FILE* shFile = fopen("shs.txt", "r");
+		if (shFile)
+		{
+			std::vector<spherical_harmonics> shs(lightProbePositions.size());
+
+			for (spherical_harmonics& sh : shs)
+			{
+				for (uint32 i = 0; i < 9; ++i)
+				{
+					fscanf(shFile, "%f %f %f\n", &sh.coefficients[i].x, &sh.coefficients[i].y, &sh.coefficients[i].z);
+					sh.coefficients[i].w = 1.f;
+				}
+				fscanf(shFile, "-----\n");
+			}
+			fclose(shFile);
+
+			lightProbeSystem.initialize(device, commandList, lightingRT, lightProbePositions, shs);
+		}
+		else
+		{
+			lightProbeSystem.initialize(device, commandList, lightingRT, lightProbePositions);
+		}
 	}
 
 	{
@@ -749,7 +777,6 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 
 
 		commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->transitionBarrier(lightProbeSystem.sphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->transitionBarrier(lightProbeSystem.lightProbePositionBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList->transitionBarrier(lightProbeSystem.lightProbeTetrahedraBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
@@ -844,8 +871,6 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	if (lightProbeRecording)
 	{
-		commandList->transitionBarrier(lightProbeSystem.lightProbeHDRTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
-		commandList->transitionBarrier(lightProbeSystem.lightProbeDepthTexture, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 		if (lightProbeGlobalIndex < lightProbeSystem.lightProbePositions.size())
 		{
 			vec3 lightProbePosition = lightProbeSystem.lightProbePositions[lightProbeGlobalIndex].xyz;
@@ -865,6 +890,64 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 			lightProbeFaceIndex = 0;
 			++lightProbeGlobalIndex;
 		}
+
+		if (lightProbeGlobalIndex >= lightProbeSystem.lightProbePositions.size())
+		{
+			lightProbeRecording = false;
+			lightProbeGlobalIndex = 0;
+			lightProbeFaceIndex = 0;
+		}
+	}
+
+
+	DEBUG_TAB(gui, "General")
+	{
+		gui.textF("%u/%u light probe faces recorded", 6 * lightProbeGlobalIndex + lightProbeFaceIndex, 6 * (uint32)lightProbeSystem.lightProbePositions.size());
+		if (gui.button("Convert cubemaps to irradiance spherical harmonics"))
+		{
+			lightProbeSystem.tempSphericalHarmonicsBuffer.initialize<spherical_harmonics>(device, nullptr, (uint32)lightProbeSystem.lightProbePositions.size());
+
+			uint32 index = 0;
+			while (index < (uint32)lightProbeSystem.lightProbePositions.size())
+			{
+				dx_command_list* commandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
+
+				//for (uint32 i = 0; i < 20 && index < (uint32)lightProbeSystem.lightProbePositions.size(); ++i, ++index)
+				{
+					dx_texture irradianceTemp;
+					commandList->createIrradianceMap(lightProbeSystem.lightProbeHDRTexture, irradianceTemp, LIGHT_PROBE_RESOLUTION, index, -1.f);
+					commandList->projectCubemapToSphericalHarmonics(irradianceTemp, lightProbeSystem.tempSphericalHarmonicsBuffer, 0, index);
+				}
+
+				++index;
+
+				uint64 fenceValue = dx_command_queue::computeCommandQueue.executeCommandList(commandList);
+				dx_command_queue::computeCommandQueue.waitForFenceValue(fenceValue);
+			}
+		}
+
+		if (gui.button("Apply spherical harmonics"))
+		{
+			std::vector<spherical_harmonics> shs(lightProbeSystem.lightProbePositions.size());
+			lightProbeSystem.tempSphericalHarmonicsBuffer.copyBackToCPU(shs.data(), shs.size() * sizeof(spherical_harmonics));
+
+			FILE* shFile = fopen("shs.txt", "w+");
+			if (shFile)
+			{
+				for (const spherical_harmonics& sh : shs)
+				{
+					for (uint32 i = 0; i < 9; ++i)
+					{
+						fprintf(shFile, "%f %f %f\n", sh.coefficients[i].x, sh.coefficients[i].y, sh.coefficients[i].z);
+					}
+					fprintf(shFile, "-----\n");
+				}
+				fclose(shFile);
+			}
+
+			lightProbeSystem.setSphericalHarmonics(device, commandList, shs);
+			commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
+		}
 	}
 
 	commandList->setRenderTarget(lightingRT);
@@ -874,8 +957,23 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	renderScene(commandList, camera);
 
 
-	//lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity);
-	lightProbeSystem.visualizeLightProbeCubemaps(commandList, camera, -1.f);
+	if (showLightProbes)
+	{
+		if (lightProbeSystem.tempSphericalHarmonicsBuffer.resource)
+		{
+			lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity);
+		}
+		else
+		{
+			lightProbeSystem.visualizeLightProbeCubemaps(commandList, camera, -1.f);
+		}
+	}
+
+	// Transition back to common, so that copy and compute list (for readback and convolution) can handle the resource.
+	commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
+	commandList->transitionBarrier(lightProbeSystem.lightProbeHDRTexture.resource, D3D12_RESOURCE_STATE_COMMON);
+	commandList->transitionBarrier(lightProbeSystem.tempSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
+
 
 	// Resolve to screen.
 	// No need to clear RTV (or for a depth buffer), since we are blitting the whole lighting buffer.

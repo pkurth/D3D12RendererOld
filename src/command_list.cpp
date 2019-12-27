@@ -90,9 +90,12 @@ void dx_command_list::aliasingBarrier(const dx_resource& beforeResource, const d
 	aliasingBarrier(beforeResource.resource, afterResource.resource, flushBarriers);
 }
 
-void dx_command_list::copyResource(ComPtr<ID3D12Resource> dstRes, ComPtr<ID3D12Resource> srcRes)
+void dx_command_list::copyResource(ComPtr<ID3D12Resource> dstRes, ComPtr<ID3D12Resource> srcRes, bool transitionDst)
 {
-	transitionBarrier(dstRes, D3D12_RESOURCE_STATE_COPY_DEST);
+	if (transitionDst)
+	{
+		transitionBarrier(dstRes, D3D12_RESOURCE_STATE_COPY_DEST);
+	}
 	transitionBarrier(srcRes, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
 	flushResourceBarriers();
@@ -103,9 +106,9 @@ void dx_command_list::copyResource(ComPtr<ID3D12Resource> dstRes, ComPtr<ID3D12R
 	trackObject(srcRes);
 }
 
-void dx_command_list::copyResource(dx_resource& dstRes, const dx_resource& srcRes)
+void dx_command_list::copyResource(dx_resource& dstRes, const dx_resource& srcRes, bool transitionDst)
 {
-	copyResource(dstRes.resource, srcRes.resource);
+	copyResource(dstRes.resource, srcRes.resource, transitionDst);
 }
 
 void dx_command_list::setScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv)
@@ -702,7 +705,7 @@ void dx_command_list::convertEquirectangularToCubemap(dx_texture& equirectangula
 	}
 }
 
-void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution)
+void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution, uint32 sourceSlice, float uvzScale)
 {
 	if (commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
 	{
@@ -710,7 +713,7 @@ void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& i
 		{
 			computeCommandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
 		}
-		computeCommandList->createIrradianceMap(environment, irradiance, resolution);
+		computeCommandList->createIrradianceMap(environment, irradiance, resolution, sourceSlice);
 		return;
 	}
 
@@ -752,10 +755,10 @@ void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& i
 
 		stagingTexture.initialize(device, stagingResource);
 
-		copyResource(stagingTexture, irradiance);
+		//copyResource(stagingTexture, irradiance);
 	}
 
-	transitionBarrier(stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	//transitionBarrier(stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 	setPipelineState(cubemapToIrradiancePSO.pipelineState);
 	setComputeRootSignature(cubemapToIrradiancePSO.rootSignature);
@@ -770,17 +773,20 @@ void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& i
 	uavDesc.Texture2DArray.MipSlice = 0;
 
 	cubemapToIrradianceCB.irradianceMapSize = resolution;
+	cubemapToIrradianceCB.uvzScale = uvzScale;
 
 	setCompute32BitConstants(cubemap_to_irradiance_param_constant_buffer, cubemapToIrradianceCB);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Format = environment.resource->GetDesc().Format;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-	srvDesc.TextureCube.MipLevels = (UINT)-1; // Use all mips.
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+	srvDesc.TextureCubeArray.MipLevels = 1;
+	srvDesc.TextureCubeArray.NumCubes = 1;
+	srvDesc.TextureCubeArray.First2DArrayFace = sourceSlice * 6;
 
 	setShaderResourceView(cubemap_to_irradiance_param_src, 0, environment, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
-	setUnorderedAccessView(cubemap_to_irradiance_param_out, 0, stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0, 0, &uavDesc);
+	setUnorderedAccessView(cubemap_to_irradiance_param_out, 0, stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &uavDesc);
 
 
 	dispatch(bucketize(cubemapToIrradianceCB.irradianceMapSize, 16), bucketize(cubemapToIrradianceCB.irradianceMapSize, 16), 6);
@@ -991,6 +997,7 @@ void dx_command_list::projectCubemapToSphericalHarmonics(dx_texture& cubemap, dx
 	setCompute32BitConstants(cubemap_to_sh_param_constant_buffer, cubemapToSHCB);
 
 	bindCubemap(cubemap_to_sh_param_src, 0, cubemap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	transitionBarrier(sh.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	dynamicDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].stageDescriptors(cubemap_to_sh_param_out, 0, 1, sh.uav);
 
 	dispatch(1, 1, 1);

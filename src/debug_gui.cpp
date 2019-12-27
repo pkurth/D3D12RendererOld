@@ -633,7 +633,7 @@ bool debug_gui::buttonInternalF(uint64 id, const char* name, uint32 color, float
 
 bool debug_gui::toggle(const char* name, bool& v)
 {
-	if (buttonInternalF(hashLabel(name), "%s: %d", DEBUG_GUI_TOGGLE_COLOR, 1.f, name, (int32)v))
+	if (buttonInternalF(hashLabel(name), "%s: %s", DEBUG_GUI_TOGGLE_COLOR, 1.f, name, v ? "on" : "off"))
 	{
 		v = !v;
 		return true;

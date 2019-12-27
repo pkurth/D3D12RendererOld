@@ -11,6 +11,7 @@ struct cs_input
 cbuffer cubemap_to_irradiance_cb : register(b0)
 {
 	uint irradianceMapSize;				// Size of the cubemap face in pixels.
+	float uvzScale;
 };
 
 TextureCube<float4> srcTexture : register(t0);
@@ -91,6 +92,8 @@ void main(cs_input IN)
 			float3 tangentSample = float3(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta);
 			// Tangent space to world.
 			float3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * dir;
+
+			sampleVec.z *= uvzScale;
 
 			float4 color = srcTexture.SampleLevel(linearRepeatSampler, sampleVec, sampleMipLevel);
 			irradiance += color.xyz * cosTheta * sinTheta;

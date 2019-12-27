@@ -74,7 +74,7 @@ private:
 	D3D12_DESCRIPTOR_HEAP_TYPE type;
 
 	std::vector<dx_descriptor_allocator_page> pages;
-	std::set<dx_descriptor_allocator_page*> freePages;
+	std::set<uint32> freePages;
 
 	ComPtr<ID3D12Device2> device;
 

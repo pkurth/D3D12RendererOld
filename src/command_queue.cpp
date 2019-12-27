@@ -88,15 +88,21 @@ uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>
 	{
 		dx_transition_command_list* pendingCommandList = getAvailableTransitionCommandList();
 		bool hasPendingBarriers = list->close(pendingCommandList->commandList);
-		checkResult(pendingCommandList->commandList->Close());
 
 		if (hasPendingBarriers)
 		{
+			checkResult(pendingCommandList->commandList->Close());
 			d3d12CommandLists.push_back(pendingCommandList->commandList.Get());
+			toBeQueued.emplace_back(pendingCommandList);
+		}
+		else
+		{
+			checkResult(pendingCommandList->commandAllocator->Reset());
+			checkResult(pendingCommandList->commandList->Reset(pendingCommandList->commandAllocator.Get(), nullptr));
+			freeTransitionCommandLists.pushBack(pendingCommandList);
 		}
 		d3d12CommandLists.push_back(list->getD3D12CommandList().Get());
 
-		toBeQueued.emplace_back(pendingCommandList);
 		toBeQueued.emplace_back(list);
 
 		dx_command_list* extraComputeCommandList = list->getComputeCommandList();
