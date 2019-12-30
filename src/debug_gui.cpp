@@ -524,6 +524,12 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 	numActiveTabs = 0;
 	firstTab = 0;
 	openTabSeenThisFrame = false;
+
+	if (lastEventType == event_type_up)
+	{
+		activeID = 0;
+	}
+
 	lastEventType = event_type_none;
 	mouseScroll = 0.f;
 	allTabsSeenThisFrame.clear();
@@ -644,6 +650,167 @@ bool debug_gui::toggle(const char* name, bool& v)
 bool debug_gui::button(const char* name)
 {
 	return buttonInternal(hashLabel(name), name, DEBUG_GUI_BUTTON_COLOR);
+}
+
+bool debug_gui::slider(const char* name, float& v, float min, float max)
+{
+	float left = getCursorX();
+	float right = left + 200.f;
+	float y = cursorY + textHeight * 0.75f;
+	float top = y - 1.5f;
+	float bottom = y + 1.5f;
+	quad(left, right, top, bottom, DEBUG_GUI_TEXT_COLOR);
+
+	v = clamp(v, min, max);
+	float x = lerp(left, right, inverseLerp(min, max, v));
+	
+	float cursorLeft = x - 2;
+	float cursorRight = x + 2;
+	float cursorTop = y - textHeight * 0.4f;
+	float cursorBottom = y + textHeight * 0.4f;
+
+	uint64 id = hashLabel(name);
+
+	bool result = false;
+
+	uint32 color = DEBUG_GUI_BUTTON_COLOR;
+
+	if (pointInRectangle(mousePosition, vec2(cursorLeft, cursorTop), vec2(cursorRight, cursorBottom)))
+	{
+		if (lastEventType == event_type_down)
+		{
+			activeID = id;
+		}
+
+		color = DEBUG_GUI_HOVERED_COLOR;
+	}
+
+	if (activeID == id)
+	{
+		color = DEBUG_GUI_HOVERED_COLOR;
+
+		float mouseX = mousePosition.x;
+		float t = clamp01(inverseLerp(left, right, mouseX));
+		v = lerp(min, max, t);
+		x = lerp(left, right, t);
+
+		cursorLeft = x - 2;
+		cursorRight = x + 2;
+		cursorTop = y - textHeight * 0.4f;
+		cursorBottom = y + textHeight * 0.4f;
+
+		result = true;
+	}
+
+	quad(cursorLeft, cursorRight, cursorTop, cursorBottom, color);
+
+	cursorY += textHeight;
+
+	textAtF(right + 4.f, cursorY, DEBUG_GUI_TEXT_COLOR, "%s: %.3f", name, v);
+
+	return result;
+}
+
+bool debug_gui::multislider(const char* name, float* values, uint32 numValues, float min, float max, float minDistance)
+{
+	float left = getCursorX();
+	float right = left + 200.f;
+	float y = cursorY + textHeight * 0.75f;
+	float top = y - 1.5f;
+	float bottom = y + 1.5f;
+	quad(left, right, top, bottom, DEBUG_GUI_TEXT_COLOR);
+
+	uint64 id = hashLabel(name);
+
+	bool result = false;
+
+	assert((numValues - 1) * minDistance <= max - min);
+
+	uint32 hovered = -1;
+
+	for (uint32 i = 0; i < numValues; ++i)
+	{
+		float localMin = min + i * minDistance;
+		float localMax = max - (numValues - i - 1) * minDistance;
+
+		float& v = values[i];
+		v = clamp(v, localMin, localMax);
+		float x = lerp(left, right, inverseLerp(min, max, v));
+
+		float cursorLeft = x - 2;
+		float cursorRight = x + 2;
+		float cursorTop = y - textHeight * 0.4f;
+		float cursorBottom = y + textHeight * 0.4f;
+
+		if (pointInRectangle(mousePosition, vec2(cursorLeft, cursorTop), vec2(cursorRight, cursorBottom)))
+		{
+			if (lastEventType == event_type_down)
+			{
+				activeID = id + i;
+			}
+			hovered = i;
+		}
+
+		if (activeID == id + i)
+		{
+			float mouseX = mousePosition.x;
+			float t = clamp01(inverseLerp(left, right, mouseX));
+			v = clamp(lerp(min, max, t), localMin, localMax);
+			t = inverseLerp(min, max, v);
+			x = lerp(left, right, t);
+
+			for (int j = (int)i - 1; j > -1; --j)
+			{
+				float distance = values[j + 1] - values[j];
+				if (distance < minDistance)
+				{
+					values[j] = values[j + 1] - minDistance;
+				}
+			}
+			for (uint32 j = i + 1; j < numValues; ++j)
+			{
+				float distance = values[j] - values[j - 1];
+				if (distance < minDistance)
+				{
+					values[j] = values[j - 1] + minDistance;
+				}
+			}
+
+			result = true;
+		}
+	}
+
+	for (uint32 i = 0; i < numValues; ++i)
+	{
+		float v = values[i];
+		float x = lerp(left, right, inverseLerp(min, max, v));
+
+		float cursorLeft = x - 2;
+		float cursorRight = x + 2;
+		float cursorTop = y - textHeight * 0.4f;
+		float cursorBottom = y + textHeight * 0.4f;
+		
+		uint32 color = DEBUG_GUI_BUTTON_COLOR;
+		if (activeID == id + i || i == hovered)
+		{
+			color = DEBUG_GUI_HOVERED_COLOR;
+		}
+		quad(cursorLeft, cursorRight, cursorTop, cursorBottom, color);
+	}
+
+	cursorY += textHeight;
+
+	char buffer[1024];
+	int index = sprintf(buffer, "%s:", name);
+	for (uint32 i = 0; i < numValues; ++i)
+	{
+		index += sprintf(buffer + index, " %.3f,", values[i]);
+	}
+	buffer[index - 1] = 0;
+
+	textAt(right + 4.f, cursorY, DEBUG_GUI_TEXT_COLOR, buffer);
+
+	return result;
 }
 
 bool debug_gui::beginGroupInternal(const char* name, bool& isOpen)

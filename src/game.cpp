@@ -737,11 +737,22 @@ void dx_game::update(float dt)
 
 		DEBUG_GROUP(gui, "Lighting")
 		{
-			gui.toggle("Show light probes", showLightProbes);
-			gui.toggle("Show light probe connectivity", showLightProbeConnectivity);
-			gui.toggle("Record light probes", lightProbeRecording);
+			DEBUG_GROUP(gui, "Sun")
+			{
+				gui.slider("Shadow map cascade power", sun.shadowMapCascadeDistancePower, 0.1f, 5.f);
+			}
+
+			DEBUG_GROUP(gui, "Light probes")
+			{
+				gui.toggle("Show light probes", showLightProbes);
+				gui.toggle("Show light probe connectivity", showLightProbeConnectivity);
+				gui.toggle("Record light probes", lightProbeRecording);
+			}
 		}
 		gui.textF("%u draw calls", numIndirectDrawCalls);
+
+		static float values[] = { 4, 7, 9 };
+		gui.multislider("Multislider", values, arraysize(values), 3.f, 15.f, 2);
 	}
 }
 

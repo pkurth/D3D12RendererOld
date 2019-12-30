@@ -77,7 +77,8 @@ public:
 
 	bool toggle(const char* name, bool& v);
 	bool button(const char* name);
-
+	bool slider(const char* name, float& v, float min, float max);
+	bool multislider(const char* name, float* values, uint32 numValues, float min, float max, float minDistance);
 
 
 	void quad(float left, float right, float top, float bottom, uint32 color);
