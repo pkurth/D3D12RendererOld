@@ -1,9 +1,6 @@
-struct view_projection_cb
-{
-	matrix vp;
-};
+#include "camera.hlsli"
 
-ConstantBuffer<view_projection_cb> viewProjectionCB : register(b0);
+ConstantBuffer<camera_cb> camera : register(b0);
 
 struct vs_input
 {
@@ -21,7 +18,7 @@ vs_output main(vs_input IN)
 	vs_output OUT;
 
 	OUT.uv = IN.position;
-	OUT.position = mul(viewProjectionCB.vp, float4(IN.position, 1.f));
+	OUT.position = mul(camera.skyVP, float4(IN.position, 1.f));
 	OUT.position.z = OUT.position.w - 1e-6f;
 
 	return OUT;

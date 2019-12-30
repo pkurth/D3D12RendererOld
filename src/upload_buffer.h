@@ -51,11 +51,11 @@ private:
 	};
 
 
-	memory_page* requestPage();
+	uint32 requestPage();
 
 	std::vector<memory_page>		pages;
-	std::vector<memory_page*>		freePages;
-	memory_page*					currentPage;
+	std::vector<uint32>				freePages;
+	uint32							currentPageIndex;
 
 	uint64							pageSize;
 	ComPtr<ID3D12Device2>			device;

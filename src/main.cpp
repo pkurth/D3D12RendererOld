@@ -500,6 +500,10 @@ int main()
 		dx_command_queue::computeCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 		dx_command_queue::copyCommandQueue.initialize(device, D3D12_COMMAND_LIST_TYPE_COPY);
 
+		SET_NAME(dx_command_queue::renderCommandQueue.getD3D12CommandQueue(), "Render command queue");
+		SET_NAME(dx_command_queue::computeCommandQueue.getD3D12CommandQueue(), "Compute command queue");
+		SET_NAME(dx_command_queue::copyCommandQueue.getD3D12CommandQueue(), "Copy command queue");
+
 		initializeCommonGraphicsItems();
 
 		window.initialize(windowClass.lpszClassName, device, initialWidth, initialHeight, colorDepth, exclusiveFullscreen);

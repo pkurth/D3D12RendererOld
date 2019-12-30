@@ -10,18 +10,19 @@
 
 static uint32 packColorR11G11B10(vec4 c)
 {
+	const float range = 3.f;
 	// For now. Let's see what the range will be.
-	assert(c.x >= -1.f && c.x <= 1.f);
-	assert(c.y >= -1.f && c.y <= 1.f);
-	assert(c.z >= -1.f && c.z <= 1.f);
+	assert(c.x >= -range && c.x <= range);
+	assert(c.y >= -range && c.y <= range);
+	assert(c.z >= -range && c.z <= range);
 
 	const uint32 rMax = (1 << 11) - 1;
 	const uint32 gMax = (1 << 11) - 1;
 	const uint32 bMax = (1 << 10) - 1;
 
-	uint32 r = (uint32)remap(c.x, -1.f, 1.f, 0.f, rMax);
-	uint32 g = (uint32)remap(c.y, -1.f, 1.f, 0.f, gMax);
-	uint32 b = (uint32)remap(c.z, -1.f, 1.f, 0.f, bMax);
+	uint32 r = (uint32)remap(c.x, -range, range, 0.f, rMax);
+	uint32 g = (uint32)remap(c.y, -range, range, 0.f, gMax);
+	uint32 b = (uint32)remap(c.z, -range, range, 0.f, bMax);
 
 	uint32 result = (r << 21) | (g << 10) | b;
 	return result;
@@ -383,6 +384,9 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 
 		lightProbeTetrahedraBuffer.initialize(device, lightProbeTetrahedra.data(), (uint32)lightProbeTetrahedra.size(), commandList);
 		lightProbePositionBuffer.initialize(device, lightProbePositions.data(), (uint32)lightProbePositions.size(), commandList);
+
+		SET_NAME(lightProbeTetrahedraBuffer.resource, "Light probe tetrahedra");
+		SET_NAME(lightProbePositionBuffer.resource, "Light probe positions");
 	}
 
 
@@ -465,6 +469,7 @@ void light_probe_system::setSphericalHarmonics(ComPtr<ID3D12Device2> device, dx_
 	if (!packedSphericalHarmonicsBuffer.resource)
 	{
 		packedSphericalHarmonicsBuffer.initialize(device, packedSHs.data(), (uint32)packedSHs.size(), commandList);
+		SET_NAME(packedSphericalHarmonicsBuffer.resource, "Packed SHs");
 	}
 	else
 	{

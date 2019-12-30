@@ -161,9 +161,10 @@ public:
 	inline ComPtr<ID3D12GraphicsCommandList2> getD3D12CommandList() const { return commandList; }
 	inline dx_command_list* getComputeCommandList() const { return computeCommandList; }
 
-private:
-	void trackObject(ComPtr<ID3D12Object> object);
 	void flushResourceBarriers();
+
+//private:
+	void trackObject(ComPtr<ID3D12Object> object);
 
 	void copyTextureSubresource(dx_texture& texture, uint32 firstSubresource, uint32 numSubresources, D3D12_SUBRESOURCE_DATA* subresourceData);
 

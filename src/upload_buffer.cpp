@@ -13,30 +13,30 @@ dx_upload_buffer::allocation dx_upload_buffer::allocate(uint64 sizeInBytes, uint
 {
 	assert(sizeInBytes < pageSize);
 
-	if (!currentPage || !currentPage->hasSpace(sizeInBytes, alignment))
+	if (pages.size() == 0 || !pages[currentPageIndex].hasSpace(sizeInBytes, alignment))
 	{
-		currentPage = requestPage();
+		currentPageIndex = requestPage();
 	}
 
-	return currentPage->allocate(sizeInBytes, alignment);
+	return pages[currentPageIndex].allocate(sizeInBytes, alignment);
 }
 
 void dx_upload_buffer::reset()
 {
-	currentPage = nullptr;
+	currentPageIndex = 0;
 	freePages.clear();
 	freePages.reserve(pages.size());
 
-	for (memory_page& page : pages)
+	for (uint32 i = 0; i < (uint32)pages.size(); ++i)
 	{
-		page.reset();
-		freePages.push_back(&page);
+		pages[i].reset();
+		freePages.push_back(i);
 	}
 }
 
-dx_upload_buffer::memory_page* dx_upload_buffer::requestPage()
+uint32 dx_upload_buffer::requestPage()
 {
-	memory_page* page;
+	uint32 page;
 
 	if (!freePages.empty())
 	{
@@ -45,8 +45,8 @@ dx_upload_buffer::memory_page* dx_upload_buffer::requestPage()
 	}
 	else
 	{
+		page = (uint32)pages.size();
 		pages.emplace_back(device, pageSize);
-		page = &pages.back();
 	}
 
 	return page;

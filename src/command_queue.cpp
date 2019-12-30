@@ -175,7 +175,7 @@ void dx_command_queue::flush()
 	};
 
 	processInFlightCommandListsCondition.wait(lock, wait_condition{ inFlightCommandLists });
-	waitForFenceValue(fenceValue);
+	waitForFenceValue(signal());
 }
 
 ComPtr<ID3D12CommandQueue> dx_command_queue::getD3D12CommandQueue() const

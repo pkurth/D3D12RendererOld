@@ -402,6 +402,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			{
 				PROFILE_BLOCK("Upload to GPU");
 				indirectMesh.initialize(device, commandList, indirect);
+
+				SET_NAME(indirectMesh.vertexBuffer.resource, "Indirect vertex buffer");
+				SET_NAME(indirectMesh.indexBuffer.resource, "Indirect index buffer");
 			}
 		}
 
@@ -474,6 +477,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			indirectCommandBuffer.initialize(device, indirectCommands, numIndirectDrawCalls, commandList);
 			indirectDepthOnlyCommandBuffer.initialize(device, indirectShadowCommands, numIndirectDrawCalls, commandList);
 
+			SET_NAME(indirectCommandBuffer.resource, "Indirect command buffer");
+			SET_NAME(indirectDepthOnlyCommandBuffer.resource, "Indirect depth only command buffer");
+
 			delete[] indirectShadowCommands;
 			delete[] indirectCommands;
 		}
@@ -482,7 +488,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 	sun.worldSpaceDirection = comp_vec(-0.6f, -1.f, -0.3f, 0.f).normalize();
-	sun.color = vec4(1.f, 0.93f, 0.76f, 0.f) * 3.f;
+	sun.color = vec4(1.f, 0.93f, 0.76f, 0.f) * 50.f;
 
 	pointLights.resize(512);
 	for (uint32 i = 0; i < pointLights.size(); ++i)
@@ -494,6 +500,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	}
 
 	pointLightBuffer.initialize(device, pointLights.data(), (uint32)pointLights.size(), commandList);
+	SET_NAME(pointLightBuffer.resource, "Point light buffer");
 	
 	{
 		PROFILE_BLOCK("Load environment");
@@ -502,23 +509,23 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		{
 			PROFILE_BLOCK("Load HDRI");
 			commandList->loadTextureFromFile(equirectangular, L"res/hdris/sunset_in_the_chalk_quarry_4k_16bit.hdr", texture_type_noncolor);
+			SET_NAME(equirectangular.resource, "Equirectangular map");
 		}
 		{
 			PROFILE_BLOCK("Convert to cubemap");
 			commandList->convertEquirectangularToCubemap(equirectangular, cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
+			SET_NAME(cubemap.resource, "Skybox");
 		}
 		{
 			PROFILE_BLOCK("Create irradiance map");
 			commandList->createIrradianceMap(cubemap, irradiance);
+			SET_NAME(irradiance.resource, "Global irradiance");
 		}
 		{
 			PROFILE_BLOCK("Prefilter environment");
 			commandList->prefilterEnvironmentMap(cubemap, prefilteredEnvironment, 256);
+			SET_NAME(prefilteredEnvironment.resource, "Prefiltered global specular");
 		}
-		/*{
-			PROFILE_BLOCK("Project SH");
-			commandList->projectCubemapToSphericalHarmonics(irradiance, sphericalHarmonicsBuffer, 0, 0);
-		}*/
 	}
 
 	{
@@ -534,6 +541,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			;
 		descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&indirectDescriptorHeap)));
+		SET_NAME(indirectDescriptorHeap, "Indirect descriptor heap");
 
 		uint32 descriptorHandleIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
@@ -708,8 +716,8 @@ void dx_game::resize(uint32 width, uint32 height)
 
 void dx_game::update(float dt)
 {
-	camera.rotation = createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw)
-		* createQuaternionFromAxisAngle(comp_vec(1.f, 0.f, 0.f), camera.pitch);
+	camera.rotation = (createQuaternionFromAxisAngle(comp_vec(0.f, 1.f, 0.f), camera.yaw)
+		* createQuaternionFromAxisAngle(comp_vec(1.f, 0.f, 0.f), camera.pitch)).normalize();
 
 	camera.position = camera.position + camera.rotation * inputMovement * dt * CAMERA_MOVEMENT_SPEED * inputSpeedModifier;
 	camera.updateMatrices(width, height);
@@ -819,7 +827,7 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	}
 
 	// Sky.
-	sky.render(commandList, camera, cubemap);
+	sky.render(commandList, cameraCBAddress, cubemap);
 }
 
 void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
@@ -929,7 +937,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		if (gui.button("Apply spherical harmonics"))
 		{
 			std::vector<spherical_harmonics> shs(lightProbeSystem.lightProbePositions.size());
-			lightProbeSystem.tempSphericalHarmonicsBuffer.copyBackToCPU(shs.data(), shs.size() * sizeof(spherical_harmonics));
+			lightProbeSystem.tempSphericalHarmonicsBuffer.copyBackToCPU(shs.data(), (uint32)shs.size() * sizeof(spherical_harmonics));
 
 			FILE* shFile = fopen("shs.txt", "w+");
 			if (shFile)
@@ -946,7 +954,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 			}
 
 			lightProbeSystem.setSphericalHarmonics(device, commandList, shs);
-			commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
+			commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, true);
 		}
 	}
 
@@ -969,7 +977,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		}
 	}
 
-	// Transition back to common, so that copy and compute list (for readback and convolution) can handle the resource.
+	// Transition back to common, so that copy and compute list can handle the resource (for readback and convolution).
 	commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
 	commandList->transitionBarrier(lightProbeSystem.lightProbeHDRTexture.resource, D3D12_RESOURCE_STATE_COMMON);
 	commandList->transitionBarrier(lightProbeSystem.tempSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
@@ -1019,7 +1027,7 @@ bool dx_game::keyUpCallback(keyboard_event event)
 
 bool dx_game::mouseMoveCallback(mouse_move_event event)
 {
-	if (event.leftDown)
+	if (event.rightDown)
 	{
 		camera.pitch = camera.pitch - event.relDY * CAMERA_SENSITIVITY;
 		camera.yaw = camera.yaw - event.relDX * CAMERA_SENSITIVITY;

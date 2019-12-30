@@ -32,6 +32,7 @@ struct camera_cb
 	mat4 invVP;
 	mat4 invV;
 	mat4 invP;
+	mat4 skyVP;
 	vec4 pos;
 	vec4 forward;
 	vec4 projectionParams; // nearPlane, farPlane, farPlane / nearPlane, 1 - farPlane / nearPlane
@@ -80,6 +81,10 @@ struct render_camera
 		cb.pos = vec4(position.x, position.y, position.z, 1.f);
 		cb.forward = rotation * vec3(0.f, 0.f, -1.f);
 		cb.projectionParams = vec4(nearPlane, farPlane, farPlane / nearPlane, 1.f - farPlane / nearPlane);
+
+		mat4 v = viewMatrix;
+		v.m03 = 0.f; v.m13 = 0.f; v.m23 = 0.f;
+		cb.skyVP = projectionMatrix * v;
 	}
 
 	comp_vec restoreViewSpacePosition(vec2 uv, float depthBufferDepth)

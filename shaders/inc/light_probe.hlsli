@@ -45,6 +45,7 @@ static float4 sampleSphericalHarmonics(spherical_harmonics sh, float3 normal)
 
 static float3 unpackColorR11G11B10(uint c)
 {
+	const float range = 3.f;
 	const uint rMax = (1 << 11) - 1;
 	const uint gMax = (1 << 11) - 1;
 	const uint bMax = (1 << 10) - 1;
@@ -56,9 +57,9 @@ static float3 unpackColorR11G11B10(uint c)
 	float r = c;
 
 	return float3(
-		remap(r, 0.f, rMax, -1.f, 1.f),
-		remap(g, 0.f, gMax, -1.f, 1.f),
-		remap(b, 0.f, bMax, -1.f, 1.f)
+		remap(r, 0.f, rMax, -range, range),
+		remap(g, 0.f, gMax, -range, range),
+		remap(b, 0.f, bMax, -range, range)
 		);
 }
 

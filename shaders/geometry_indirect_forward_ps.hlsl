@@ -133,7 +133,7 @@ ps_output main(ps_input IN)
 			{
 				for (int x = -2; x <= 2; ++x)
 				{
-					visibility += sunShadowMapCascades[currentCascadeIndex].SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - 0.001f);
+					visibility += sunShadowMapCascades[currentCascadeIndex].SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - 0.01f);
 					++count;
 				}
 			}
@@ -149,5 +149,6 @@ ps_output main(ps_input IN)
 
 	ps_output OUT;
 	OUT.color = totalLighting;
+	//OUT.color = float4(1, 0, 0, 1);
 	return OUT;
 }

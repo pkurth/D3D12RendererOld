@@ -4,6 +4,7 @@
 #include "platform.h"
 #include "resource_state_tracker.h"
 #include "command_queue.h"
+#include "graphics.h"
 
 
 static ComPtr<IDXGIFactory4> createFactory()
@@ -289,6 +290,8 @@ void dx_window::updateRenderTargetViews()
 		device->CreateRenderTargetView(backBuffer.Get(), nullptr, rtvHandle);
 
 		backBuffers[i] = backBuffer;
+
+		SET_NAME(backBuffers[i], "Backbuffer");
 
 		rtvHandle.Offset(rtvDescriptorSize);
 	}

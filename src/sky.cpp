@@ -28,7 +28,7 @@ void sky_pipeline::initialize(ComPtr<ID3D12Device2> device, dx_command_list* com
 	CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-	rootParameters[SKY_ROOTPARAM_VP].InitAsConstants(sizeof(mat4) / sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // VP matrix.
+	rootParameters[SKY_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX); // Camera.
 	rootParameters[SKY_ROOTPARAM_TEXTURE].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
@@ -77,26 +77,22 @@ void sky_pipeline::initialize(ComPtr<ID3D12Device2> device, dx_command_list* com
 	mesh.initialize(device, commandList, skybox);
 }
 
-void sky_pipeline::render(dx_command_list* commandList, const render_camera& camera, dx_texture& cubemap)
+void sky_pipeline::render(dx_command_list* commandList, D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, dx_texture& cubemap)
 {
 	PROFILE_FUNCTION();
 
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sky.");
+
 
 	commandList->setPipelineState(pipelineState);
 	commandList->setGraphicsRootSignature(rootSignature);
 
 	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-
-	mat4 view = camera.viewMatrix;
-	view.m03 = 0.f; view.m13 = 0.f; view.m23 = 0.f;
-	mat4 skyVP = camera.projectionMatrix * view;
-
-	commandList->setGraphics32BitConstants(SKY_ROOTPARAM_VP, skyVP);
-
 	commandList->setVertexBuffer(0, mesh.vertexBuffer);
 	commandList->setIndexBuffer(mesh.indexBuffer);
+
+	commandList->setGraphicsDynamicConstantBuffer(SKY_ROOTPARAM_CAMERA, cameraCBAddress);
 	commandList->bindCubemap(SKY_ROOTPARAM_TEXTURE, 0, cubemap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	commandList->drawIndexed(mesh.indexBuffer.numIndices, 1, 0, 0, 0);

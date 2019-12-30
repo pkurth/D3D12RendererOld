@@ -30,6 +30,17 @@ public:
 	static void addGlobalResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES state, uint32 numSubResources);
 	static void removeGlobalResourceState(ID3D12Resource* resource);
 
+	static D3D12_RESOURCE_STATES getLastKnownGlobalState(ID3D12Resource* resource)
+	{
+		std::lock_guard<std::mutex> lock(globalMutex);
+		return globalResourceState[resource].state;
+	}
+
+	D3D12_RESOURCE_STATES getLastKnownLocalState(ID3D12Resource* resource)
+	{
+		return finalResourceState[resource].state;
+	}
+
 private:
 	struct resource_state
 	{
