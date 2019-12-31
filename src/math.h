@@ -326,6 +326,11 @@ inline comp_vec operator-(comp_vec a, comp_vec b)
 	return DirectX::XMVectorSubtract(a, b);
 }
 
+inline comp_vec operator-(comp_vec v)
+{
+	return comp_vec(0.f, 0.f, 0.f, 0.f) - v;
+}
+
 inline comp_vec& operator-=(comp_vec& a, comp_vec b)
 {
 	a = a - b;

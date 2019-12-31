@@ -292,9 +292,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
 
 	{
-		PROFILE_BLOCK("Sky, lighting, present pipeline");
+		PROFILE_BLOCK("Sky, lighting, particle, present pipeline");
 		sky.initialize(device, commandList, lightingRT);
 		present.initialize(device, screenRTFormats);
+
+		particles.initialize(device, lightingRT);
 
 		commandList->integrateBRDF(brdf);
 		dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, MAX_NUM_SUN_SHADOW_CASCADES);
@@ -313,6 +315,12 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 				allocation.getDescriptorHandle(i)
 			);
 		}
+	}
+
+	{
+		PROFILE_BLOCK("Particle system");
+		particleSystem1.initialize(10000, vec3(0.f, 10.f, 0.f), 2000, 1.f, vec4(0.7f, 0.3f, 0.4f, 1.f));
+		particleSystem2.initialize(10000, vec3(0.f, 10.f, 0.f), 2000, 1.f, vec4(0.8f, 0.8f, 0.1f, 1.f));
 	}
 
 	{
@@ -738,6 +746,16 @@ void dx_game::update(float dt)
 
 	sun.updateMatrices(camera);
 
+	particleSystemTime += dt;
+
+	particleSystem1.spawnPosition.x = cos(particleSystemTime) * 20.f;
+	particleSystem1.spawnPosition.y = sin(particleSystemTime) * 15.f + 20.f;
+	particleSystem1.update(dt);
+
+	particleSystem2.spawnPosition.x = cos(particleSystemTime + DirectX::XM_PI) * 20.f;
+	particleSystem2.spawnPosition.y = sin(particleSystemTime + DirectX::XM_PI) * 15.f + 20.f;
+	particleSystem2.update(dt);
+
 	this->dt = dt;
 
 	DEBUG_TAB(gui, "General")
@@ -995,6 +1013,9 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	{
 		debugDisplay.renderFrustum(commandList, camera, mainCameraFrustum, vec4(1.f, 1.f, 1.f, 1.f));
 	}
+
+	particles.renderParticleSystem(commandList, camera, particleSystem1);
+	particles.renderParticleSystem(commandList, camera, particleSystem2);
 	
 	if (showLightProbes)
 	{

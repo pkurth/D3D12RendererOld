@@ -156,6 +156,7 @@
     <ClCompile Include="src\graphics.cpp" />
     <ClCompile Include="src\lighting.cpp" />
     <ClCompile Include="src\math.cpp" />
+    <ClCompile Include="src\particles.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
@@ -196,6 +197,7 @@
     <ClInclude Include="src\lighting.h" />
     <ClInclude Include="src\material.h" />
     <ClInclude Include="src\model.h" />
+    <ClInclude Include="src\particles.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\present.h" />
     <ClInclude Include="src\profiling.h" />
@@ -287,6 +289,11 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">5.1</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="shaders\particles_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="shaders\prefilter_environment.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>

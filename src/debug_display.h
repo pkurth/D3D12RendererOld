@@ -21,8 +21,8 @@ struct debug_display
 	ComPtr<ID3D12PipelineState> unlitTexturedPipelineState;
 	dx_root_signature unlitTexturedRootSignature;
 
-	ComPtr<ID3D12PipelineState> unlitLinePipeline;
-	ComPtr<ID3D12PipelineState> unlitFlatPipeline;
+	ComPtr<ID3D12PipelineState> unlitLinePipelineState;
+	ComPtr<ID3D12PipelineState> unlitFlatPipelineState;
 	dx_root_signature unlitFlatRootSignature;
 
 	dx_index_buffer frustumIndexBuffer;

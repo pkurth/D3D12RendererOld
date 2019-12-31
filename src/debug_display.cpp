@@ -135,7 +135,7 @@ void debug_display::initialize(ComPtr<ID3D12Device2> device, dx_command_list* co
 			D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
 				sizeof(pipeline_state_stream), &pipelineStateStream
 			};
-			checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&unlitLinePipeline)));
+			checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&unlitLinePipelineState)));
 		}
 
 		{
@@ -143,12 +143,12 @@ void debug_display::initialize(ComPtr<ID3D12Device2> device, dx_command_list* co
 			D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
 				sizeof(pipeline_state_stream), &pipelineStateStream
 			};
-			checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&unlitFlatPipeline)));
+			checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&unlitFlatPipelineState)));
 		}
 
 		SET_NAME(unlitFlatRootSignature.rootSignature, "Unlit Line Root Signature");
-		SET_NAME(unlitLinePipeline, "Unlit Line Pipeline");
-		SET_NAME(unlitFlatPipeline, "Unlit Flat Pipeline");
+		SET_NAME(unlitLinePipelineState, "Unlit Line Pipeline");
+		SET_NAME(unlitFlatPipelineState, "Unlit Flat Pipeline");
 	}
 
 	uint16 frustumIndices[] = {
@@ -238,9 +238,11 @@ void debug_display::renderBillboard(dx_command_list* commandList, const render_c
 
 void debug_display::renderLineMesh(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh, mat4 transform)
 {
+	PROFILE_FUNCTION();
+
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Line mesh.");
 
-	commandList->setPipelineState(unlitLinePipeline);
+	commandList->setPipelineState(unlitLinePipelineState);
 	commandList->setGraphicsRootSignature(unlitFlatRootSignature);
 
 	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
@@ -264,9 +266,11 @@ void debug_display::renderLineMesh(dx_command_list* commandList, const render_ca
 
 void debug_display::renderLineStrip(dx_command_list* commandList, const render_camera& camera, vec3* vertices, uint32 numVertices, vec4 color)
 {
+	PROFILE_FUNCTION();
+
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Line mesh.");
 
-	commandList->setPipelineState(unlitLinePipeline);
+	commandList->setPipelineState(unlitLinePipelineState);
 	commandList->setGraphicsRootSignature(unlitFlatRootSignature);
 
 	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
@@ -291,15 +295,19 @@ void debug_display::renderLineStrip(dx_command_list* commandList, const render_c
 
 void debug_display::renderLine(dx_command_list* commandList, const render_camera& camera, vec3 from, vec3 to, vec4 color)
 {
+	PROFILE_FUNCTION();
+
 	vec3 vertices[] = { from, to, };
 	renderLineStrip(commandList, camera, vertices, 2, color);
 }
 
 void debug_display::renderFrustum(dx_command_list* commandList, const render_camera& camera, const camera_frustum& frustum, vec4 color)
 {
+	PROFILE_FUNCTION();
+
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Line mesh.");
 
-	commandList->setPipelineState(unlitLinePipeline);
+	commandList->setPipelineState(unlitLinePipelineState);
 	commandList->setGraphicsRootSignature(unlitFlatRootSignature);
 
 	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);

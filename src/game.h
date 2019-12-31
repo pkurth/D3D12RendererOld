@@ -12,6 +12,7 @@
 #include "debug_gui.h"
 #include "debug_display.h"
 #include "platform.h"
+#include "particles.h"
 
 #include "sky.h"
 #include "present.h"
@@ -61,9 +62,14 @@ private:
 	dx_root_signature indirectDepthOnlyRootSignature;
 	ComPtr<ID3D12CommandSignature> indirectDepthOnlyCommandSignature;
 
-	
+	particle_pipeline particles;
 	sky_pipeline sky;
 	present_pipeline present;
+
+
+	particle_system particleSystem1;
+	particle_system particleSystem2;
+	float particleSystemTime = 0.f;
 
 
 	dx_mesh indirectMesh;

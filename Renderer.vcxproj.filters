@@ -93,6 +93,9 @@
     <ClCompile Include="src\debug_display.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\particles.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\common.h">
@@ -221,6 +224,9 @@
     <ClInclude Include="src\debug_display.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\particles.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\generate_mips.hlsl" />
@@ -250,6 +256,7 @@
     <FxCompile Include="shaders\visualize_light_probe_sh_buffer_ps.hlsl" />
     <FxCompile Include="shaders\unlit_textured_vs.hlsl" />
     <FxCompile Include="shaders\unlit_textured_ps.hlsl" />
+    <FxCompile Include="shaders\particles_vs.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
