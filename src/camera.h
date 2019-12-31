@@ -59,6 +59,8 @@ struct render_camera
 	mat4 invProjectionMatrix;
 	mat4 invViewProjectionMatrix;
 
+	mat4 viewProjectionMatrix;
+
 
 	void updateMatrices(uint32 width, uint32 height)
 	{
@@ -69,12 +71,13 @@ struct render_camera
 		viewMatrix = createModelMatrix(position, rotation).invert();
 		invViewMatrix = viewMatrix.invert();
 
+		viewProjectionMatrix = projectionMatrix * viewMatrix;
 		invViewProjectionMatrix = invViewMatrix * invProjectionMatrix;
 	}
 
 	void fillConstantBuffer(camera_cb& cb) const
 	{
-		cb.vp = projectionMatrix * viewMatrix;
+		cb.vp = viewProjectionMatrix;
 		cb.v = viewMatrix;
 		cb.p = projectionMatrix;
 		cb.invV = invViewMatrix;
@@ -114,8 +117,20 @@ struct render_camera
 		return 1.f / (c0 * depthBufferDepth + c1);
 	}
 
-	camera_frustum getWorldSpaceFrustum() const
+	float eyeDepthToDepthBufferDepth(float eyeDepth) const
 	{
+		return -projectionMatrix.m22 + projectionMatrix.m23 / eyeDepth;
+	}
+
+	camera_frustum getWorldSpaceFrustum(float alternativeFarPlane = 0.f) const
+	{
+		if (alternativeFarPlane <= 0.f)
+		{
+			alternativeFarPlane = farPlane;
+		}
+
+		float depthValue = eyeDepthToDepthBufferDepth(alternativeFarPlane);
+
 		camera_frustum result;
 
 		result.eye = position;
@@ -124,10 +139,10 @@ struct render_camera
 		result.nearBottomRight = restoreWorldSpacePosition(vec2(1.f, 1.f), 0.f);
 		result.nearTopLeft =	 restoreWorldSpacePosition(vec2(0.f, 0.f), 0.f);
 		result.nearTopRight =	 restoreWorldSpacePosition(vec2(1.f, 0.f), 0.f);
-		result.farBottomLeft =	 restoreWorldSpacePosition(vec2(0.f, 1.f), 1.f);
-		result.farBottomRight =  restoreWorldSpacePosition(vec2(1.f, 1.f), 1.f);
-		result.farTopLeft =		 restoreWorldSpacePosition(vec2(0.f, 0.f), 1.f);
-		result.farTopRight =	 restoreWorldSpacePosition(vec2(1.f, 0.f), 1.f);
+		result.farBottomLeft =	 restoreWorldSpacePosition(vec2(0.f, 1.f), depthValue);
+		result.farBottomRight =  restoreWorldSpacePosition(vec2(1.f, 1.f), depthValue);
+		result.farTopLeft =		 restoreWorldSpacePosition(vec2(0.f, 0.f), depthValue);
+		result.farTopRight =	 restoreWorldSpacePosition(vec2(1.f, 0.f), depthValue);
 
 		return result;
 	}

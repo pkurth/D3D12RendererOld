@@ -10,6 +10,7 @@
 #include "material.h"
 #include "lighting.h"
 #include "debug_gui.h"
+#include "debug_display.h"
 #include "platform.h"
 
 #include "sky.h"
@@ -103,11 +104,12 @@ private:
 	D3D12_VIEWPORT viewport;
 	D3D12_RECT scissorRect;
 
-	mat4 modelMatrix;
-	
 	render_camera camera;
+	bool isDebugCamera = false;
+	camera_frustum mainCameraFrustum;
 
 	debug_gui gui;
+	debug_display debugDisplay;
 
 	dx_render_target lightingRT;
 	dx_texture hdrTexture;

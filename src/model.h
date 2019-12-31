@@ -13,6 +13,12 @@ struct vertex_3P
 	vec3 position;
 };
 
+struct vertex_3PU
+{
+	vec3 position;
+	vec2 uv;
+};
+
 struct vertex_3PUN
 {
 	vec3 position;

@@ -145,6 +145,7 @@
     <ClCompile Include="src\buffer.cpp" />
     <ClCompile Include="src\command_list.cpp" />
     <ClCompile Include="src\command_queue.cpp" />
+    <ClCompile Include="src\debug_display.cpp" />
     <ClCompile Include="src\debug_gui.cpp" />
     <ClCompile Include="src\descriptor_allocator.cpp" />
     <ClCompile Include="src\dynamic_descriptor_heap.cpp" />
@@ -183,6 +184,7 @@
     <ClInclude Include="src\buffer.h" />
     <ClInclude Include="src\camera.h" />
     <ClInclude Include="src\color.h" />
+    <ClInclude Include="src\debug_display.h" />
     <ClInclude Include="src\debug_gui.h" />
     <ClInclude Include="src\descriptor_allocator.h" />
     <ClInclude Include="src\dynamic_descriptor_heap.h" />
@@ -336,6 +338,16 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="shaders\unlit_flat_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="shaders\unlit_textured_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="shaders\unlit_textured_vs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>

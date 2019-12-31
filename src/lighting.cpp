@@ -389,71 +389,6 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 		SET_NAME(lightProbePositionBuffer.resource, "Light probe positions");
 	}
 
-
-	// TODO: Factor this out into debug display system.
-	{
-		ComPtr<ID3DBlob> vertexShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/unlit_flat_vs.cso", &vertexShaderBlob));
-
-		ComPtr<ID3DBlob> pixelShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/unlit_flat_ps.cso", &pixelShaderBlob));
-
-		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
-		// Root signature.
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-
-
-		CD3DX12_DESCRIPTOR_RANGE1 textures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-
-		CD3DX12_ROOT_PARAMETER1 rootParameters[1];
-		rootParameters[VISUALIZE_LIGHTPROBE_ROOTPARAM_CB].InitAsConstants(sizeof(mat4) / sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // MVP matrix.
-
-		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
-		rootSignatureDesc.Flags = rootSignatureFlags;
-		rootSignatureDesc.pParameters = rootParameters;
-		rootSignatureDesc.NumParameters = arraysize(rootParameters);
-		rootSignatureDesc.pStaticSamplers = nullptr;
-		rootSignatureDesc.NumStaticSamplers = 0;
-		unlitRootSignature.initialize(device, rootSignatureDesc);
-
-
-		struct pipeline_state_stream
-		{
-			CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
-			CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
-			CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
-			CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-			CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-			CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
-			CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
-			CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
-		} pipelineStateStream;
-
-		pipelineStateStream.rootSignature = unlitRootSignature.rootSignature.Get();
-		pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
-		pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-		pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-		pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
-		pipelineStateStream.dsvFormat = renderTarget.depthStencilFormat;
-		pipelineStateStream.rtvFormats = renderTarget.renderTargetFormat;
-		pipelineStateStream.rasterizer = defaultRasterizerDesc;
-
-		D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
-			sizeof(pipeline_state_stream), &pipelineStateStream
-		};
-		checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&unlitPipeline)));
-
-		SET_NAME(unlitRootSignature.rootSignature, "Unlit Line Root Signature");
-		SET_NAME(unlitPipeline, "Unlit Line Pipeline");
-	}
 }
 
 void light_probe_system::setSphericalHarmonics(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const std::vector<spherical_harmonics>& sphericalHarmonics)
@@ -599,7 +534,7 @@ void light_probe_system::visualizeCubemap(dx_command_list* commandList, const re
 		mat4 mvp;
 		float uvzScale;
 	} cb = {
-		camera.projectionMatrix * camera.viewMatrix * createModelMatrix(position, quat::identity),
+		camera.viewProjectionMatrix * createModelMatrix(position, quat::identity),
 		uvzScale
 	};
 	commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, cb);
@@ -634,7 +569,7 @@ void light_probe_system::visualizeLightProbeCubemaps(dx_command_list* commandLis
 			mat4 mvp;
 			float uvzScale;
 		} cb = {
-			camera.projectionMatrix * camera.viewMatrix * createModelMatrix(lightProbePositions[i].xyz, quat::identity),
+			camera.viewProjectionMatrix* createModelMatrix(lightProbePositions[i].xyz, quat::identity),
 			uvzScale
 		};
 		commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, cb);
@@ -671,7 +606,7 @@ void light_probe_system::visualizeSH(dx_command_list* commandList, const render_
 		mat4 mvp;
 		float uvzScale;
 	} cb = {
-		camera.projectionMatrix * camera.viewMatrix * createModelMatrix(position, quat::identity),
+		camera.viewProjectionMatrix* createModelMatrix(position, quat::identity),
 		uvzScale
 	};
 	commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, cb);
@@ -685,26 +620,14 @@ void light_probe_system::visualizeSH(dx_command_list* commandList, const render_
 	commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 }
 
-void light_probe_system::visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh)
+void light_probe_system::visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh,
+	debug_display& debugDisplay)
 {
 	PROFILE_FUNCTION();
 
 	if (showTetrahedralMesh)
 	{
-		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Visualize light probe tetrahedra.");
-
-		commandList->setPipelineState(unlitPipeline);
-		commandList->setGraphicsRootSignature(unlitRootSignature);
-
-		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-
-		mat4 vp = camera.projectionMatrix * camera.viewMatrix;
-		commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, vp);
-
-		commandList->setVertexBuffer(0, tetrahedronMesh.vertexBuffer);
-		commandList->setIndexBuffer(tetrahedronMesh.indexBuffer);
-
-		commandList->drawIndexed(tetrahedronMesh.indexBuffer.numIndices, 1, 0, 0, 0);
+		debugDisplay.renderLineMesh(commandList, camera, tetrahedronMesh, mat4::identity);
 	}
 
 	if (showProbes)
@@ -731,7 +654,7 @@ void light_probe_system::visualizeLightProbes(dx_command_list* commandList, cons
 				mat4 mvp;
 				float uvzScale;
 			} cb = {
-				camera.projectionMatrix * camera.viewMatrix * createModelMatrix(lightProbePositions[i], quat::identity),
+				camera.viewProjectionMatrix * createModelMatrix(lightProbePositions[i], quat::identity),
 				1.f
 			};
 			commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, cb);

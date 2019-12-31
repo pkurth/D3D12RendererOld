@@ -10,6 +10,7 @@
 #include "root_signature.h"
 #include "render_target.h"
 #include "command_list.h"
+#include "debug_display.h"
 
 
 #define MAX_NUM_SUN_SHADOW_CASCADES 4
@@ -141,7 +142,8 @@ struct light_probe_system
 	void visualizeSH(dx_command_list* commandList, const render_camera& camera, vec3 position, const spherical_harmonics& sh, float uvzScale = 1.f);
 
 	// Visualize whole system.
-	void visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh);
+	void visualizeLightProbes(dx_command_list* commandList, const render_camera& camera, bool showProbes, bool showTetrahedralMesh,
+		debug_display& debugDisplay);
 
 	vec4 calculateBarycentricCoordinates(const light_probe_tetrahedron& tet, vec3 position);
 	spherical_harmonics getInterpolatedSphericalHarmonics(const light_probe_tetrahedron& tet, vec4 barycentric);
@@ -165,8 +167,6 @@ struct light_probe_system
 
 
 	dx_mesh tetrahedronMesh;
-	ComPtr<ID3D12PipelineState> unlitPipeline;
-	dx_root_signature unlitRootSignature;
 
 	ComPtr<ID3D12PipelineState> visualizeCubemapPipeline;
 	dx_root_signature visualizeCubemapRootSignature;

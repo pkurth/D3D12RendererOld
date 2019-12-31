@@ -370,6 +370,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	}
 
 	{
+		PROFILE_BLOCK("Init debug display");
+		debugDisplay.initialize(device, commandList, lightingRT);
+	}
+
+	{
 		PROFILE_BLOCK("Load sponza model");
 
 		std::vector<submesh_info> sponzaSubmeshes;
@@ -986,12 +991,16 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	renderScene(commandList, camera);
 
-
+	if (isDebugCamera)
+	{
+		debugDisplay.renderFrustum(commandList, camera, mainCameraFrustum, vec4(1.f, 1.f, 1.f, 1.f));
+	}
+	
 	if (showLightProbes)
 	{
 		if (lightProbeSystem.tempSphericalHarmonicsBuffer.resource)
 		{
-			lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity);
+			lightProbeSystem.visualizeLightProbes(commandList, camera, showLightProbes, showLightProbeConnectivity, debugDisplay);
 		}
 		else
 		{
@@ -1043,6 +1052,14 @@ bool dx_game::keyUpCallback(keyboard_event event)
 	case key_q: inputMovement.y += 1.f; break;
 	case key_e: inputMovement.y -= 1.f; break;
 	case key_shift: inputSpeedModifier = 1.f; break;
+	case key_tab:
+	{
+		isDebugCamera = !isDebugCamera;
+		if (isDebugCamera)
+		{
+			mainCameraFrustum = camera.getWorldSpaceFrustum(20.f);
+		}
+	} break;
 	}
 	return true;
 }
