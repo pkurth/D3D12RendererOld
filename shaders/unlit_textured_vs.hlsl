@@ -13,8 +13,8 @@ struct vs_input
 
 struct vs_output
 {
-	float2 uv		: TEXCOORDS;
 	float4 color	: COLOR;
+	float2 uv		: TEXCOORDS;
 	float4 position : SV_Position;
 };
 

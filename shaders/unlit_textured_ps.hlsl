@@ -1,8 +1,8 @@
 
 struct ps_input
 {
-	float2 uv		: TEXCOORDS;
 	float4 color	: COLOR;
+	float2 uv		: TEXCOORDS;
 };
 
 SamplerState texSampler		: register(s0);

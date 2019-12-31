@@ -1,6 +1,7 @@
 #pragma once
 
 #include "resource.h"
+#include "math.h"
 
 enum texture_type
 {
@@ -50,4 +51,28 @@ struct dx_texture : dx_resource
 private:
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> renderTargetViews;
 	D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView;
+};
+
+struct dx_texture_atlas : dx_texture
+{
+	uint32 slicesX;
+	uint32 slicesY;
+
+	void getUVs(uint32 x, uint32 y, vec2& uv0, vec2& uv1)
+	{
+		assert(x < slicesX);
+		assert(y < slicesY);
+		
+		float width = 1.f / slicesX;
+		float height = 1.f / slicesY;
+		uv0 = vec2(x * width, y * height);
+		uv1 = vec2((x + 1) * width, (y + 1) * height);
+	}
+
+	void getUVs(uint32 i, vec2& uv0, vec2& uv1)
+	{
+		uint32 x = i % slicesX;
+		uint32 y = i / slicesX;
+		getUVs(x, y, uv0, uv1);
+	}
 };

@@ -319,8 +319,30 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	{
 		PROFILE_BLOCK("Particle system");
-		particleSystem1.initialize(10000, vec3(0.f, 10.f, 0.f), 2000, 1.f, vec4(0.7f, 0.3f, 0.4f, 1.f));
-		particleSystem2.initialize(10000, vec3(0.f, 10.f, 0.f), 2000, 1.f, vec4(0.8f, 0.8f, 0.1f, 1.f));
+		
+		particleSystem1.initialize(10000);
+		particleSystem1.color.initializeAsLinear(vec4(0.7f, 0.3f, 0.4f, 1.f), vec4(0.8f, 0.8f, 0.1f, 1.f));
+		particleSystem1.maxLifetime.initializeAsRandom(0.2f, 1.5f);
+		particleSystem1.startVelocity.initializeAsRandom(vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f));
+		particleSystem1.spawnRate = 2000.f;
+		particleSystem1.gravityFactor = 1.f;
+
+		particleSystem2.initialize(10000);
+		particleSystem2.color.initializeAsRandom(vec4(0.f, 0.f, 0.f, 0.f), vec4(1.f, 1.f, 1.f, 1.f));
+		particleSystem2.maxLifetime.initializeAsConstant(1.f);
+		particleSystem2.startVelocity.initializeAsRandom(vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f));
+		particleSystem2.spawnRate = 2000.f;
+		particleSystem2.gravityFactor = 1.f;
+
+		particleSystem3.initialize(2000);
+		particleSystem3.spawnPosition = vec3(0.f, 3.f, 0.f);
+		particleSystem3.color.initializeAsConstant(vec4(1.f, 1.f, 1.f, 1.f));
+		particleSystem3.maxLifetime.initializeAsConstant(1.f);
+		particleSystem3.startVelocity.initializeAsRandom(vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f));
+		particleSystem3.spawnRate = 400.f;
+		commandList->loadTextureFromFile(particleSystem3.textureAtlas, L"res/fire_atlas.png", texture_type_color);
+		particleSystem3.textureAtlas.slicesX = particleSystem3.textureAtlas.slicesY = 3;
+		particleSystem3.gravityFactor = -0.2f;
 	}
 
 	{
@@ -756,6 +778,8 @@ void dx_game::update(float dt)
 	particleSystem2.spawnPosition.y = sin(particleSystemTime + DirectX::XM_PI) * 15.f + 20.f;
 	particleSystem2.update(dt);
 
+	particleSystem3.update(dt);
+
 	this->dt = dt;
 
 	DEBUG_TAB(gui, "General")
@@ -1016,6 +1040,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 	particles.renderParticleSystem(commandList, camera, particleSystem1);
 	particles.renderParticleSystem(commandList, camera, particleSystem2);
+	particles.renderParticleSystem(commandList, camera, particleSystem3);
 	
 	if (showLightProbes)
 	{

@@ -69,6 +69,7 @@ private:
 
 	particle_system particleSystem1;
 	particle_system particleSystem2;
+	particle_system particleSystem3;
 	float particleSystemTime = 0.f;
 
 
