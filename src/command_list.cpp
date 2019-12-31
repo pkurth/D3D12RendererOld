@@ -780,11 +780,21 @@ void dx_command_list::createIrradianceMap(dx_texture& environment, dx_texture& i
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Format = environment.resource->GetDesc().Format;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
-	srvDesc.TextureCubeArray.MipLevels = 1;
-	srvDesc.TextureCubeArray.NumCubes = 1;
-	srvDesc.TextureCubeArray.First2DArrayFace = sourceSlice * 6;
-
+	
+	if (sourceSlice == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+	{
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+		srvDesc.TextureCube.MostDetailedMip = 0;
+		srvDesc.TextureCube.MipLevels = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	}
+	else
+	{
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+		srvDesc.TextureCubeArray.MipLevels = 1;
+		srvDesc.TextureCubeArray.NumCubes = 1;
+		srvDesc.TextureCubeArray.First2DArrayFace = sourceSlice * 6;
+	}
+	
 	setShaderResourceView(cubemap_to_irradiance_param_src, 0, environment, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
 	setUnorderedAccessView(cubemap_to_irradiance_param_out, 0, stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &uavDesc);
 

@@ -270,6 +270,7 @@ static uint32 displayProfileBlock(profile_display_state& state, debug_gui& gui, 
 }
 
 static float frameWidth60FPS = 500.f;
+static uint64 lastFrameGlobalHighlightIndex = -1;
 
 static void displayProfileInfo(debug_gui& gui)
 {
@@ -421,6 +422,14 @@ static void displayProfileInfo(debug_gui& gui)
 					frameWidth60FPS = 200.f;
 				}
 			}
+
+			if (frame->globalFrameID != lastFrameGlobalHighlightIndex)
+			{
+				// Sum up timings.
+				//std::unordered_map<const char*, float> timings;
+			}
+
+			lastFrameGlobalHighlightIndex = frame->globalFrameID;
 		}
 	}
 }

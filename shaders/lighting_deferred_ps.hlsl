@@ -55,6 +55,7 @@ float4 main(ps_input IN) : SV_TARGET
 	// Ambient.
 	totalLighting.xyz += calculateAmbientLighting(albedo, irradianceTexture, environmentTexture, brdf, brdfSampler, N, V, F0, roughness, metallic, ao);
 
+#if 0
 	// Sun.
 	{
 		float visibility = 1.f;
@@ -111,6 +112,7 @@ float4 main(ps_input IN) : SV_TARGET
 
 		totalLighting.xyz += calculateDirectLighting(albedo, radiance, N, L, V, F0, roughness, metallic) * visibility;
 	}
+#endif
 
 	return totalLighting;
 }

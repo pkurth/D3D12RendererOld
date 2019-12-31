@@ -17,50 +17,68 @@
 
 #define LIGHT_PROBE_RESOLUTION 32
 
+
 struct directional_light
 {
 	mat4 vp[MAX_NUM_SUN_SHADOW_CASCADES];
+	vec4 cascadeDistances;
+	vec4 bias;
 
 	vec4 worldSpaceDirection;
 	vec4 color;
 
 	uint32 numShadowCascades = 3;
+	float blendArea;
+	float texelSize;
 	uint32 shadowMapDimensions = 2048;
-	float shadowMapCascadeDistancePower = 2.f;
-	float cascadeBlendArea = 0.1f;
+	
 
-	void updateMatrices(const camera_frustum& cameraWorldSpaceFrustum)
+	void updateMatrices(const render_camera& camera)
 	{
 		comp_mat viewMatrix = createLookAt(vec3(0.f, 0.f, 0.f), worldSpaceDirection, vec3(0.f, 1.f, 0.f));
+		
+		vec3 worldForward = camera.rotation * vec3(0.f, 0.f, -1.f);
+		camera_frustum worldFrustum = camera.getWorldSpaceFrustum();
 
-		comp_vec nearBottomLeft = viewMatrix * vec4(cameraWorldSpaceFrustum.nearBottomLeft, 1.f);
-		comp_vec nearBottomRight = viewMatrix * vec4(cameraWorldSpaceFrustum.nearBottomRight, 1.f);
-		comp_vec nearTopLeft = viewMatrix * vec4(cameraWorldSpaceFrustum.nearTopLeft, 1.f);
-		comp_vec nearTopRight = viewMatrix * vec4(cameraWorldSpaceFrustum.nearTopRight, 1.f);
-		comp_vec farBottomLeft = viewMatrix * vec4(cameraWorldSpaceFrustum.farBottomLeft, 1.f);
-		comp_vec farBottomRight = viewMatrix * vec4(cameraWorldSpaceFrustum.farBottomRight, 1.f);
-		comp_vec farTopLeft = viewMatrix * vec4(cameraWorldSpaceFrustum.farTopLeft, 1.f);
-		comp_vec farTopRight = viewMatrix * vec4(cameraWorldSpaceFrustum.farTopRight, 1.f);
+		comp_vec worldBottomLeft = worldFrustum.farBottomLeft - worldFrustum.nearBottomLeft;
+		comp_vec worldBottomRight = worldFrustum.farBottomRight - worldFrustum.nearBottomRight;
+		comp_vec worldTopLeft = worldFrustum.farTopLeft - worldFrustum.nearTopLeft;
+		comp_vec worldTopRight = worldFrustum.farTopRight - worldFrustum.nearTopRight;
 
-		bounding_box bb = bounding_box::negativeInfinity();
-		bb.grow(nearBottomLeft);
-		bb.grow(nearBottomRight);
-		bb.grow(nearTopLeft);
-		bb.grow(nearTopRight);
+		worldBottomLeft /= dot3(worldBottomLeft, worldForward);
+		worldBottomRight /= dot3(worldBottomRight, worldForward);
+		worldTopLeft /= dot3(worldTopLeft, worldForward);
+		worldTopRight /= dot3(worldTopRight, worldForward);
+
+		comp_vec worldEye = vec4(camera.position, 1.f);
+		comp_vec sunEye = viewMatrix * worldEye;
+
+		bounding_box initialBB = bounding_box::negativeInfinity();
+		initialBB.grow(sunEye);
 
 		for (uint32 i = 0; i < numShadowCascades; ++i)
 		{
-			float distance = powf((float)(i + 1) / numShadowCascades, shadowMapCascadeDistancePower);
+			float distance = cascadeDistances.data[i];
 
-			bb.grow(lerp(nearBottomLeft, farBottomLeft, distance));
-			bb.grow(lerp(nearBottomRight, farBottomRight, distance));
-			bb.grow(lerp(nearTopLeft, farTopLeft, distance));
-			bb.grow(lerp(nearTopRight, farTopRight, distance));
+			comp_vec sunBottomLeft = viewMatrix * (worldEye + distance * worldBottomLeft);
+			comp_vec sunBottomRight = viewMatrix * (worldEye + distance * worldBottomRight);
+			comp_vec sunTopLeft = viewMatrix * (worldEye + distance * worldTopLeft);
+			comp_vec sunTopRight = viewMatrix * (worldEye + distance * worldTopRight);
+
+			bounding_box bb = initialBB;
+			bb.grow(sunBottomLeft);
+			bb.grow(sunBottomRight);
+			bb.grow(sunTopLeft);
+			bb.grow(sunTopRight);
+
+			bb.expand(2.f);
 
 			comp_mat projMatrix = createOrthographicMatrix(bb.min.x, bb.max.x, bb.max.y, bb.min.y, -bb.max.z - SHADOW_MAP_NEGATIVE_Z_OFFSET, -bb.min.z);
 
 			vp[i] = projMatrix * viewMatrix;
 		}
+
+		texelSize = 1.f / (float)shadowMapDimensions;
 	}
 };
 

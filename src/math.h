@@ -288,7 +288,7 @@ inline comp_vec operator*(comp_vec v, float s)
 	return DirectX::XMVectorScale(v, s);
 }
 
-inline comp_vec& operator*=(comp_vec v, float s)
+inline comp_vec& operator*=(comp_vec& v, float s)
 {
 	v = v * s;
 	return v;
@@ -299,7 +299,7 @@ inline comp_vec operator/(comp_vec v, float s)
 	return DirectX::XMVectorScale(v, 1.f / s);
 }
 
-inline comp_vec& operator/=(comp_vec v, float s)
+inline comp_vec& operator/=(comp_vec& v, float s)
 {
 	v = v / s;
 	return v;
@@ -392,19 +392,19 @@ inline comp_quat createQuaternionFromAxisAngle(comp_vec axis, float angle)
 	return DirectX::XMQuaternionRotationAxis(axis, angle);
 }
 
-inline comp_vec dot2(comp_vec a, comp_vec b)
+inline float dot2(comp_vec a, comp_vec b)
 {
-	return DirectX::XMVector2Dot(a, b);
+	return DirectX::XMVector2Dot(a, b).m128_f32[0];
 }
 
-inline comp_vec dot3(comp_vec a, comp_vec b)
+inline float dot3(comp_vec a, comp_vec b)
 {
-	return DirectX::XMVector3Dot(a, b);
+	return DirectX::XMVector3Dot(a, b).m128_f32[0];
 }
 
-inline comp_vec dot4(comp_vec a, comp_vec b)
+inline float dot4(comp_vec a, comp_vec b)
 {
-	return DirectX::XMVector4Dot(a, b);
+	return DirectX::XMVector4Dot(a, b).m128_f32[0];
 }
 
 inline comp_vec cross(comp_vec a, comp_vec b)
@@ -474,6 +474,12 @@ struct bounding_box
 		max.x = ::max(max.x, a.x);
 		max.y = ::max(max.y, a.y);
 		max.z = ::max(max.z, a.z);
+	}
+
+	void expand(float v)
+	{
+		min = min - vec3(v, v, v);
+		max = max + vec3(v, v, v);
 	}
 };
 

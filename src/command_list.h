@@ -44,7 +44,7 @@ public:
 
 	// BRDF.
 	void convertEquirectangularToCubemap(dx_texture& equirectangular, dx_texture& cubemap, uint32 resolution, uint32 numMips, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
-	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32, uint32 sourceSlice = 0, float uvzScale = 1.f);
+	void createIrradianceMap(dx_texture& environment, dx_texture& irradiance, uint32 resolution = 32, uint32 sourceSlice = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, float uvzScale = 1.f);
 	void prefilterEnvironmentMap(dx_texture& environment, dx_texture& prefiltered, uint32 resolution = 128);
 	void integrateBRDF(dx_texture& brdf, uint32 resolution = 512);
 	void projectCubemapToSphericalHarmonics(dx_texture& cubemap, dx_structured_buffer& sh, uint32 srcMip, uint32 shIndex);

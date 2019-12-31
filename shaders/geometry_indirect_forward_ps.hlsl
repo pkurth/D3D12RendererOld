@@ -19,7 +19,7 @@ struct ps_output
 
 ConstantBuffer<camera_cb> camera			: register(b0);
 ConstantBuffer<material_cb> material		: register(b2);
-ConstantBuffer<directional_light> sunLight	: register(b3);
+ConstantBuffer<directional_light> sun		: register(b3);
 
 
 SamplerState linearWrapSampler				: register(s0, space0);
@@ -47,6 +47,29 @@ StructuredBuffer<float4> lightProbePositions					: register(t0, space6);
 StructuredBuffer<packed_spherical_harmonics> sphericalHarmonics	: register(t1, space6);
 StructuredBuffer<light_probe_tetrahedron> lightProbeTetrahedra	: register(t2, space6);
 
+
+static float sampleSunShadowMap(float4x4 vp, float3 worldPosition, Texture2D<float> shadowMap, float texelSize, float bias)
+{
+	float4 lightProjected = mul(vp, float4(worldPosition, 1.f));
+	// Since the sun is a directional (orthographic) light source, we don't need to divide by w.
+
+	float2 lightUV = lightProjected.xy * 0.5f + float2(0.5f, 0.5f);
+	lightUV.y = 1.f - lightUV.y;
+
+	float visibility = 0.f;
+	uint count = 0;
+
+	for (int y = -2; y <= 2; ++y)
+	{
+		for (int x = -2; x <= 2; ++x)
+		{
+			visibility += shadowMap.SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - bias);
+			++count;
+		}
+	}
+	visibility /= count;
+	return visibility;
+}
 
 ps_output main(ps_input IN)
 {
@@ -79,7 +102,7 @@ ps_output main(ps_input IN)
 
 	// Ambient.
 	
-#if 0
+#if 1
 	totalLighting.xyz += calculateAmbientLighting(albedo.xyz, irradianceTexture, environmentTexture, brdf, brdfSampler, N, V, F0, roughness, metallic, ao);
 #else
 	totalLighting.xyz += calculateAmbientLighting(albedo.xyz,
@@ -91,57 +114,44 @@ ps_output main(ps_input IN)
 	// Sun.
 	{
 		float visibility = 1.f;
-		uint numCascades = sunLight.numShadowCascades;
+		uint numCascades = sun.numShadowCascades;
+		float4 cascadeDistances = sun.cascadeDistances;
 
-		if (numCascades > 0)
+		float currentPixelDepth = dot(camera.forward.xyz, camToP);
+		float4 comparison = float4(currentPixelDepth, currentPixelDepth, currentPixelDepth, currentPixelDepth) > cascadeDistances;
+		float index = dot(float4(numCascades > 0, numCascades > 1, numCascades > 2, numCascades > 3), comparison);
+
+		index = min(index, float(numCascades - 1));
+
+		int currentCascadeIndex = int(index);
+		int nextCascadeIndex = min(numCascades - 1, currentCascadeIndex + 1);
+
+		float4 bias = sun.bias;
+		visibility = sampleSunShadowMap(sun.vp[currentCascadeIndex], IN.worldPosition, sunShadowMapCascades[currentCascadeIndex], sun.texelSize, bias[currentCascadeIndex]);
+
+		// Blend between cascades.
+
+		float currentPixelsBlendBandLocation = 1.f;
+		if (numCascades > 1)
 		{
-			int currentCascadeIndex = 0;
-			int nextCascadeIndex = currentCascadeIndex;
-			float currentPixelsBlendBandLocation = 1.f;
+			// Calculate blend amount.
+			int blendIntervalBelowIndex = max(0, currentCascadeIndex - 1);
+			float cascade0Factor = float(currentCascadeIndex > 0);
+			float pixelDepth = currentPixelDepth - cascadeDistances[blendIntervalBelowIndex] * cascade0Factor;
+			float blendInterval = cascadeDistances[currentCascadeIndex] - cascadeDistances[blendIntervalBelowIndex] * cascade0Factor;
 
-			if (numCascades > 1)
-			{
-				float4 cascadeRelativeDistances = pow(float4(1.f, 2.f, 3.f, 4.f) / numCascades, sunLight.shadowMapCascadeDistancePower);
-				float nearPlane = camera.projectionParams.x;
-				float farPlane = camera.projectionParams.y;
-				float4 cascadeDistances = float4(
-					lerp(nearPlane, farPlane, cascadeRelativeDistances.x),
-					lerp(nearPlane, farPlane, cascadeRelativeDistances.y),
-					lerp(nearPlane, farPlane, cascadeRelativeDistances.z),
-					lerp(nearPlane, farPlane, cascadeRelativeDistances.w)
-					);
-
-				float worldDepth = dot(camera.forward.xyz, camToP);
-				float4 comparison = float4(worldDepth, worldDepth, worldDepth, worldDepth) > cascadeDistances;
-				float index = dot(float4(numCascades > 0, numCascades > 1, numCascades > 2, numCascades > 3), comparison);
-
-				index = min(index, float(numCascades) - 1.f);
-				currentCascadeIndex = uint(index);
-			}
-
-			float4 lightProjected = mul(sunLight.vp[currentCascadeIndex], float4(IN.worldPosition, 1.f));
-			// Since the sun is a directional (orthographic) light source, we don't need to divide by w.
-
-			float2 lightUV = lightProjected.xy * 0.5f + float2(0.5f, 0.5f);
-			lightUV.y = 1.f - lightUV.y;
-
-			visibility = 0.f;
-			uint count = 0;
-
-			float texelSize = 1.f / (float)sunLight.shadowMapDimensions;
-			for (int y = -2; y <= 2; ++y)
-			{
-				for (int x = -2; x <= 2; ++x)
-				{
-					visibility += sunShadowMapCascades[currentCascadeIndex].SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - 0.01f);
-					++count;
-				}
-			}
-			visibility /= count;
+			// Relative to current cascade. 0 means at nearplane of cascade, 1 at farplane of cascade.
+			currentPixelsBlendBandLocation = 1.f - pixelDepth / blendInterval;
 		}
-
-		float3 L = -sunLight.worldSpaceDirection.xyz;
-		float3 radiance = sunLight.color.xyz; // No attenuation for sun.
+		if (currentPixelsBlendBandLocation < sun.blendArea) // Blend area is relative!
+		{
+			float blendBetweenCascadesAmount = currentPixelsBlendBandLocation / sun.blendArea;
+			float visibilityOfNextCascade = sampleSunShadowMap(sun.vp[nextCascadeIndex], IN.worldPosition, sunShadowMapCascades[nextCascadeIndex], sun.texelSize, bias[nextCascadeIndex]);
+			visibility = lerp(visibilityOfNextCascade, visibility, blendBetweenCascadesAmount);
+		}
+		
+		float3 L = -sun.worldSpaceDirection.xyz;
+		float3 radiance = sun.color.xyz; // No attenuation for sun.
 
 		totalLighting.xyz += calculateDirectLighting(albedo.xyz, radiance, N, L, V, F0, roughness, metallic) * visibility;
 	}
@@ -149,6 +159,5 @@ ps_output main(ps_input IN)
 
 	ps_output OUT;
 	OUT.color = totalLighting;
-	//OUT.color = float4(1, 0, 0, 1);
 	return OUT;
 }

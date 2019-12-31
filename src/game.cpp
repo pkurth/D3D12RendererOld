@@ -490,6 +490,15 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	sun.worldSpaceDirection = comp_vec(-0.6f, -1.f, -0.3f, 0.f).normalize();
 	sun.color = vec4(1.f, 0.93f, 0.76f, 0.f) * 50.f;
 
+	sun.cascadeDistances.data[0] = 9.f;
+	sun.cascadeDistances.data[1] = 39.f;
+	sun.cascadeDistances.data[2] = 74.f;
+	sun.cascadeDistances.data[3] = 10000.f;
+
+	sun.bias = vec4(0.001f, 0.0015f, 0.0015f, 0.0035f);
+	sun.blendArea = 0.07f;
+
+
 	pointLights.resize(512);
 	for (uint32 i = 0; i < pointLights.size(); ++i)
 	{
@@ -722,7 +731,7 @@ void dx_game::update(float dt)
 	camera.position = camera.position + camera.rotation * inputMovement * dt * CAMERA_MOVEMENT_SPEED * inputSpeedModifier;
 	camera.updateMatrices(width, height);
 
-	sun.updateMatrices(camera.getWorldSpaceFrustum());
+	sun.updateMatrices(camera);
 
 	this->dt = dt;
 
@@ -733,13 +742,18 @@ void dx_game::update(float dt)
 		{
 			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
 			gui.textF("Input movement: %.2f, %.2f, %.2f", inputMovement.x, inputMovement.y, inputMovement.z);
+			gui.slider("Near plane", camera.nearPlane, 0.1f, 10.f);
 		}
 
 		DEBUG_GROUP(gui, "Lighting")
 		{
 			DEBUG_GROUP(gui, "Sun")
 			{
-				gui.slider("Shadow map cascade power", sun.shadowMapCascadeDistancePower, 0.1f, 5.f);
+				gui.multislider("Cascade distances", sun.cascadeDistances.data, sun.numShadowCascades, 0.1f, 150.f, 0.1f);
+				gui.slider("Cascade 0 bias", sun.bias.x, 0.f, 0.01f);
+				gui.slider("Cascade 1 bias", sun.bias.y, 0.f, 0.01f);
+				gui.slider("Cascade 2 bias", sun.bias.z, 0.f, 0.01f);
+				gui.slider("Blend area", sun.blendArea, 0.f, 1.f);
 			}
 
 			DEBUG_GROUP(gui, "Light probes")
@@ -750,9 +764,6 @@ void dx_game::update(float dt)
 			}
 		}
 		gui.textF("%u draw calls", numIndirectDrawCalls);
-
-		static float values[] = { 4, 7, 9 };
-		gui.multislider("Multislider", values, arraysize(values), 3.f, 15.f, 2);
 	}
 }
 
@@ -857,8 +868,6 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sun shadow map.");
 
-		commandList->setViewport(sunShadowMapRT[0].viewport);
-
 		// If more than the static scene is rendered here, this stuff must go in the loop.
 		commandList->setPipelineState(indirectDepthOnlyPipelineState);
 		commandList->setGraphicsRootSignature(indirectDepthOnlyRootSignature);
@@ -871,6 +880,8 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
 		{
 			commandList->setRenderTarget(sunShadowMapRT[i]);
+			commandList->setViewport(sunShadowMapRT[i].viewport);
+
 			commandList->clearDepth(sunShadowMapRT[i].depthStencilAttachment->getDepthStencilView());
 
 			// This only works, because the vertex shader expects the vp matrix as the first argument.

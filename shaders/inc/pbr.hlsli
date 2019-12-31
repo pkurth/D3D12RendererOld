@@ -21,14 +21,16 @@ static const float3 platinumAlbedo =	float3(0.672f, 0.637f, 0.585f);
 struct directional_light
 {
 	float4x4 vp[4];
+	float4 cascadeDistances;
+	float4 bias;
 
 	float4 worldSpaceDirection;
 	float4 color;
 
 	uint numShadowCascades;
+	float blendArea;
+	float texelSize;
 	uint shadowMapDimensions;
-	float shadowMapCascadeDistancePower;
-	float cascadeBlendArea;
 };
 
 struct point_light

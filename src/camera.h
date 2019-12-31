@@ -5,6 +5,8 @@
 
 union camera_frustum
 {
+	vec3 eye;
+
 	struct
 	{
 		vec3 nearTopLeft;
@@ -70,7 +72,7 @@ struct render_camera
 		invViewProjectionMatrix = invViewMatrix * invProjectionMatrix;
 	}
 
-	void fillConstantBuffer(camera_cb& cb)
+	void fillConstantBuffer(camera_cb& cb) const
 	{
 		cb.vp = projectionMatrix * viewMatrix;
 		cb.v = viewMatrix;
@@ -87,7 +89,7 @@ struct render_camera
 		cb.skyVP = projectionMatrix * v;
 	}
 
-	comp_vec restoreViewSpacePosition(vec2 uv, float depthBufferDepth)
+	comp_vec restoreViewSpacePosition(vec2 uv, float depthBufferDepth) const
 	{
 		uv.y = 1.f - uv.y; // Screen uvs start at the top left, so flip y.
 		vec3 ndc = vec3(uv * 2.f - vec2(1.f, 1.f), depthBufferDepth);
@@ -96,7 +98,7 @@ struct render_camera
 		return position;
 	}
 
-	comp_vec restoreWorldSpacePosition(vec2 uv, float depthBufferDepth)
+	comp_vec restoreWorldSpacePosition(vec2 uv, float depthBufferDepth) const
 	{
 		uv.y = 1.f - uv.y; // Screen uvs start at the top left, so flip y.
 		vec3 ndc = vec3(uv * 2.f - vec2(1.f, 1.f), depthBufferDepth);
@@ -105,25 +107,27 @@ struct render_camera
 		return position;
 	}
 
-	float depthBufferDepthToLinearNormalizedDepthEyeToFarPlane(float depthBufferDepth)
+	float depthBufferDepthToLinearNormalizedDepthEyeToFarPlane(float depthBufferDepth) const
 	{
 		float c1 = farPlane / nearPlane;
 		float c0 = 1.f - c1;
 		return 1.f / (c0 * depthBufferDepth + c1);
 	}
 
-	camera_frustum getWorldSpaceFrustum()
+	camera_frustum getWorldSpaceFrustum() const
 	{
 		camera_frustum result;
 
-		result.nearBottomLeft = restoreWorldSpacePosition(vec2(0.f, 1.f), 0.f);
+		result.eye = position;
+
+		result.nearBottomLeft =  restoreWorldSpacePosition(vec2(0.f, 1.f), 0.f);
 		result.nearBottomRight = restoreWorldSpacePosition(vec2(1.f, 1.f), 0.f);
-		result.nearTopLeft = restoreWorldSpacePosition(vec2(0.f, 0.f), 0.f);
-		result.nearTopRight = restoreWorldSpacePosition(vec2(1.f, 0.f), 0.f);
-		result.farBottomLeft = restoreWorldSpacePosition(vec2(0.f, 1.f), 1.f);
-		result.farBottomRight = restoreWorldSpacePosition(vec2(1.f, 1.f), 1.f);
-		result.farTopLeft = restoreWorldSpacePosition(vec2(0.f, 0.f), 1.f);
-		result.farTopRight = restoreWorldSpacePosition(vec2(1.f, 0.f), 1.f);
+		result.nearTopLeft =	 restoreWorldSpacePosition(vec2(0.f, 0.f), 0.f);
+		result.nearTopRight =	 restoreWorldSpacePosition(vec2(1.f, 0.f), 0.f);
+		result.farBottomLeft =	 restoreWorldSpacePosition(vec2(0.f, 1.f), 1.f);
+		result.farBottomRight =  restoreWorldSpacePosition(vec2(1.f, 1.f), 1.f);
+		result.farTopLeft =		 restoreWorldSpacePosition(vec2(0.f, 0.f), 1.f);
+		result.farTopRight =	 restoreWorldSpacePosition(vec2(1.f, 0.f), 1.f);
 
 		return result;
 	}
