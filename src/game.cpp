@@ -92,7 +92,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			}
 
 			// Spot light.
-			depthDesc.Width = depthDesc.Height = flashLight.shadowMapDimensions;
+			depthDesc.Width = depthDesc.Height = spotLight.shadowMapDimensions;
 			spotLightShadowMapTexture.initialize(device, depthDesc, &depthClearValue);
 			spotLightShadowMapRT.attachDepthStencilTexture(spotLightShadowMapTexture);
 		}
@@ -138,21 +138,21 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		PROFILE_BLOCK("Particle system");
 		
-		particleSystem1.finish(10000);
+		particleSystem1.initialize(10000);
 		particleSystem1.color.initializeAsLinear(vec4(0.7f, 0.3f, 0.4f, 1.f), vec4(0.8f, 0.8f, 0.1f, 1.f));
 		particleSystem1.maxLifetime.initializeAsRandom(0.2f, 1.5f);
 		particleSystem1.startVelocity.initializeAsRandom(vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f));
 		particleSystem1.spawnRate = 2000.f;
 		particleSystem1.gravityFactor = 1.f;
 
-		particleSystem2.finish(10000);
+		particleSystem2.initialize(10000);
 		particleSystem2.color.initializeAsRandom(vec4(0.f, 0.f, 0.f, 0.f), vec4(1.f, 1.f, 1.f, 1.f));
 		particleSystem2.maxLifetime.initializeAsConstant(1.f);
 		particleSystem2.startVelocity.initializeAsRandom(vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f));
 		particleSystem2.spawnRate = 2000.f;
 		particleSystem2.gravityFactor = 1.f;
 
-		particleSystem3.finish(10000);
+		particleSystem3.initialize(10000);
 		particleSystem3.spawnPosition = vec3(0.f, 3.f, 0.f);
 		particleSystem3.color.initializeAsLinear(vec4(4.f, 3.f, 10.f, 0.02f), vec4(0.4f, 0.1f, 0.2f, 0.f));
 		particleSystem3.maxLifetime.initializeAsRandom(1.f, 1.5f);
@@ -226,16 +226,16 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 
-	flashLight.worldSpacePosition = vec4(0.f, 5.f, 0.f, 1.f);
-	flashLight.worldSpaceDirection = comp_vec(1.f, 0.f, 0.f, 0.f);
-	flashLight.color = vec4(1.f, 1.f, 0.f, 0.f) * 50.f;
+	spotLight.worldSpacePosition = vec4(0.f, 5.f, 0.f, 1.f);
+	spotLight.worldSpaceDirection = comp_vec(1.f, 0.f, 0.f, 0.f);
+	spotLight.color = vec4(1.f, 1.f, 0.f, 0.f) * 50.f;
 
-	flashLight.attenuation.linear = 0.f;
-	flashLight.attenuation.quadratic = 0.02f;
+	spotLight.attenuation.linear = 0.f;
+	spotLight.attenuation.quadratic = 0.015f;
 
-	flashLight.outerAngle = DirectX::XMConvertToRadians(35.f);
-	flashLight.innerAngle = DirectX::XMConvertToRadians(20.f);
-	flashLight.bias = 0.001f;
+	spotLight.outerAngle = DirectX::XMConvertToRadians(35.f);
+	spotLight.innerAngle = DirectX::XMConvertToRadians(20.f);
+	spotLight.bias = 0.001f;
 
 
 	{
@@ -291,7 +291,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		cpu_triangle_mesh<vertex_3PUNTL> mesh;
 		auto [submeshes, materials] = mesh.pushFromFile("res/floodlight.fbx");
 
-		mat4 model = createModelMatrix(vec3(flashLight.worldSpacePosition.x, 0.f, flashLight.worldSpacePosition.z),
+		mat4 model = createModelMatrix(vec3(spotLight.worldSpacePosition.x, 0.f, spotLight.worldSpacePosition.z - 1.f),
 			createQuaternionFromAxisAngle(vec3(0.f, 1.f, 0.f), DirectX::XM_PIDIV2) *
 			createQuaternionFromAxisAngle(vec3(1.f, 0.f, 0.f), -DirectX::XM_PIDIV2),
 			0.03f);
@@ -450,17 +450,17 @@ void dx_game::update(float dt)
 				gui.slider("Blend area", sun.blendArea, 0.f, 1.f);
 			}
 
-			DEBUG_GROUP(gui, "Flash light")
+			DEBUG_GROUP(gui, "Spot light")
 			{
-				float angles[] = { DirectX::XMConvertToDegrees(flashLight.innerAngle), DirectX::XMConvertToDegrees(flashLight.outerAngle) };
+				float angles[] = { DirectX::XMConvertToDegrees(spotLight.innerAngle), DirectX::XMConvertToDegrees(spotLight.outerAngle) };
 				if (gui.multislider("Radii", angles, 2, 0.f, 90.f, 1.f))
 				{
-					flashLight.innerAngle = DirectX::XMConvertToRadians(angles[0]);
-					flashLight.outerAngle = DirectX::XMConvertToRadians(angles[1]);
+					spotLight.innerAngle = DirectX::XMConvertToRadians(angles[0]);
+					spotLight.outerAngle = DirectX::XMConvertToRadians(angles[1]);
 				}
-				gui.slider("Linear attenuation", flashLight.attenuation.linear, 0.f, 3.f);
-				gui.slider("Quadratic attenuation", flashLight.attenuation.quadratic, 0.f, 4.f);
-				gui.slider("Bias", flashLight.bias, 0.f, 0.01f);
+				gui.slider("Linear attenuation", spotLight.attenuation.linear, 0.f, 3.f);
+				gui.slider("Quadratic attenuation", spotLight.attenuation.quadratic, 0.f, 4.f);
+				gui.slider("Bias", spotLight.bias, 0.f, 0.01f);
 			}
 
 			DEBUG_GROUP(gui, "Light probes")
@@ -474,7 +474,7 @@ void dx_game::update(float dt)
 	}
 
 	sun.updateMatrices(camera);
-	flashLight.updateMatrices();
+	spotLight.updateMatrices();
 }
 
 void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
@@ -484,13 +484,10 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress = commandList->uploadDynamicConstantBuffer(cameraCB);
 	D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress = commandList->uploadDynamicConstantBuffer(sun);
-	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress = commandList->uploadDynamicConstantBuffer(flashLight);
+	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress = commandList->uploadDynamicConstantBuffer(spotLight);
 
 #if DEPTH_PREPASS
 	indirect.renderDepthOnly(commandList, camera, indirectBuffer);
-#else
-	float clearColor[] = { 0, 0, 0, 0 };
-	commandList->clearRTV(lightingRT.colorAttachments[0]->getRenderTargetView(), clearColor);
 #endif
 
 	commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -549,7 +546,7 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		{
 			renderShadowmap(commandList, sunShadowMapRT[i], sun.vp[i]);
 		}
-		renderShadowmap(commandList, spotLightShadowMapRT, flashLight.vp);
+		renderShadowmap(commandList, spotLightShadowMapRT, spotLight.vp);
 
 		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
 		{
@@ -652,7 +649,6 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	{
 		debugDisplay.renderFrustum(commandList, camera, mainCameraFrustum, vec4(1.f, 1.f, 1.f, 1.f));
 	}
-	//debugDisplay.renderBillboard(commandList, camera, flashLight.worldSpacePosition.xyz, vec2(7.f, 7.f), spotLightShadowMapTexture, true, vec4(1, 1, 1, 1), true);
 
 #if ENABLE_PARTICLES
 	particles.renderParticleSystem(commandList, camera, particleSystem1);

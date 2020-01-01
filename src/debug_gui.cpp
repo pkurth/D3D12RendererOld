@@ -538,14 +538,20 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 bool debug_gui::mouseDownCallback(mouse_button_event event)
 {
 	mousePosition = vec2((float)event.x, (float)event.y);
-	lastEventType = event_type_down;
+	if (event.button == mouse_left)
+	{
+		lastEventType = event_type_down;
+	}
 	return false;
 }
 
 bool debug_gui::mouseUpCallback(mouse_button_event event)
 {
 	mousePosition = vec2((float)event.x, (float)event.y);
-	lastEventType = event_type_up;
+	if (event.button == mouse_left)
+	{
+		lastEventType = event_type_up;
+	}
 	return false;
 }
 

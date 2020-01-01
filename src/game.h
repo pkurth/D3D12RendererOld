@@ -61,7 +61,7 @@ private:
 	std::vector<submesh_info> sceneSubmeshes;
 
 	directional_light sun;
-	spot_light flashLight;
+	spot_light spotLight;
 
 	dx_texture cubemap;
 	dx_texture irradiance;
