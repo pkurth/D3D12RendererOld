@@ -26,8 +26,9 @@
 #define INDIRECT_ROOTPARAM_ROUGHNESSES		6
 #define INDIRECT_ROOTPARAM_METALLICS		7
 #define INDIRECT_ROOTPARAM_DIRECTIONAL		8
-#define INDIRECT_ROOTPARAM_SHADOWMAPS		9
-#define INDIRECT_ROOTPARAM_LIGHTPROBES		10
+#define INDIRECT_ROOTPARAM_SPOT				9
+#define INDIRECT_ROOTPARAM_SHADOWMAPS		10
+#define INDIRECT_ROOTPARAM_LIGHTPROBES		11
 
 
 #define CAMERA_SENSITIVITY 4.f
@@ -49,6 +50,7 @@ public:
 private:
 
 	void renderScene(dx_command_list* commandList, render_camera& camera);
+	void renderShadowmap(dx_command_list* commandList, dx_render_target& shadowMapRT, const mat4& vp);
 
 
 	bool contentLoaded = false;
@@ -84,15 +86,14 @@ private:
 	CD3DX12_GPU_DESCRIPTOR_HANDLE roughnessesOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE metallicsOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE brdfOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE shadowCascadesOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE shadowMapsOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE lightProbeOffset;
 
 	dx_mesh sceneMesh;
 	std::vector<submesh_info> sceneSubmeshes;
 
 	directional_light sun;
-	std::vector<point_light> pointLights;
-	dx_structured_buffer pointLightBuffer;
+	spot_light flashLight;
 
 	dx_texture cubemap;
 	dx_texture irradiance;
@@ -132,5 +133,8 @@ private:
 
 	dx_render_target sunShadowMapRT[MAX_NUM_SUN_SHADOW_CASCADES];
 	dx_texture sunShadowMapTexture[MAX_NUM_SUN_SHADOW_CASCADES];
+
+	dx_render_target spotLightShadowMapRT;
+	dx_texture spotLightShadowMapTexture;
 };
 

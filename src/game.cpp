@@ -7,7 +7,20 @@
 
 #include <pix3.h>
 
+/*
+	Rendering TODOs:
+		- Anti aliasing.
+		- Multiple command lists.
+		- Frustum and occlusion culling.
+		- Spot lights with shadows.
+		- LOD.
+		- Volumetrics?
+		- VFX.
+*/
+
 #define DEPTH_PREPASS 1
+
+#define ENABLE_PARTICLES 0
 
 #pragma pack(push, 1)
 struct indirect_command
@@ -18,7 +31,7 @@ struct indirect_command
 	uint32 padding[2];
 };
 
-struct indirect_shadow_command
+struct indirect_depth_only_command
 {
 	mat4 modelMatrix;
 	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
@@ -80,8 +93,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		}
 
-		// Sun shadow map.
+		// Shadow maps.
 		{
+			// Sun.
 			DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
 			CD3DX12_RESOURCE_DESC depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, sun.shadowMapDimensions, sun.shadowMapDimensions);
 			depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
@@ -96,6 +110,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 				sunShadowMapTexture[i].initialize(device, depthDesc, &depthClearValue);
 				sunShadowMapRT[i].attachDepthStencilTexture(sunShadowMapTexture[i]);
 			}
+
+			// Spot light.
+			depthDesc.Width = depthDesc.Height = flashLight.shadowMapDimensions;
+			spotLightShadowMapTexture.initialize(device, depthDesc, &depthClearValue);
+			spotLightShadowMapRT.attachDepthStencilTexture(spotLightShadowMapTexture);
 		}
 	}
 
@@ -132,7 +151,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		CD3DX12_DESCRIPTOR_RANGE1 roughnesses(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 3);
 		CD3DX12_DESCRIPTOR_RANGE1 metallics(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 4);
 
-		CD3DX12_DESCRIPTOR_RANGE1 shadowMaps(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_NUM_SUN_SHADOW_CASCADES, 0, 5);
+		CD3DX12_DESCRIPTOR_RANGE1 shadowMaps(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_NUM_SUN_SHADOW_CASCADES + 1, 0, 5); // Sun cascades + spot light.
 		
 		CD3DX12_DESCRIPTOR_RANGE1 pointLights(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, MAX_NUM_SUN_SHADOW_CASCADES, 5);
 
@@ -143,7 +162,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 6), // Tetrahedra.
 		};
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[11];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[12];
 		rootParameters[INDIRECT_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_ALL); // Camera.
 		rootParameters[INDIRECT_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
 		rootParameters[INDIRECT_ROOTPARAM_MATERIAL].InitAsConstants(sizeof(material_cb) / sizeof(float), 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material.
@@ -159,6 +178,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		// Sun.
 		rootParameters[INDIRECT_ROOTPARAM_DIRECTIONAL].InitAsConstantBufferView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		// Spot light.
+		rootParameters[INDIRECT_ROOTPARAM_SPOT].InitAsConstantBufferView(4, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		// Shadow maps.
 		rootParameters[INDIRECT_ROOTPARAM_SHADOWMAPS].InitAsDescriptorTable(1, &shadowMaps, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		// Light probes.
@@ -280,7 +304,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 		commandSignatureDesc.NumArgumentDescs = 2;
-		commandSignatureDesc.ByteStride = sizeof(indirect_shadow_command);
+		commandSignatureDesc.ByteStride = sizeof(indirect_depth_only_command);
 
 		checkResult(device->CreateCommandSignature(&commandSignatureDesc, indirectDepthOnlyRootSignature.rootSignature.Get(),
 			IID_PPV_ARGS(&indirectDepthOnlyCommandSignature)));
@@ -317,6 +341,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		}
 	}
 
+#if ENABLE_PARTICLES
 	{
 		PROFILE_BLOCK("Particle system");
 		
@@ -334,16 +359,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		particleSystem2.spawnRate = 2000.f;
 		particleSystem2.gravityFactor = 1.f;
 
-		particleSystem3.initialize(2000);
+		particleSystem3.initialize(10000);
 		particleSystem3.spawnPosition = vec3(0.f, 3.f, 0.f);
-		particleSystem3.color.initializeAsConstant(vec4(1.f, 1.f, 1.f, 1.f));
-		particleSystem3.maxLifetime.initializeAsConstant(1.f);
+		particleSystem3.color.initializeAsLinear(vec4(4.f, 3.f, 10.f, 0.02f), vec4(0.4f, 0.1f, 0.2f, 0.f));
+		particleSystem3.maxLifetime.initializeAsRandom(1.f, 1.5f);
 		particleSystem3.startVelocity.initializeAsRandom(vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f));
-		particleSystem3.spawnRate = 400.f;
+		particleSystem3.spawnRate = 2000.f;
 		commandList->loadTextureFromFile(particleSystem3.textureAtlas, L"res/fire_atlas.png", texture_type_color);
 		particleSystem3.textureAtlas.slicesX = particleSystem3.textureAtlas.slicesY = 3;
 		particleSystem3.gravityFactor = -0.2f;
 	}
+#endif
 
 	{
 		PROFILE_BLOCK("Light probe system");
@@ -394,6 +420,31 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		}
 	}
 
+	sun.worldSpaceDirection = comp_vec(-0.6f, -1.f, -0.3f, 0.f).normalize();
+	sun.color = vec4(1.f, 0.93f, 0.76f, 0.f) * 50.f;
+
+	sun.cascadeDistances.data[0] = 9.f;
+	sun.cascadeDistances.data[1] = 39.f;
+	sun.cascadeDistances.data[2] = 74.f;
+	sun.cascadeDistances.data[3] = 10000.f;
+
+	sun.bias = vec4(0.001f, 0.0015f, 0.0015f, 0.0035f);
+	sun.blendArea = 0.07f;
+
+
+
+	flashLight.worldSpacePosition = vec4(0.f, 5.f, 0.f, 1.f);
+	flashLight.worldSpaceDirection = comp_vec(1.f, 0.f, 0.f, 0.f);
+	flashLight.color = vec4(1.f, 1.f, 0.f, 0.f) * 50.f;
+
+	flashLight.attenuation.linear = 0.f;
+	flashLight.attenuation.quadratic = 0.02f;
+
+	flashLight.outerAngle = DirectX::XMConvertToRadians(35.f);
+	flashLight.innerAngle = DirectX::XMConvertToRadians(20.f);
+	flashLight.bias = 0.001f;
+
+
 	{
 		PROFILE_BLOCK("Init gui");
 		gui.initialize(device, commandList, screenRTFormats);
@@ -410,6 +461,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		std::vector<submesh_info> sponzaSubmeshes;
 		std::vector<submesh_material_info> sponzaMaterials;
 		submesh_info sphereSubmesh;
+		std::vector<submesh_info> floodlightSubmeshes;
 
 		{
 			PROFILE_BLOCK("Load sponza mesh");
@@ -422,12 +474,14 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 				auto [sponzaSubmeshes_, sponzaMaterials_] = indirect.pushFromFile("res/sponza/sponza.obj");
 				append(sponzaSubmeshes, sponzaSubmeshes_);
 				sphereSubmesh = indirect.pushSphere(21, 21, 1.f);
+				auto [floodlightSubmeshes_, floodlightMaterials_] = indirect.pushFromFile("res/floodlight.fbx");
 
 				sponzaMaterials = std::move(sponzaMaterials_);
-
+				floodlightSubmeshes = std::move(floodlightSubmeshes_);
 
 				for (auto& vertex : indirect.vertices)
 				{
+					// TODO: This is only working for the sponza part (because of the scaling).
 					vec4 barycentric;
 					vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
 				}
@@ -460,9 +514,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			PROFILE_BLOCK("Set up indirect command buffers");
 
 			uint32 numSpheres = 5;
-			numIndirectDrawCalls = (uint32)sponzaSubmeshes.size() + numSpheres;
+			numIndirectDrawCalls = (uint32)sponzaSubmeshes.size() + numSpheres + (uint32)floodlightSubmeshes.size();
 			indirect_command* indirectCommands = new indirect_command[numIndirectDrawCalls];
-			indirect_shadow_command* indirectShadowCommands = new indirect_shadow_command[numIndirectDrawCalls];
+			indirect_depth_only_command* indirectShadowCommands = new indirect_depth_only_command[numIndirectDrawCalls];
 
 			mat4 model = createScaleMatrix(0.03f);
 
@@ -508,6 +562,33 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 				indirectShadowCommands[i].modelMatrix = indirectCommands[i].modelMatrix;
 				indirectShadowCommands[i].drawArguments = indirectCommands[i].drawArguments;
 			}
+			for (uint32 i = (uint32)sponzaSubmeshes.size() + numSpheres; i < (uint32)(sponzaSubmeshes.size() + floodlightSubmeshes.size()) + numSpheres; ++i)
+			{
+				uint32 id = i - (uint32)sponzaSubmeshes.size() - numSpheres;
+
+				submesh_info mesh = floodlightSubmeshes[id];
+
+				mat4 model = createModelMatrix(vec3(flashLight.worldSpacePosition.x, 0.f, flashLight.worldSpacePosition.z), 
+					createQuaternionFromAxisAngle(vec3(0.f, 1.f, 0.f), DirectX::XM_PIDIV2) *
+					createQuaternionFromAxisAngle(vec3(1.f, 0.f, 0.f), -DirectX::XM_PIDIV2),
+					0.03f);
+				indirectCommands[i].modelMatrix = model;
+				indirectCommands[i].material.textureID = 0;
+				indirectCommands[i].material.usageFlags = 0;
+				indirectCommands[i].material.roughnessOverride = 1.f;
+				indirectCommands[i].material.metallicOverride = 0.5f;
+				indirectCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
+				indirectCommands[i].material.drawID = i;
+
+				indirectCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
+				indirectCommands[i].drawArguments.InstanceCount = 1;
+				indirectCommands[i].drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
+				indirectCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
+				indirectCommands[i].drawArguments.StartInstanceLocation = 0;
+
+				indirectShadowCommands[i].modelMatrix = model;
+				indirectShadowCommands[i].drawArguments = indirectCommands[i].drawArguments;
+			}
 
 			indirectCommandBuffer.initialize(device, indirectCommands, numIndirectDrawCalls, commandList);
 			indirectDepthOnlyCommandBuffer.initialize(device, indirectShadowCommands, numIndirectDrawCalls, commandList);
@@ -521,30 +602,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	}
 
-
-	sun.worldSpaceDirection = comp_vec(-0.6f, -1.f, -0.3f, 0.f).normalize();
-	sun.color = vec4(1.f, 0.93f, 0.76f, 0.f) * 50.f;
-
-	sun.cascadeDistances.data[0] = 9.f;
-	sun.cascadeDistances.data[1] = 39.f;
-	sun.cascadeDistances.data[2] = 74.f;
-	sun.cascadeDistances.data[3] = 10000.f;
-
-	sun.bias = vec4(0.001f, 0.0015f, 0.0015f, 0.0035f);
-	sun.blendArea = 0.07f;
-
-
-	pointLights.resize(512);
-	for (uint32 i = 0; i < pointLights.size(); ++i)
-	{
-		point_light& l = pointLights[i];
-		l.color = vec4(1, randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), 1);
-		l.worldSpacePositionAndRadius.xyz = vec3(i / 10.f, 1.f, (float)(i % 10));
-		l.worldSpacePositionAndRadius.w = 20.f;
-	}
-
-	pointLightBuffer.initialize(device, pointLights.data(), (uint32)pointLights.size(), commandList);
-	SET_NAME(pointLightBuffer.resource, "Point light buffer");
 	
 	{
 		PROFILE_BLOCK("Load environment");
@@ -580,7 +637,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		descriptorHeapDesc.NumDescriptors =
 			(uint32)indirectMaterials.size() * 4	// Materials.
 			+ 3										// PBR Textures.
-			+ MAX_NUM_SUN_SHADOW_CASCADES			// Shadow map cascades.
+			+ MAX_NUM_SUN_SHADOW_CASCADES			// Sun shadow map cascades.
+			+ 1										// Spot light shadow map.
 			+ 3										// Light probes.
 			;
 		descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -613,11 +671,11 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			cpuHandle.Offset(descriptorHandleIncrementSize);
 			gpuHandle.Offset(descriptorHandleIncrementSize);
 		}
-		shadowCascadesOffset = gpuHandle;
+		shadowMapsOffset = gpuHandle;
 		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
 		{
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = dx_texture::getReadFormatFromTypeless(depthTexture.resource->GetDesc().Format);
+			srvDesc.Format = dx_texture::getReadFormatFromTypeless(sunShadowMapTexture[i].resource->GetDesc().Format);
 			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 			srvDesc.Texture2D.MipLevels = 1;
@@ -635,6 +693,17 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			srvDesc.Texture2D.MipLevels = 0;
 
 			device->CreateShaderResourceView(nullptr, &srvDesc,	cpuHandle);
+			cpuHandle.Offset(descriptorHandleIncrementSize);
+			gpuHandle.Offset(descriptorHandleIncrementSize);
+		}
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+			srvDesc.Format = dx_texture::getReadFormatFromTypeless(spotLightShadowMapTexture.resource->GetDesc().Format);
+			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+			srvDesc.Texture2D.MipLevels = 1;
+
+			device->CreateShaderResourceView(spotLightShadowMapTexture.resource.Get(), &srvDesc, cpuHandle);
 			cpuHandle.Offset(descriptorHandleIncrementSize);
 			gpuHandle.Offset(descriptorHandleIncrementSize);
 		}
@@ -766,8 +835,7 @@ void dx_game::update(float dt)
 	camera.position = camera.position + camera.rotation * inputMovement * dt * CAMERA_MOVEMENT_SPEED * inputSpeedModifier;
 	camera.updateMatrices(width, height);
 
-	sun.updateMatrices(camera);
-
+#if ENABLE_PARTICLES
 	particleSystemTime += dt;
 
 	particleSystem1.spawnPosition.x = cos(particleSystemTime) * 20.f;
@@ -779,6 +847,7 @@ void dx_game::update(float dt)
 	particleSystem2.update(dt);
 
 	particleSystem3.update(dt);
+#endif
 
 	this->dt = dt;
 
@@ -803,6 +872,19 @@ void dx_game::update(float dt)
 				gui.slider("Blend area", sun.blendArea, 0.f, 1.f);
 			}
 
+			DEBUG_GROUP(gui, "Flash light")
+			{
+				float angles[] = { DirectX::XMConvertToDegrees(flashLight.innerAngle), DirectX::XMConvertToDegrees(flashLight.outerAngle) };
+				if (gui.multislider("Radii", angles, 2, 0.f, 90.f, 1.f))
+				{
+					flashLight.innerAngle = DirectX::XMConvertToRadians(angles[0]);
+					flashLight.outerAngle = DirectX::XMConvertToRadians(angles[1]);
+				}
+				gui.slider("Linear attenuation", flashLight.attenuation.linear, 0.f, 3.f);
+				gui.slider("Quadratic attenuation", flashLight.attenuation.quadratic, 0.f, 4.f);
+				gui.slider("Bias", flashLight.bias, 0.f, 0.01f);
+			}
+
 			DEBUG_GROUP(gui, "Light probes")
 			{
 				gui.toggle("Show light probes", showLightProbes);
@@ -812,6 +894,9 @@ void dx_game::update(float dt)
 		}
 		gui.textF("%u draw calls", numIndirectDrawCalls);
 	}
+
+	sun.updateMatrices(camera);
+	flashLight.updateMatrices();
 }
 
 void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
@@ -821,6 +906,7 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress = commandList->uploadDynamicConstantBuffer(cameraCB);
 	D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress = commandList->uploadDynamicConstantBuffer(sun);
+	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress = commandList->uploadDynamicConstantBuffer(flashLight);
 
 #if DEPTH_PREPASS
 	// Depth pre pass.
@@ -877,8 +963,11 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_METALLICS, metallicsOffset);
 
 		// Sun.
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_SHADOWMAPS, shadowCascadesOffset);
 		commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_DIRECTIONAL, sunCBAddress);
+		commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_SPOT, spotLightCBAddress);
+
+		// Shadow maps.
+		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_SHADOWMAPS, shadowMapsOffset);
 
 		// Light probes.
 		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_LIGHTPROBES, lightProbeOffset);
@@ -897,6 +986,25 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 
 	// Sky.
 	sky.render(commandList, cameraCBAddress, cubemap);
+}
+
+void dx_game::renderShadowmap(dx_command_list* commandList, dx_render_target& shadowMapRT, const mat4& vp)
+{
+	PROFILE_FUNCTION();
+
+	commandList->setRenderTarget(shadowMapRT);
+	commandList->setViewport(shadowMapRT.viewport);
+
+	commandList->clearDepth(shadowMapRT.depthStencilAttachment->getDepthStencilView());
+
+	// This only works, because the vertex shader expects the vp matrix as the first argument.
+	commandList->setGraphics32BitConstants(INDIRECT_ROOTPARAM_CAMERA, vp);
+
+	// Static scene.
+	commandList->drawIndirect(
+		indirectDepthOnlyCommandSignature,
+		numIndirectDrawCalls,
+		indirectDepthOnlyCommandBuffer);
 }
 
 void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
@@ -926,23 +1034,17 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 
 		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
 		{
-			commandList->setRenderTarget(sunShadowMapRT[i]);
-			commandList->setViewport(sunShadowMapRT[i].viewport);
+			renderShadowmap(commandList, sunShadowMapRT[i], sun.vp[i]);
+		}
+		renderShadowmap(commandList, spotLightShadowMapRT, flashLight.vp);
 
-			commandList->clearDepth(sunShadowMapRT[i].depthStencilAttachment->getDepthStencilView());
-
-			// This only works, because the vertex shader expects the vp matrix as the first argument.
-			commandList->setGraphics32BitConstants(INDIRECT_ROOTPARAM_CAMERA, sun.vp[i]);
-
-			// Static scene.
-			commandList->drawIndirect(
-				indirectDepthOnlyCommandSignature,
-				numIndirectDrawCalls,
-				indirectDepthOnlyCommandBuffer);
-
-			commandList->transitionBarrier(sunShadowMapTexture[i], 
+		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
+		{
+			commandList->transitionBarrier(sunShadowMapTexture[i],
 				D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		}
+		commandList->transitionBarrier(spotLightShadowMapTexture,
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	}
 
 
@@ -1037,11 +1139,14 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	{
 		debugDisplay.renderFrustum(commandList, camera, mainCameraFrustum, vec4(1.f, 1.f, 1.f, 1.f));
 	}
+	//debugDisplay.renderBillboard(commandList, camera, flashLight.worldSpacePosition.xyz, vec2(7.f, 7.f), spotLightShadowMapTexture, true, vec4(1, 1, 1, 1), true);
 
+#if ENABLE_PARTICLES
 	particles.renderParticleSystem(commandList, camera, particleSystem1);
 	particles.renderParticleSystem(commandList, camera, particleSystem2);
 	particles.renderParticleSystem(commandList, camera, particleSystem3);
-	
+#endif
+
 	if (showLightProbes)
 	{
 		if (lightProbeSystem.tempSphericalHarmonicsBuffer.resource)

@@ -43,7 +43,7 @@ static vec4 unpackColorR11G11B10(uint32 c)
 	return vec4(
 		remap(r, 0.f, rMax, -1.f, 1.f),
 		remap(g, 0.f, gMax, -1.f, 1.f),
-		remap(b, 0.f, bMax, -1.f, 1.f), 
+		remap(b, 0.f, bMax, -1.f, 1.f),
 		1.f);
 }
 
@@ -293,7 +293,7 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 
 
 	this->lightProbePositions = lightProbePositions;
-	
+
 	setSphericalHarmonics(device, commandList, sphericalHarmonics);
 
 	{
@@ -412,7 +412,7 @@ void light_probe_system::setSphericalHarmonics(ComPtr<ID3D12Device2> device, dx_
 	}
 }
 
-void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget, 
+void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, const dx_render_target& renderTarget,
 	const std::vector<vec4>& lightProbePositions)
 {
 	spherical_harmonics defaultSH =
@@ -569,7 +569,7 @@ void light_probe_system::visualizeLightProbeCubemaps(dx_command_list* commandLis
 			mat4 mvp;
 			float uvzScale;
 		} cb = {
-			camera.viewProjectionMatrix* createModelMatrix(lightProbePositions[i].xyz, quat::identity),
+			camera.viewProjectionMatrix * createModelMatrix(lightProbePositions[i].xyz, quat::identity),
 			uvzScale
 		};
 		commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, cb);
@@ -582,7 +582,7 @@ void light_probe_system::visualizeLightProbeCubemaps(dx_command_list* commandLis
 		srvDesc.TextureCubeArray.NumCubes = 1;
 		srvDesc.TextureCubeArray.First2DArrayFace = i * 6;
 
-		commandList->setShaderResourceView(VISUALIZE_LIGHTPROBE_ROOTPARAM_TEXTURE, 0, lightProbeHDRTexture, 
+		commandList->setShaderResourceView(VISUALIZE_LIGHTPROBE_ROOTPARAM_TEXTURE, 0, lightProbeHDRTexture,
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
 
 		commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
@@ -606,7 +606,7 @@ void light_probe_system::visualizeSH(dx_command_list* commandList, const render_
 		mat4 mvp;
 		float uvzScale;
 	} cb = {
-		camera.viewProjectionMatrix* createModelMatrix(position, quat::identity),
+		camera.viewProjectionMatrix * createModelMatrix(position, quat::identity),
 		uvzScale
 	};
 	commandList->setGraphics32BitConstants(VISUALIZE_LIGHTPROBE_ROOTPARAM_CB, cb);
@@ -664,4 +664,63 @@ void light_probe_system::visualizeLightProbes(dx_command_list* commandList, cons
 			commandList->drawIndexed(lightProbeMesh.indexBuffer.numIndices, 1, 0, 0, 0);
 		}
 	}
+}
+
+void directional_light::updateMatrices(const render_camera& camera)
+{
+	comp_mat viewMatrix = createLookAt(vec3(0.f, 0.f, 0.f), worldSpaceDirection, vec3(0.f, 1.f, 0.f));
+
+	vec3 worldForward = camera.rotation * vec3(0.f, 0.f, -1.f);
+	camera_frustum worldFrustum = camera.getWorldSpaceFrustum();
+
+	comp_vec worldBottomLeft = worldFrustum.farBottomLeft - worldFrustum.nearBottomLeft;
+	comp_vec worldBottomRight = worldFrustum.farBottomRight - worldFrustum.nearBottomRight;
+	comp_vec worldTopLeft = worldFrustum.farTopLeft - worldFrustum.nearTopLeft;
+	comp_vec worldTopRight = worldFrustum.farTopRight - worldFrustum.nearTopRight;
+
+	worldBottomLeft /= dot3(worldBottomLeft, worldForward);
+	worldBottomRight /= dot3(worldBottomRight, worldForward);
+	worldTopLeft /= dot3(worldTopLeft, worldForward);
+	worldTopRight /= dot3(worldTopRight, worldForward);
+
+	comp_vec worldEye = vec4(camera.position, 1.f);
+	comp_vec sunEye = viewMatrix * worldEye;
+
+	bounding_box initialBB = bounding_box::negativeInfinity();
+	initialBB.grow(sunEye);
+
+	for (uint32 i = 0; i < numShadowCascades; ++i)
+	{
+		float distance = cascadeDistances.data[i];
+
+		comp_vec sunBottomLeft = viewMatrix * (worldEye + distance * worldBottomLeft);
+		comp_vec sunBottomRight = viewMatrix * (worldEye + distance * worldBottomRight);
+		comp_vec sunTopLeft = viewMatrix * (worldEye + distance * worldTopLeft);
+		comp_vec sunTopRight = viewMatrix * (worldEye + distance * worldTopRight);
+
+		bounding_box bb = initialBB;
+		bb.grow(sunBottomLeft);
+		bb.grow(sunBottomRight);
+		bb.grow(sunTopLeft);
+		bb.grow(sunTopRight);
+
+		bb.expand(2.f);
+
+		comp_mat projMatrix = createOrthographicMatrix(bb.min.x, bb.max.x, bb.max.y, bb.min.y, -bb.max.z - SHADOW_MAP_NEGATIVE_Z_OFFSET, -bb.min.z);
+
+		vp[i] = projMatrix * viewMatrix;
+	}
+
+	texelSize = 1.f / (float)shadowMapDimensions;
+}
+
+void spot_light::updateMatrices()
+{
+	comp_mat viewMatrix = createLookAt(worldSpacePosition, worldSpacePosition + worldSpaceDirection, vec3(0.f, 1.f, 0.f));
+	comp_mat projMatrix = createPerspectiveMatrix(outerAngle * 2.f, 1.f, 0.1f, 150.f);
+	vp = projMatrix * viewMatrix;
+
+	texelSize = 1.f / (float)shadowMapDimensions;
+	outerCutoff = cos(outerAngle);
+	innerCutoff = cos(innerAngle);
 }

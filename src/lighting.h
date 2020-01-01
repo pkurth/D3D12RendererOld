@@ -18,6 +18,24 @@
 
 #define LIGHT_PROBE_RESOLUTION 32
 
+struct light_attenuation
+{
+	float constant = 1.f;
+	float linear;
+	float quadratic;
+
+
+	float getAttenuation(float distance)
+	{
+		return 1.f / (constant + linear * distance + quadratic * distance * distance);
+	}
+
+	float getMaxDistance(float lightMax)
+	{
+		return (-linear + std::sqrtf(linear * linear - 4.f * quadratic * (constant - (256.f / 5.f) * lightMax)))
+			/ (2.f * quadratic);
+	}
+};
 
 struct directional_light
 {
@@ -33,54 +51,28 @@ struct directional_light
 	float texelSize;
 	uint32 shadowMapDimensions = 2048;
 	
+	void updateMatrices(const render_camera& camera);
+};
 
-	void updateMatrices(const render_camera& camera)
-	{
-		comp_mat viewMatrix = createLookAt(vec3(0.f, 0.f, 0.f), worldSpaceDirection, vec3(0.f, 1.f, 0.f));
-		
-		vec3 worldForward = camera.rotation * vec3(0.f, 0.f, -1.f);
-		camera_frustum worldFrustum = camera.getWorldSpaceFrustum();
+struct spot_light
+{
+	mat4 vp;
 
-		comp_vec worldBottomLeft = worldFrustum.farBottomLeft - worldFrustum.nearBottomLeft;
-		comp_vec worldBottomRight = worldFrustum.farBottomRight - worldFrustum.nearBottomRight;
-		comp_vec worldTopLeft = worldFrustum.farTopLeft - worldFrustum.nearTopLeft;
-		comp_vec worldTopRight = worldFrustum.farTopRight - worldFrustum.nearTopRight;
+	vec4 worldSpacePosition;
+	vec4 worldSpaceDirection;
+	vec4 color;
 
-		worldBottomLeft /= dot3(worldBottomLeft, worldForward);
-		worldBottomRight /= dot3(worldBottomRight, worldForward);
-		worldTopLeft /= dot3(worldTopLeft, worldForward);
-		worldTopRight /= dot3(worldTopRight, worldForward);
+	light_attenuation attenuation;
 
-		comp_vec worldEye = vec4(camera.position, 1.f);
-		comp_vec sunEye = viewMatrix * worldEye;
+	float innerAngle;
+	float outerAngle;
+	float innerCutoff; // cos(innerAngle).
+	float outerCutoff; // cos(outerAngle).
+	float texelSize;
+	float bias;
+	uint32 shadowMapDimensions = 2048;
 
-		bounding_box initialBB = bounding_box::negativeInfinity();
-		initialBB.grow(sunEye);
-
-		for (uint32 i = 0; i < numShadowCascades; ++i)
-		{
-			float distance = cascadeDistances.data[i];
-
-			comp_vec sunBottomLeft = viewMatrix * (worldEye + distance * worldBottomLeft);
-			comp_vec sunBottomRight = viewMatrix * (worldEye + distance * worldBottomRight);
-			comp_vec sunTopLeft = viewMatrix * (worldEye + distance * worldTopLeft);
-			comp_vec sunTopRight = viewMatrix * (worldEye + distance * worldTopRight);
-
-			bounding_box bb = initialBB;
-			bb.grow(sunBottomLeft);
-			bb.grow(sunBottomRight);
-			bb.grow(sunTopLeft);
-			bb.grow(sunTopRight);
-
-			bb.expand(2.f);
-
-			comp_mat projMatrix = createOrthographicMatrix(bb.min.x, bb.max.x, bb.max.y, bb.min.y, -bb.max.z - SHADOW_MAP_NEGATIVE_Z_OFFSET, -bb.min.z);
-
-			vp[i] = projMatrix * viewMatrix;
-		}
-
-		texelSize = 1.f / (float)shadowMapDimensions;
-	}
+	void updateMatrices();
 };
 
 struct point_light
