@@ -579,29 +579,13 @@ int main()
 			dx_descriptor_allocator::releaseStaleDescriptors(frameValues[currentBackBufferIndex]);
 		}
 
-		dx_command_list* commandList;
 		{
 			PROFILE_BLOCK("Record render commands");
 
 			ComPtr<ID3D12Resource> backBuffer = window.getCurrentBackBuffer();
-			commandList = renderCommandQueue.getAvailableCommandList();
-
-			// Transition backbuffer from "Present" to "Render Target", so we can render to it.
-			commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
 			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = window.getCurrentRenderTargetView();
 
-			game.render(commandList, rtv);
-
-			// Transition back to "Present".
-			commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
-		}
-
-		{
-			PROFILE_BLOCK("Execute command list");
-
-			// Run command list.
-			fenceValues[currentBackBufferIndex] = renderCommandQueue.executeCommandList(commandList);
+			fenceValues[currentBackBufferIndex] = game.render(backBuffer, rtv);
 		}
 
 		{

@@ -59,10 +59,10 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 		indirect_depth_only_command& depthOnlyCommand = depthOnlyCommands[i + currentSize];
 
 		command.modelMatrix = transform;
-		command.material.textureID = mesh.materialIndex;
-		command.material.usageFlags = (USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
+
+		command.material.textureID_usageFlags = (mesh.materialIndex << 16) |
+			(USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
 		command.material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
-		command.material.drawID = i;
 
 		command.drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
 		command.drawArguments.InstanceCount = 1;
@@ -96,12 +96,10 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 		indirect_depth_only_command& depthOnlyCommand = depthOnlyCommands[i + currentSize];
 
 		command.modelMatrix = transform;
-		command.material.textureID = 0;
-		command.material.usageFlags = 0;
+		command.material.textureID_usageFlags = 0;
 		command.material.albedoTint = color;
 		command.material.roughnessOverride = roughness;
 		command.material.metallicOverride = metallic;
-		command.material.drawID = i;
 
 		command.drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
 		command.drawArguments.InstanceCount = 1;
@@ -138,12 +136,10 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 			indirect_depth_only_command& depthOnlyCommand = depthOnlyCommands[instance + instanceCount * i + currentSize];
 
 			command.modelMatrix = transforms[instance];
-			command.material.textureID = 0;
-			command.material.usageFlags = 0;
+			command.material.textureID_usageFlags = 0;
 			command.material.albedoTint = colors[instance];
 			command.material.roughnessOverride = roughnesses[instance];
 			command.material.metallicOverride = metallics[instance];
-			command.material.drawID = i;
 
 			command.drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
 			command.drawArguments.InstanceCount = 1;

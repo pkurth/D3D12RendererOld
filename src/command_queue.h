@@ -28,6 +28,8 @@ public:
 
 	bool isFenceComplete(uint64 fenceValue);
 	void waitForFenceValue(uint64 fenceValue);
+	void waitForOtherQueue(dx_command_queue& other);
+	
 	void flush();
 
 	ComPtr<ID3D12CommandQueue> getD3D12CommandQueue() const;
@@ -41,8 +43,6 @@ public:
 protected:
 	uint64 signal();
 	void processInFlightCommandLists();
-
-	void wait(dx_command_queue& other);
 
 private:
 	

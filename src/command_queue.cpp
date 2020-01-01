@@ -126,7 +126,7 @@ uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>
 
 	if (extraComputeCommandLists.size() > 0)
 	{
-		computeCommandQueue.wait(*this);
+		computeCommandQueue.waitForOtherQueue(*this);
 		computeCommandQueue.executeCommandLists(extraComputeCommandLists);
 	}
 
@@ -220,7 +220,7 @@ void dx_command_queue::processInFlightCommandLists()
 	}
 }
 
-void dx_command_queue::wait(dx_command_queue& other)
+void dx_command_queue::waitForOtherQueue(dx_command_queue& other)
 {
 	commandQueue->Wait(other.fence.Get(), other.fenceValue);
 }

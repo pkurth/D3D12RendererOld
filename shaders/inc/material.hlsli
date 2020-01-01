@@ -9,15 +9,11 @@
 
 struct material_cb
 {
-	uint textureID;
-	uint usageFlags;
+	float4 albedoTint;
+	uint textureID_usageFlags;
 
 	float roughnessOverride;
 	float metallicOverride;
-
-	float4 albedoTint;
-
-	uint drawID;
 };
 
 #endif

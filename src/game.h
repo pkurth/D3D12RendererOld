@@ -29,7 +29,7 @@ public:
 	void resize(uint32 width, uint32 height);
 
 	void update(float dt);
-	void render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV);
+	uint64 render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV);
 
 	bool keyDownCallback(keyboard_event event);
 	bool keyUpCallback(keyboard_event event);

@@ -20,15 +20,12 @@ struct dx_material
 
 struct material_cb
 {
-	uint32 textureID;
-	uint32 usageFlags;
+	vec4 albedoTint;
+
+	uint32 textureID_usageFlags;
 
 	float roughnessOverride;
 	float metallicOverride;
-
-	vec4 albedoTint;
-
-	uint32 drawID;
 };
 
 

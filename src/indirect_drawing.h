@@ -29,7 +29,6 @@ struct indirect_command
 	mat4 modelMatrix;
 	material_cb material;
 	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
-	uint32 padding[2];
 };
 
 struct indirect_depth_only_command

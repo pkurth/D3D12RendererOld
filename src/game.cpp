@@ -517,8 +517,10 @@ void dx_game::renderShadowmap(dx_command_list* commandList, dx_render_target& sh
 		indirectBuffer.depthOnlyCommandBuffer);
 }
 
-void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
+uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
 {
+	dx_command_list* commandList = dx_command_queue::renderCommandQueue.getAvailableCommandList();
+
 	PIXSetMarker(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 0, 0), "Frame start.");
 
 	commandList->setScissor(scissorRect);
@@ -674,16 +676,26 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 	commandList->transitionBarrier(lightProbeSystem.tempSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
 
 
-	// Resolve to screen.
-	// No need to clear RTV (or for a depth buffer), since we are blitting the whole lighting buffer.
+
+
+
+
+
+
+	// Transition backbuffer from "Present" to "Render Target", so we can render to it.
+	commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+
 	commandList->setScreenRenderTarget(&screenRTV, 1, nullptr);
 
-	// Present.
 	present.render(commandList, hdrTexture);
-
-	// GUI.
 	processAndDisplayProfileEvents(gui);
 	gui.render(commandList, viewport); // Probably not completely correct here, since alpha blending assumes linear colors?
+
+	// Transition back to "Present".
+	commandList->transitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
+
+	return dx_command_queue::renderCommandQueue.executeCommandList(commandList);
 }
 
 bool dx_game::keyDownCallback(keyboard_event event)

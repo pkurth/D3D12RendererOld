@@ -24,29 +24,30 @@ Texture2D<float> metallicTextures[64]	: register(t0, space3);
 
 ps_output main(ps_input IN)
 {
-	ps_output OUT;
+	uint textureID = material.textureID_usageFlags >> 16;
+	uint usageFlags = material.textureID_usageFlags & 0xFFFF;
 
-	float4 color = ((material.usageFlags & USE_ALBEDO_TEXTURE) 
-		? albedoTextures[material.textureID].Sample(linearWrapSampler, IN.uv)
+	float4 color = ((usageFlags & USE_ALBEDO_TEXTURE) 
+		? albedoTextures[textureID].Sample(linearWrapSampler, IN.uv)
 		: float4(1.f, 1.f, 1.f, 1.f))
 		* material.albedoTint;
 
-	float3 N = (material.usageFlags & USE_NORMAL_TEXTURE)
-		? mul(normalTextures[material.textureID].Sample(linearWrapSampler, IN.uv).xyz * 2.f - float3(1.f, 1.f, 1.f), IN.tbn)
+	float3 N = (usageFlags & USE_NORMAL_TEXTURE)
+		? mul(normalTextures[textureID].Sample(linearWrapSampler, IN.uv).xyz * 2.f - float3(1.f, 1.f, 1.f), IN.tbn)
 		: IN.tbn[2];
 
-	float roughness = (material.usageFlags & USE_ROUGHNESS_TEXTURE) 
-		? roughnessTextures[material.textureID].Sample(linearWrapSampler, IN.uv) 
+	float roughness = (usageFlags & USE_ROUGHNESS_TEXTURE) 
+		? roughnessTextures[textureID].Sample(linearWrapSampler, IN.uv) 
 		: material.roughnessOverride;
 
-	float metallic = (material.usageFlags & USE_METALLIC_TEXTURE) 
-		? metallicTextures[material.textureID].Sample(linearWrapSampler, IN.uv)
+	float metallic = (usageFlags & USE_METALLIC_TEXTURE) 
+		? metallicTextures[textureID].Sample(linearWrapSampler, IN.uv)
 		: material.metallicOverride;
 	float ao = 1.f;// (material.usageFlags & USE_AO_TEXTURE) ? RMAO.z : 1.f;
 
+	ps_output OUT;
 	OUT.albedoAO = float4(color.xyz, ao);
 	OUT.emission = float4(0.f, 0.f, 0.f, 0.f);
 	OUT.normal = float4(encodeNormal(N), roughness, metallic);
-
 	return OUT;
 }

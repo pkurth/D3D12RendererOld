@@ -75,22 +75,25 @@ static float sampleShadowMap(float4x4 vp, float3 worldPosition, Texture2D<float>
 
 ps_output main(ps_input IN)
 {
-	float4 albedo = ((material.usageFlags & USE_ALBEDO_TEXTURE)
-		? albedoTextures[material.textureID].Sample(linearWrapSampler, IN.uv)
+	uint textureID = material.textureID_usageFlags >> 16;
+	uint usageFlags = material.textureID_usageFlags & 0xFFFF;
+
+	float4 albedo = ((usageFlags & USE_ALBEDO_TEXTURE)
+		? albedoTextures[textureID].Sample(linearWrapSampler, IN.uv)
 		: float4(1.f, 1.f, 1.f, 1.f))
 		* material.albedoTint;
 
-	float3 N = (material.usageFlags & USE_NORMAL_TEXTURE)
-		? mul(normalTextures[material.textureID].Sample(linearWrapSampler, IN.uv).xyz * 2.f - float3(1.f, 1.f, 1.f), IN.tbn)
+	float3 N = (usageFlags & USE_NORMAL_TEXTURE)
+		? mul(normalTextures[textureID].Sample(linearWrapSampler, IN.uv).xyz * 2.f - float3(1.f, 1.f, 1.f), IN.tbn)
 		: IN.tbn[2];
 
-	float roughness = (material.usageFlags & USE_ROUGHNESS_TEXTURE)
-		? roughnessTextures[material.textureID].Sample(linearWrapSampler, IN.uv)
+	float roughness = (usageFlags & USE_ROUGHNESS_TEXTURE)
+		? roughnessTextures[textureID].Sample(linearWrapSampler, IN.uv)
 		: material.roughnessOverride;
 	roughness = clamp(roughness, 0.01f, 0.99f);
 
-	float metallic = (material.usageFlags & USE_METALLIC_TEXTURE)
-		? metallicTextures[material.textureID].Sample(linearWrapSampler, IN.uv)
+	float metallic = (usageFlags & USE_METALLIC_TEXTURE)
+		? metallicTextures[textureID].Sample(linearWrapSampler, IN.uv)
 		: material.metallicOverride;
 	float ao = 1.f;// (material.usageFlags & USE_AO_TEXTURE) ? RMAO.z : 1.f;
 
