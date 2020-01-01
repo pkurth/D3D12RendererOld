@@ -134,6 +134,12 @@ struct cpu_triangle_mesh
 
 	std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> pushFromFile(const std::string& filename);
 
+	void append(cpu_triangle_mesh<vertex_t>& other)
+	{
+		::append(vertices, other.vertices);
+		::append(triangles, other.triangles);
+	}
+
 private:
 	submesh_info loadAssimpMesh(const aiMesh* mesh);
 	submesh_material_info loadAssimpMaterial(const aiMaterial* material, const fs::path& parent);

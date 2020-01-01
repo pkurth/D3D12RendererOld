@@ -154,6 +154,7 @@
     <ClCompile Include="src\game.cpp" />
     <ClCompile Include="src\generate_mips.cpp" />
     <ClCompile Include="src\graphics.cpp" />
+    <ClCompile Include="src\indirect_drawing.cpp" />
     <ClCompile Include="src\lighting.cpp" />
     <ClCompile Include="src\math.cpp" />
     <ClCompile Include="src\particles.cpp" />
@@ -193,6 +194,7 @@
     <ClInclude Include="src\font.h" />
     <ClInclude Include="src\generate_mips.h" />
     <ClInclude Include="src\graphics.h" />
+    <ClInclude Include="src\indirect_drawing.h" />
     <ClInclude Include="src\input.h" />
     <ClInclude Include="src\lighting.h" />
     <ClInclude Include="src\material.h" />

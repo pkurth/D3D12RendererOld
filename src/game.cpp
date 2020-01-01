@@ -12,32 +12,12 @@
 		- Anti aliasing.
 		- Multiple command lists.
 		- Frustum and occlusion culling.
-		- Spot lights with shadows.
 		- LOD.
 		- Volumetrics?
 		- VFX.
 */
 
-#define DEPTH_PREPASS 1
-
 #define ENABLE_PARTICLES 0
-
-#pragma pack(push, 1)
-struct indirect_command
-{
-	mat4 modelMatrix;
-	material_cb material;
-	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
-	uint32 padding[2];
-};
-
-struct indirect_depth_only_command
-{
-	mat4 modelMatrix;
-	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
-	uint32 padding[3];
-};
-#pragma pack(pop)
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
 {
@@ -121,194 +101,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	// Indirect.
 	{
-		PROFILE_BLOCK("Indirect pipeline");
-
-		ComPtr<ID3DBlob> vertexShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_indirect_vs.cso", &vertexShaderBlob));
-		ComPtr<ID3DBlob> pixelShaderBlob;
-		checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_indirect_forward_ps.cso", &pixelShaderBlob));
-
-		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "LIGHTPROBE_TETRAHEDRON", 0, DXGI_FORMAT_R32_UINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
-
-		// Root signature.
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-		CD3DX12_DESCRIPTOR_RANGE1 pbrTextures(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0);
-
-		CD3DX12_DESCRIPTOR_RANGE1 albedos(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 1);
-		CD3DX12_DESCRIPTOR_RANGE1 normals(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 2);
-		CD3DX12_DESCRIPTOR_RANGE1 roughnesses(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 3);
-		CD3DX12_DESCRIPTOR_RANGE1 metallics(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UNBOUNDED_DESCRIPTOR_RANGE, 0, 4);
-
-		CD3DX12_DESCRIPTOR_RANGE1 shadowMaps(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_NUM_SUN_SHADOW_CASCADES + 1, 0, 5); // Sun cascades + spot light.
-		
-		CD3DX12_DESCRIPTOR_RANGE1 pointLights(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, MAX_NUM_SUN_SHADOW_CASCADES, 5);
-
-		CD3DX12_DESCRIPTOR_RANGE1 lightProbes[] =
-		{
-			CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 6), // Positions.
-			CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 6), // Spherical harmonics.
-			CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 6), // Tetrahedra.
-		};
-
-		CD3DX12_ROOT_PARAMETER1 rootParameters[12];
-		rootParameters[INDIRECT_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_ALL); // Camera.
-		rootParameters[INDIRECT_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
-		rootParameters[INDIRECT_ROOTPARAM_MATERIAL].InitAsConstants(sizeof(material_cb) / sizeof(float), 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material.
-		
-		// PBR.
-		rootParameters[INDIRECT_ROOTPARAM_BRDF_TEXTURES].InitAsDescriptorTable(1, &pbrTextures, D3D12_SHADER_VISIBILITY_PIXEL);
-		
-		// Materials.
-		rootParameters[INDIRECT_ROOTPARAM_ALBEDOS].InitAsDescriptorTable(1, &albedos, D3D12_SHADER_VISIBILITY_PIXEL);
-		rootParameters[INDIRECT_ROOTPARAM_NORMALS].InitAsDescriptorTable(1, &normals, D3D12_SHADER_VISIBILITY_PIXEL);
-		rootParameters[INDIRECT_ROOTPARAM_ROUGHNESSES].InitAsDescriptorTable(1, &roughnesses, D3D12_SHADER_VISIBILITY_PIXEL);
-		rootParameters[INDIRECT_ROOTPARAM_METALLICS].InitAsDescriptorTable(1, &metallics, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		// Sun.
-		rootParameters[INDIRECT_ROOTPARAM_DIRECTIONAL].InitAsConstantBufferView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		// Spot light.
-		rootParameters[INDIRECT_ROOTPARAM_SPOT].InitAsConstantBufferView(4, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		// Shadow maps.
-		rootParameters[INDIRECT_ROOTPARAM_SHADOWMAPS].InitAsDescriptorTable(1, &shadowMaps, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		// Light probes.
-		rootParameters[INDIRECT_ROOTPARAM_LIGHTPROBES].InitAsDescriptorTable(arraysize(lightProbes), lightProbes, D3D12_SHADER_VISIBILITY_PIXEL);
-
-
-		CD3DX12_STATIC_SAMPLER_DESC samplers[] =
-		{
-			staticLinearWrapSampler(0),
-			staticLinearClampSampler(1),
-			staticPointBorderComparisonSampler(2),
-		};
-
-		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
-		rootSignatureDesc.Flags = rootSignatureFlags;
-		rootSignatureDesc.pParameters = rootParameters;
-		rootSignatureDesc.NumParameters = arraysize(rootParameters);
-		rootSignatureDesc.pStaticSamplers = samplers;
-		rootSignatureDesc.NumStaticSamplers = arraysize(samplers);
-		indirectGeometryRootSignature.initialize(device, rootSignatureDesc, false);
-
-
-		{
-			struct pipeline_state_stream
-			{
-				CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
-				CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
-				CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
-				CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-				CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-				CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
-				CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtvFormats;
-				CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
-#if DEPTH_PREPASS
-				CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1 depthStencil;
-#endif
-			} pipelineStateStream;
-
-			pipelineStateStream.rootSignature = indirectGeometryRootSignature.rootSignature.Get();
-			pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
-			pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-			pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-			pipelineStateStream.ps = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
-			pipelineStateStream.dsvFormat = lightingRT.depthStencilFormat;
-			pipelineStateStream.rtvFormats = lightingRT.renderTargetFormat;
-			pipelineStateStream.rasterizer = defaultRasterizerDesc;
-#if DEPTH_PREPASS
-			pipelineStateStream.depthStencil = equalDepthDesc;
-#endif
-
-			D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
-				sizeof(pipeline_state_stream), &pipelineStateStream
-			};
-			checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&indirectGeometryPipelineState)));
-		}
-
-		// Depth only pass (for depth pre pass and shadow maps).
-		rootParameters[INDIRECT_ROOTPARAM_CAMERA].InitAsConstants(16, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // VP matrix.
-		rootSignatureDesc.NumParameters = 2; // Don't need the materials.
-		rootSignatureDesc.NumStaticSamplers = 0;
-		rootSignatureDesc.Flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-		indirectDepthOnlyRootSignature.initialize(device, rootSignatureDesc);
-
-		{
-			struct pipeline_state_stream
-			{
-				CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE rootSignature;
-				CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT inputLayout;
-				CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
-				CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-				CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsvFormat;
-				CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rasterizer;
-			} pipelineStateStream;
-
-			pipelineStateStream.rootSignature = indirectDepthOnlyRootSignature.rootSignature.Get();
-			pipelineStateStream.inputLayout = { inputLayout, arraysize(inputLayout) };
-			pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-			pipelineStateStream.vs = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-			pipelineStateStream.dsvFormat = sunShadowMapRT[0].depthStencilFormat;
-			pipelineStateStream.rasterizer = defaultRasterizerDesc;
-
-			D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
-				sizeof(pipeline_state_stream), &pipelineStateStream
-			};
-			checkResult(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&indirectDepthOnlyPipelineState)));
-		}
-
-
-		SET_NAME(indirectGeometryRootSignature.rootSignature, "Indirect Root Signature");
-		SET_NAME(indirectGeometryPipelineState, "Indirect Pipeline");
-		SET_NAME(indirectDepthOnlyRootSignature.rootSignature, "Indirect Shadow Root Signature");
-		SET_NAME(indirectDepthOnlyPipelineState, "Indirect Shadow Pipeline");
-
-
-		// Command Signature.
-
-		D3D12_INDIRECT_ARGUMENT_DESC argumentDescs[3];
-		argumentDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
-		argumentDescs[0].Constant.RootParameterIndex = INDIRECT_ROOTPARAM_MODEL;
-		argumentDescs[0].Constant.DestOffsetIn32BitValues = 0;
-		argumentDescs[0].Constant.Num32BitValuesToSet = 16;
-
-		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
-		argumentDescs[1].Constant.RootParameterIndex = INDIRECT_ROOTPARAM_MATERIAL;
-		argumentDescs[1].Constant.DestOffsetIn32BitValues = 0;
-		argumentDescs[1].Constant.Num32BitValuesToSet = rootParameters[INDIRECT_ROOTPARAM_MATERIAL].Constants.Num32BitValues;
-
-		argumentDescs[2].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
-
-		D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc = {};
-		commandSignatureDesc.pArgumentDescs = argumentDescs;
-		commandSignatureDesc.NumArgumentDescs = arraysize(argumentDescs);
-		commandSignatureDesc.ByteStride = sizeof(indirect_command);
-
-		checkResult(device->CreateCommandSignature(&commandSignatureDesc, indirectGeometryRootSignature.rootSignature.Get(),
-			IID_PPV_ARGS(&indirectGeometryCommandSignature)));
-		SET_NAME(indirectGeometryCommandSignature, "Indirect Command Signature");
-
-
-		argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
-		commandSignatureDesc.NumArgumentDescs = 2;
-		commandSignatureDesc.ByteStride = sizeof(indirect_depth_only_command);
-
-		checkResult(device->CreateCommandSignature(&commandSignatureDesc, indirectDepthOnlyRootSignature.rootSignature.Get(),
-			IID_PPV_ARGS(&indirectDepthOnlyCommandSignature)));
-		SET_NAME(indirectDepthOnlyCommandSignature, "Indirect Shadow Command Signature");
+		indirect.initialize(device, lightingRT, sunShadowMapRT->depthStencilFormat);
 	}
 
 
@@ -345,21 +138,21 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		PROFILE_BLOCK("Particle system");
 		
-		particleSystem1.initialize(10000);
+		particleSystem1.finish(10000);
 		particleSystem1.color.initializeAsLinear(vec4(0.7f, 0.3f, 0.4f, 1.f), vec4(0.8f, 0.8f, 0.1f, 1.f));
 		particleSystem1.maxLifetime.initializeAsRandom(0.2f, 1.5f);
 		particleSystem1.startVelocity.initializeAsRandom(vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f));
 		particleSystem1.spawnRate = 2000.f;
 		particleSystem1.gravityFactor = 1.f;
 
-		particleSystem2.initialize(10000);
+		particleSystem2.finish(10000);
 		particleSystem2.color.initializeAsRandom(vec4(0.f, 0.f, 0.f, 0.f), vec4(1.f, 1.f, 1.f, 1.f));
 		particleSystem2.maxLifetime.initializeAsConstant(1.f);
 		particleSystem2.startVelocity.initializeAsRandom(vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f));
 		particleSystem2.spawnRate = 2000.f;
 		particleSystem2.gravityFactor = 1.f;
 
-		particleSystem3.initialize(10000);
+		particleSystem3.finish(10000);
 		particleSystem3.spawnPosition = vec3(0.f, 3.f, 0.f);
 		particleSystem3.color.initializeAsLinear(vec4(4.f, 3.f, 10.f, 0.02f), vec4(0.4f, 0.1f, 0.2f, 0.f));
 		particleSystem3.maxLifetime.initializeAsRandom(1.f, 1.5f);
@@ -458,150 +251,59 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		PROFILE_BLOCK("Load sponza model");
 
-		std::vector<submesh_info> sponzaSubmeshes;
-		std::vector<submesh_material_info> sponzaMaterials;
-		submesh_info sphereSubmesh;
-		std::vector<submesh_info> floodlightSubmeshes;
+		cpu_triangle_mesh<vertex_3PUNTL> mesh;
+		auto [submeshes, materials] = mesh.pushFromFile("res/sponza/sponza.obj");
 
+		for (auto& vertex : mesh.vertices)
 		{
-			PROFILE_BLOCK("Load sponza mesh");
-
-			cpu_triangle_mesh<vertex_3PUNTL> indirect;
-
-			{
-				PROFILE_BLOCK("Load from file");
-
-				auto [sponzaSubmeshes_, sponzaMaterials_] = indirect.pushFromFile("res/sponza/sponza.obj");
-				append(sponzaSubmeshes, sponzaSubmeshes_);
-				sphereSubmesh = indirect.pushSphere(21, 21, 1.f);
-				auto [floodlightSubmeshes_, floodlightMaterials_] = indirect.pushFromFile("res/floodlight.fbx");
-
-				sponzaMaterials = std::move(sponzaMaterials_);
-				floodlightSubmeshes = std::move(floodlightSubmeshes_);
-
-				for (auto& vertex : indirect.vertices)
-				{
-					// TODO: This is only working for the sponza part (because of the scaling).
-					vec4 barycentric;
-					vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
-				}
-
-			}
-
-			{
-				PROFILE_BLOCK("Upload to GPU");
-				indirectMesh.initialize(device, commandList, indirect);
-
-				SET_NAME(indirectMesh.vertexBuffer.resource, "Indirect vertex buffer");
-				SET_NAME(indirectMesh.indexBuffer.resource, "Indirect index buffer");
-			}
+			vec4 barycentric;
+			vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
 		}
 
-		{
-			PROFILE_BLOCK("Load sponza textures");
-
-			indirectMaterials.resize(sponzaMaterials.size());
-			for (uint32 i = 0; i < sponzaMaterials.size(); ++i)
-			{
-				commandList->loadTextureFromFile(indirectMaterials[i].albedo, stringToWString(sponzaMaterials[i].albedoName), texture_type_color);
-				commandList->loadTextureFromFile(indirectMaterials[i].normal, stringToWString(sponzaMaterials[i].normalName), texture_type_noncolor);
-				commandList->loadTextureFromFile(indirectMaterials[i].roughness, stringToWString(sponzaMaterials[i].roughnessName), texture_type_noncolor);
-				commandList->loadTextureFromFile(indirectMaterials[i].metallic, stringToWString(sponzaMaterials[i].metallicName), texture_type_noncolor);
-			}
-		}
-
-		{
-			PROFILE_BLOCK("Set up indirect command buffers");
-
-			uint32 numSpheres = 5;
-			numIndirectDrawCalls = (uint32)sponzaSubmeshes.size() + numSpheres + (uint32)floodlightSubmeshes.size();
-			indirect_command* indirectCommands = new indirect_command[numIndirectDrawCalls];
-			indirect_depth_only_command* indirectShadowCommands = new indirect_depth_only_command[numIndirectDrawCalls];
-
-			mat4 model = createScaleMatrix(0.03f);
-
-			for (uint32 i = 0; i < sponzaSubmeshes.size(); ++i)
-			{
-				uint32 id = i;
-
-				submesh_info mesh = sponzaSubmeshes[id];
-
-				indirectCommands[i].modelMatrix = model;
-				indirectCommands[i].material.textureID = mesh.materialIndex;
-				indirectCommands[i].material.usageFlags = (USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
-				indirectCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
-				indirectCommands[i].material.drawID = i;
-
-				indirectCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
-				indirectCommands[i].drawArguments.InstanceCount = 1;
-				indirectCommands[i].drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
-				indirectCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
-				indirectCommands[i].drawArguments.StartInstanceLocation = 0;
-
-				indirectShadowCommands[i].modelMatrix = model;
-				indirectShadowCommands[i].drawArguments = indirectCommands[i].drawArguments;
-			}
-
-			for (uint32 i = (uint32)sponzaSubmeshes.size(); i < (uint32)sponzaSubmeshes.size() + numSpheres; ++i)
-			{
-				uint32 j = i - (uint32)sponzaSubmeshes.size();
-				indirectCommands[i].modelMatrix = createModelMatrix(vec3(-10.f + j * 4.f, 3.f, 0.f), quat::identity);
-				indirectCommands[i].material.textureID = 0;
-				indirectCommands[i].material.usageFlags = 0;
-				indirectCommands[i].material.roughnessOverride = (float)j / (numSpheres - 1);
-				indirectCommands[i].material.metallicOverride = 0.5f;
-				indirectCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
-				indirectCommands[i].material.drawID = i;
-
-				indirectCommands[i].drawArguments.IndexCountPerInstance = sphereSubmesh.numTriangles * 3;
-				indirectCommands[i].drawArguments.InstanceCount = 1;
-				indirectCommands[i].drawArguments.StartIndexLocation = sphereSubmesh.firstTriangle * 3;
-				indirectCommands[i].drawArguments.BaseVertexLocation = sphereSubmesh.baseVertex;
-				indirectCommands[i].drawArguments.StartInstanceLocation = 0;
-
-				indirectShadowCommands[i].modelMatrix = indirectCommands[i].modelMatrix;
-				indirectShadowCommands[i].drawArguments = indirectCommands[i].drawArguments;
-			}
-			for (uint32 i = (uint32)sponzaSubmeshes.size() + numSpheres; i < (uint32)(sponzaSubmeshes.size() + floodlightSubmeshes.size()) + numSpheres; ++i)
-			{
-				uint32 id = i - (uint32)sponzaSubmeshes.size() - numSpheres;
-
-				submesh_info mesh = floodlightSubmeshes[id];
-
-				mat4 model = createModelMatrix(vec3(flashLight.worldSpacePosition.x, 0.f, flashLight.worldSpacePosition.z), 
-					createQuaternionFromAxisAngle(vec3(0.f, 1.f, 0.f), DirectX::XM_PIDIV2) *
-					createQuaternionFromAxisAngle(vec3(1.f, 0.f, 0.f), -DirectX::XM_PIDIV2),
-					0.03f);
-				indirectCommands[i].modelMatrix = model;
-				indirectCommands[i].material.textureID = 0;
-				indirectCommands[i].material.usageFlags = 0;
-				indirectCommands[i].material.roughnessOverride = 1.f;
-				indirectCommands[i].material.metallicOverride = 0.5f;
-				indirectCommands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
-				indirectCommands[i].material.drawID = i;
-
-				indirectCommands[i].drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
-				indirectCommands[i].drawArguments.InstanceCount = 1;
-				indirectCommands[i].drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
-				indirectCommands[i].drawArguments.BaseVertexLocation = mesh.baseVertex;
-				indirectCommands[i].drawArguments.StartInstanceLocation = 0;
-
-				indirectShadowCommands[i].modelMatrix = model;
-				indirectShadowCommands[i].drawArguments = indirectCommands[i].drawArguments;
-			}
-
-			indirectCommandBuffer.initialize(device, indirectCommands, numIndirectDrawCalls, commandList);
-			indirectDepthOnlyCommandBuffer.initialize(device, indirectShadowCommands, numIndirectDrawCalls, commandList);
-
-			SET_NAME(indirectCommandBuffer.resource, "Indirect command buffer");
-			SET_NAME(indirectDepthOnlyCommandBuffer.resource, "Indirect depth only command buffer");
-
-			delete[] indirectShadowCommands;
-			delete[] indirectCommands;
-		}
-
+		indirectBuffer.push(mesh, submeshes, materials, createScaleMatrix(0.03f), commandList);
 	}
 
+	{
+		PROFILE_BLOCK("Load sphere model");
+
+		cpu_triangle_mesh<vertex_3PUNTL> mesh;
+		submesh_info sphereSubmesh = mesh.pushSphere(21, 21, 1.f);
+
+		vec4 colors[] = { vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f) };
+		float roughnesses[] = { 0.f, 0.25f, 0.5f, 0.75f, 1.f };
+		float metallics[] = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
+		mat4 transforms[] = {
+			createModelMatrix(vec3(-10.f + 0.f * 4.f, 3.f, 0.f), quat::identity),
+			createModelMatrix(vec3(-10.f + 1.f * 4.f, 3.f, 0.f), quat::identity),
+			createModelMatrix(vec3(-10.f + 2.f * 4.f, 3.f, 0.f), quat::identity),
+			createModelMatrix(vec3(-10.f + 3.f * 4.f, 3.f, 0.f), quat::identity),
+			createModelMatrix(vec3(-10.f + 4.f * 4.f, 3.f, 0.f), quat::identity),
+		};
+
+		// TODO: We cannot compute per vertex light probe indices for instanced objects.
+
+		indirectBuffer.push(mesh, { sphereSubmesh }, colors, roughnesses, metallics, transforms, 5, commandList);
+	}
+
+	{
+		PROFILE_BLOCK("Load flood light model");
+
+		cpu_triangle_mesh<vertex_3PUNTL> mesh;
+		auto [submeshes, materials] = mesh.pushFromFile("res/floodlight.fbx");
+
+		mat4 model = createModelMatrix(vec3(flashLight.worldSpacePosition.x, 0.f, flashLight.worldSpacePosition.z),
+			createQuaternionFromAxisAngle(vec3(0.f, 1.f, 0.f), DirectX::XM_PIDIV2) *
+			createQuaternionFromAxisAngle(vec3(1.f, 0.f, 0.f), -DirectX::XM_PIDIV2),
+			0.03f);
+
+		for (auto& vertex : mesh.vertices)
+		{
+			vec4 barycentric;
+			vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
+		}
+
+		indirectBuffer.push(mesh, submeshes, vec4(1.f, 1.f, 1.f, 1.f), 0.5f, 1.f, model, commandList);
+	}
 	
 	{
 		PROFILE_BLOCK("Load environment");
@@ -629,132 +331,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		}
 	}
 
-	{
-		PROFILE_BLOCK("Set up indirect descriptor heap");
-
-		D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
-		descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		descriptorHeapDesc.NumDescriptors =
-			(uint32)indirectMaterials.size() * 4	// Materials.
-			+ 3										// PBR Textures.
-			+ MAX_NUM_SUN_SHADOW_CASCADES			// Sun shadow map cascades.
-			+ 1										// Spot light shadow map.
-			+ 3										// Light probes.
-			;
-		descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&indirectDescriptorHeap)));
-		SET_NAME(indirectDescriptorHeap, "Indirect descriptor heap");
-
-		uint32 descriptorHandleIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-		CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(indirectDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-		CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(indirectDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-
-
-		brdfOffset = gpuHandle;
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = cubemap.resource->GetDesc().Format;
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-			srvDesc.TextureCube.MipLevels = (uint32)-1; // Use all mips.
-
-			device->CreateShaderResourceView(irradiance.resource.Get(), &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-
-			device->CreateShaderResourceView(prefilteredEnvironment.resource.Get(), &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-
-			device->CreateShaderResourceView(brdf.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-		shadowMapsOffset = gpuHandle;
-		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = dx_texture::getReadFormatFromTypeless(sunShadowMapTexture[i].resource->GetDesc().Format);
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D.MipLevels = 1;
-
-			device->CreateShaderResourceView(sunShadowMapTexture[i].resource.Get(), &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-		for (uint32 i = 0; i < MAX_NUM_SUN_SHADOW_CASCADES - sun.numShadowCascades; ++i)
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.Texture2D.MipLevels = 0;
-
-			device->CreateShaderResourceView(nullptr, &srvDesc,	cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = dx_texture::getReadFormatFromTypeless(spotLightShadowMapTexture.resource->GetDesc().Format);
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D.MipLevels = 1;
-
-			device->CreateShaderResourceView(spotLightShadowMapTexture.resource.Get(), &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-
-		lightProbeOffset = gpuHandle;
-		{
-			lightProbeSystem.lightProbePositionBuffer.createShaderResourceView(device, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-
-			lightProbeSystem.packedSphericalHarmonicsBuffer.createShaderResourceView(device, cpuHandle);
-			//lightProbeSystem.sphericalHarmonicsBuffer.createShaderResourceView(device, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-
-			lightProbeSystem.lightProbeTetrahedraBuffer.createShaderResourceView(device, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-
-		// I am putting the material textures at the very end of the descriptor heap, since they are variably sized and the shader complains if there
-		// is a buffer coming after them.
-		albedosOffset = gpuHandle;
-		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-		{
-			device->CreateShaderResourceView(indirectMaterials[i].albedo.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-		normalsOffset = gpuHandle;
-		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-		{
-			device->CreateShaderResourceView(indirectMaterials[i].normal.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-		roughnessesOffset = gpuHandle;
-		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-		{
-			device->CreateShaderResourceView(indirectMaterials[i].roughness.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-		metallicsOffset = gpuHandle;
-		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
-		{
-			device->CreateShaderResourceView(indirectMaterials[i].metallic.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-	}
+	indirectBuffer.finish(device, commandList, cubemap, irradiance, prefilteredEnvironment, brdf, sunShadowMapTexture, sun.numShadowCascades,
+		spotLightShadowMapTexture, lightProbeSystem);
 
 	{
 		PROFILE_BLOCK("Execute copy command list");
@@ -771,12 +349,12 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 		// Transition indirect textures to pixel shader state.
-		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
+		for (uint32 i = 0; i < indirectBuffer.indirectMaterials.size(); ++i)
 		{
-			commandList->transitionBarrier(indirectMaterials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			commandList->transitionBarrier(indirectMaterials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			commandList->transitionBarrier(indirectMaterials[i].roughness, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			commandList->transitionBarrier(indirectMaterials[i].metallic, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->transitionBarrier(indirectBuffer.indirectMaterials[i].albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->transitionBarrier(indirectBuffer.indirectMaterials[i].normal, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->transitionBarrier(indirectBuffer.indirectMaterials[i].roughness, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			commandList->transitionBarrier(indirectBuffer.indirectMaterials[i].metallic, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		}
 		
 		{
@@ -892,7 +470,7 @@ void dx_game::update(float dt)
 				gui.toggle("Record light probes", lightProbeRecording);
 			}
 		}
-		gui.textF("%u draw calls", numIndirectDrawCalls);
+		gui.textF("%u draw calls", indirectBuffer.numDrawCalls);
 	}
 
 	sun.updateMatrices(camera);
@@ -909,82 +487,17 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress = commandList->uploadDynamicConstantBuffer(flashLight);
 
 #if DEPTH_PREPASS
-	// Depth pre pass.
-	{
-		commandList->setPipelineState(indirectDepthOnlyPipelineState);
-		commandList->setGraphicsRootSignature(indirectDepthOnlyRootSignature);
-
-		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);
-		commandList->setIndexBuffer(indirectMesh.indexBuffer);
-
-		// This only works, because the vertex shader expects the vp matrix as the first argument.
-		commandList->setGraphics32BitConstants(INDIRECT_ROOTPARAM_CAMERA, cameraCB.vp);
-
-		commandList->drawIndirect(
-			indirectDepthOnlyCommandSignature,
-			numIndirectDrawCalls,
-			indirectDepthOnlyCommandBuffer);
-	}
+	indirect.renderDepthOnly(commandList, camera, indirectBuffer);
 #else
 	float clearColor[] = { 0, 0, 0, 0 };
 	commandList->clearRTV(lightingRT.colorAttachments[0]->getRenderTargetView(), clearColor);
 #endif
 
-	// Render geometry.
-	{
-		PROFILE_BLOCK("Record Geometry commands");
+	commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	commandList->transitionBarrier(lightProbeSystem.lightProbePositionBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	commandList->transitionBarrier(lightProbeSystem.lightProbeTetrahedraBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Geometry.");
-
-
-		commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->transitionBarrier(lightProbeSystem.lightProbePositionBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		commandList->transitionBarrier(lightProbeSystem.lightProbeTetrahedraBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-
-		commandList->setPipelineState(indirectGeometryPipelineState);
-		commandList->setGraphicsRootSignature(indirectGeometryRootSignature);
-
-		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_CAMERA, cameraCBAddress);
-
-		commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, indirectDescriptorHeap);
-
-		// PBR.
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_BRDF_TEXTURES, brdfOffset);
-
-		// Materials.
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_ALBEDOS, albedosOffset);
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_NORMALS, normalsOffset);
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_ROUGHNESSES, roughnessesOffset);
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_METALLICS, metallicsOffset);
-
-		// Sun.
-		commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_DIRECTIONAL, sunCBAddress);
-		commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_SPOT, spotLightCBAddress);
-
-		// Shadow maps.
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_SHADOWMAPS, shadowMapsOffset);
-
-		// Light probes.
-		commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_LIGHTPROBES, lightProbeOffset);
-
-		commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);
-		commandList->setIndexBuffer(indirectMesh.indexBuffer);
-
-
-		commandList->drawIndirect(
-			indirectGeometryCommandSignature,
-			numIndirectDrawCalls,
-			indirectCommandBuffer);
-
-		commandList->resetToDynamicDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
-
-	// Sky.
+	indirect.render(commandList, indirectBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
 	sky.render(commandList, cameraCBAddress, cubemap);
 }
 
@@ -1002,9 +515,9 @@ void dx_game::renderShadowmap(dx_command_list* commandList, dx_render_target& sh
 
 	// Static scene.
 	commandList->drawIndirect(
-		indirectDepthOnlyCommandSignature,
-		numIndirectDrawCalls,
-		indirectDepthOnlyCommandBuffer);
+		indirect.depthOnlyCommandSignature,
+		indirectBuffer.numDrawCalls,
+		indirectBuffer.depthOnlyCommandBuffer);
 }
 
 void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
@@ -1024,13 +537,13 @@ void dx_game::render(dx_command_list* commandList, CD3DX12_CPU_DESCRIPTOR_HANDLE
 		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Sun shadow map.");
 
 		// If more than the static scene is rendered here, this stuff must go in the loop.
-		commandList->setPipelineState(indirectDepthOnlyPipelineState);
-		commandList->setGraphicsRootSignature(indirectDepthOnlyRootSignature);
+		commandList->setPipelineState(indirect.depthOnlyPipelineState);
+		commandList->setGraphicsRootSignature(indirect.depthOnlyRootSignature);
 
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		commandList->setVertexBuffer(0, indirectMesh.vertexBuffer);
-		commandList->setIndexBuffer(indirectMesh.indexBuffer);
+		commandList->setVertexBuffer(0, indirectBuffer.indirectMesh.vertexBuffer);
+		commandList->setIndexBuffer(indirectBuffer.indirectMesh.indexBuffer);
 
 		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
 		{

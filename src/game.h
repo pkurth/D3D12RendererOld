@@ -13,22 +13,10 @@
 #include "debug_display.h"
 #include "platform.h"
 #include "particles.h"
+#include "indirect_drawing.h"
 
 #include "sky.h"
 #include "present.h"
-
-#define INDIRECT_ROOTPARAM_CAMERA			0
-#define INDIRECT_ROOTPARAM_MODEL			1
-#define INDIRECT_ROOTPARAM_MATERIAL			2
-#define INDIRECT_ROOTPARAM_BRDF_TEXTURES	3
-#define INDIRECT_ROOTPARAM_ALBEDOS			4
-#define INDIRECT_ROOTPARAM_NORMALS			5
-#define INDIRECT_ROOTPARAM_ROUGHNESSES		6
-#define INDIRECT_ROOTPARAM_METALLICS		7
-#define INDIRECT_ROOTPARAM_DIRECTIONAL		8
-#define INDIRECT_ROOTPARAM_SPOT				9
-#define INDIRECT_ROOTPARAM_SHADOWMAPS		10
-#define INDIRECT_ROOTPARAM_LIGHTPROBES		11
 
 
 #define CAMERA_SENSITIVITY 4.f
@@ -56,14 +44,7 @@ private:
 	bool contentLoaded = false;
 	ComPtr<ID3D12Device2> device;
 
-	ComPtr<ID3D12PipelineState> indirectGeometryPipelineState;
-	dx_root_signature indirectGeometryRootSignature;
-	ComPtr<ID3D12CommandSignature> indirectGeometryCommandSignature;
-
-	ComPtr<ID3D12PipelineState> indirectDepthOnlyPipelineState;
-	dx_root_signature indirectDepthOnlyRootSignature;
-	ComPtr<ID3D12CommandSignature> indirectDepthOnlyCommandSignature;
-
+	indirect_pipeline indirect;
 	particle_pipeline particles;
 	sky_pipeline sky;
 	present_pipeline present;
@@ -74,20 +55,7 @@ private:
 	particle_system particleSystem3;
 	float particleSystemTime = 0.f;
 
-
-	dx_mesh indirectMesh;
-	std::vector<dx_material> indirectMaterials;
-	dx_buffer indirectCommandBuffer;
-	dx_buffer indirectDepthOnlyCommandBuffer;
-	uint32 numIndirectDrawCalls;
-	ComPtr<ID3D12DescriptorHeap> indirectDescriptorHeap;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE albedosOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE roughnessesOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE metallicsOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE brdfOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE shadowMapsOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE lightProbeOffset;
+	indirect_draw_buffer indirectBuffer;
 
 	dx_mesh sceneMesh;
 	std::vector<submesh_info> sceneSubmeshes;
