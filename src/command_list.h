@@ -105,6 +105,7 @@ public:
 
 		setShaderResourceView(rootParameterIndex, descriptorOffset, cubemap, stateAfter, 0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, &srvDesc);
 	}
+
 	void bindDepthTextureForReading(uint32 rootParameterIndex, uint32 descriptorOffset, dx_texture& depthTexture,
 		D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 	{

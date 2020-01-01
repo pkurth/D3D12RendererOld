@@ -4,6 +4,7 @@
 #include "material.h"
 #include "lighting.h"
 #include "camera.h"
+#include "descriptor_heap.h"
 
 #define INDIRECT_ROOTPARAM_CAMERA			0
 #define INDIRECT_ROOTPARAM_MODEL			1
@@ -51,7 +52,7 @@ struct indirect_draw_buffer
 
 
 	void finish(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
-		dx_texture& environment, dx_texture& irradiance, dx_texture& prefilteredEnvironment, dx_texture& brdf,
+		dx_texture& irradiance, dx_texture& prefilteredEnvironment, dx_texture& brdf,
 		dx_texture* sunShadowMapCascades, uint32 numSunShadowMapCascades,
 		dx_texture& spotLightShadowMap,
 		light_probe_system& lightProbeSystem);
@@ -68,7 +69,7 @@ struct indirect_draw_buffer
 	dx_buffer depthOnlyCommandBuffer;
 	uint32 numDrawCalls = 0;
 
-	ComPtr<ID3D12DescriptorHeap> descriptorHeap;
+	dx_descriptor_heap descriptorHeap;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE albedosOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE roughnessesOffset;

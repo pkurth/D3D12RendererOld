@@ -331,7 +331,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		}
 	}
 
-	indirectBuffer.finish(device, commandList, cubemap, irradiance, prefilteredEnvironment, brdf, sunShadowMapTexture, sun.numShadowCascades,
+	indirectBuffer.finish(device, commandList, irradiance, prefilteredEnvironment, brdf, sunShadowMapTexture, sun.numShadowCascades,
 		spotLightShadowMapTexture, lightProbeSystem);
 
 	{

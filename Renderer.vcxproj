@@ -148,6 +148,7 @@
     <ClCompile Include="src\debug_display.cpp" />
     <ClCompile Include="src\debug_gui.cpp" />
     <ClCompile Include="src\descriptor_allocator.cpp" />
+    <ClCompile Include="src\descriptor_heap.cpp" />
     <ClCompile Include="src\dynamic_descriptor_heap.cpp" />
     <ClCompile Include="src\brdf.cpp" />
     <ClCompile Include="src\font.cpp" />
@@ -189,6 +190,7 @@
     <ClInclude Include="src\debug_display.h" />
     <ClInclude Include="src\debug_gui.h" />
     <ClInclude Include="src\descriptor_allocator.h" />
+    <ClInclude Include="src\descriptor_heap.h" />
     <ClInclude Include="src\dynamic_descriptor_heap.h" />
     <ClInclude Include="src\brdf.h" />
     <ClInclude Include="src\font.h" />

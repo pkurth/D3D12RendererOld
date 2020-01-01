@@ -160,7 +160,7 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 }
 
 void indirect_draw_buffer::finish(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
-	dx_texture& environment, dx_texture& irradiance, dx_texture& prefilteredEnvironment, dx_texture& brdf,
+	dx_texture& irradiance, dx_texture& prefilteredEnvironment, dx_texture& brdf,
 	dx_texture* sunShadowMapCascades, uint32 numSunShadowMapCascades,
 	dx_texture& spotLightShadowMap,
 	light_probe_system& lightProbeSystem)
@@ -184,127 +184,57 @@ void indirect_draw_buffer::finish(ComPtr<ID3D12Device2> device, dx_command_list*
 	{
 		PROFILE_BLOCK("Set up indirect descriptor heap");
 
-		D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
-		descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		descriptorHeapDesc.NumDescriptors =
+		descriptorHeap.initialize(device, 
 			(uint32)indirectMaterials.size() * 4	// Materials.
 			+ 3										// PBR Textures.
 			+ MAX_NUM_SUN_SHADOW_CASCADES			// Sun shadow map cascades.
 			+ 1										// Spot light shadow map.
 			+ 3										// Light probes.
-			;
-		descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		checkResult(device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&descriptorHeap)));
-		SET_NAME(descriptorHeap, "Indirect descriptor heap");
+		);
+		SET_NAME(descriptorHeap.descriptorHeap, "Indirect descriptor heap");
 
-		uint32 descriptorHandleIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		brdfOffset = descriptorHeap.gpuHandle;
+		descriptorHeap.pushCubemap(irradiance);
+		descriptorHeap.pushCubemap(prefilteredEnvironment);
+		descriptorHeap.push2DTexture(brdf);
 
-		CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(descriptorHeap->GetCPUDescriptorHandleForHeapStart());
-		CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(descriptorHeap->GetGPUDescriptorHandleForHeapStart());
-
-
-		brdfOffset = gpuHandle;
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = environment.resource->GetDesc().Format;
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-			srvDesc.TextureCube.MipLevels = (uint32)-1; // Use all mips.
-
-			device->CreateShaderResourceView(irradiance.resource.Get(), &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-
-			device->CreateShaderResourceView(prefilteredEnvironment.resource.Get(), &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-
-			device->CreateShaderResourceView(brdf.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-		shadowMapsOffset = gpuHandle;
+		shadowMapsOffset = descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < numSunShadowMapCascades; ++i)
 		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = dx_texture::getReadFormatFromTypeless(sunShadowMapCascades[i].resource->GetDesc().Format);
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D.MipLevels = 1;
-
-			device->CreateShaderResourceView(sunShadowMapCascades[i].resource.Get(), &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
+			descriptorHeap.pushDepthTexture(sunShadowMapCascades[i]);
 		}
 		for (uint32 i = 0; i < MAX_NUM_SUN_SHADOW_CASCADES - numSunShadowMapCascades; ++i)
 		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.Texture2D.MipLevels = 0;
-
-			device->CreateShaderResourceView(nullptr, &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
+			descriptorHeap.pushNullTexture();
 		}
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = dx_texture::getReadFormatFromTypeless(spotLightShadowMap.resource->GetDesc().Format);
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D.MipLevels = 1;
+		descriptorHeap.pushDepthTexture(spotLightShadowMap);
 
-			device->CreateShaderResourceView(spotLightShadowMap.resource.Get(), &srvDesc, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
-
-		lightProbeOffset = gpuHandle;
-		{
-			lightProbeSystem.lightProbePositionBuffer.createShaderResourceView(device, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-
-			lightProbeSystem.packedSphericalHarmonicsBuffer.createShaderResourceView(device, cpuHandle);
-			//lightProbeSystem.sphericalHarmonicsBuffer.createShaderResourceView(device, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-
-			lightProbeSystem.lightProbeTetrahedraBuffer.createShaderResourceView(device, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
-		}
+		lightProbeOffset = descriptorHeap.gpuHandle;
+		descriptorHeap.pushStructuredBuffer(lightProbeSystem.lightProbePositionBuffer);
+		descriptorHeap.pushStructuredBuffer(lightProbeSystem.packedSphericalHarmonicsBuffer);
+		descriptorHeap.pushStructuredBuffer(lightProbeSystem.lightProbeTetrahedraBuffer);
 
 		// I am putting the material textures at the very end of the descriptor heap, since they are variably sized and the shader complains if there
 		// is a buffer coming after them.
-		albedosOffset = gpuHandle;
+		albedosOffset = descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 		{
-			device->CreateShaderResourceView(indirectMaterials[i].albedo.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
+			descriptorHeap.push2DTexture(indirectMaterials[i].albedo);
 		}
-		normalsOffset = gpuHandle;
+		normalsOffset = descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 		{
-			device->CreateShaderResourceView(indirectMaterials[i].normal.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
+			descriptorHeap.push2DTexture(indirectMaterials[i].normal);
 		}
-		roughnessesOffset = gpuHandle;
+		roughnessesOffset = descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 		{
-			device->CreateShaderResourceView(indirectMaterials[i].roughness.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
+			descriptorHeap.push2DTexture(indirectMaterials[i].roughness);
 		}
-		metallicsOffset = gpuHandle;
+		metallicsOffset = descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 		{
-			device->CreateShaderResourceView(indirectMaterials[i].metallic.resource.Get(), nullptr, cpuHandle);
-			cpuHandle.Offset(descriptorHandleIncrementSize);
-			gpuHandle.Offset(descriptorHandleIncrementSize);
+			descriptorHeap.push2DTexture(indirectMaterials[i].metallic);
 		}
 	}
 }
@@ -518,7 +448,7 @@ void indirect_pipeline::render(dx_command_list* commandList, indirect_draw_buffe
 
 	commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_CAMERA, cameraCBAddress);
 
-	commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, indirectBuffer.descriptorHeap);
+	commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, indirectBuffer.descriptorHeap.descriptorHeap);
 
 	// PBR.
 	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_BRDF_TEXTURES, indirectBuffer.brdfOffset);
