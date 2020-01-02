@@ -5,8 +5,9 @@
 #include "indirect_drawing.h"
 #include "command_queue.h"
 #include "profiling.h"
+#include "poisson_distribution.h"
 
-void procedural_placement::initialize(ComPtr<ID3D12Device2> device, uint32 dims)
+void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList)
 {
 	{
 		ComPtr<ID3DBlob> shaderBlob;
@@ -48,7 +49,7 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, uint32 dims)
 		ComPtr<ID3DBlob> shaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/procedural_placement_gen_points.cso", &shaderBlob));
 
-		CD3DX12_DESCRIPTOR_RANGE1 density(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+		CD3DX12_DESCRIPTOR_RANGE1 density(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
 		CD3DX12_DESCRIPTOR_RANGE1 placementPoints(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
@@ -123,8 +124,14 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, uint32 dims)
 	}
 
 
-	maxNumDrawCalls = 16 * 16 * dims * dims * 4;
+	for (uint32 i = 0; i < arraysize(POISSON_SAMPLES); ++i)
+	{
+		POISSON_SAMPLES[i].z = randomFloat(0.f, 1.f);
+	}
+
+	maxNumDrawCalls = arraysize(POISSON_SAMPLES) * 4; // * 4, because multiple meshes per object.
 	placementPointBuffer.initialize<placement_point>(device, nullptr, maxNumDrawCalls);
+	poissonSampleBuffer.initialize(device, POISSON_SAMPLES, arraysize(POISSON_SAMPLES), commandList);
 
 	for (uint32 i = 0; i < NUM_BUFFERED_FRAMES; ++i)
 	{
@@ -132,7 +139,6 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, uint32 dims)
 		renderResources[i].commandBuffer.initialize<indirect_command>(device, nullptr, maxNumDrawCalls);
 		renderResources[i].depthOnlyCommandBuffer.initialize<indirect_depth_only_command>(device, nullptr, maxNumDrawCalls);
 	}
-	this->dims = dims;
 }
 
 void procedural_placement::generate(const render_camera& camera, dx_texture& densityMap,
@@ -188,7 +194,6 @@ void procedural_placement::generatePoints(dx_command_list* commandList, dx_textu
 	time += dt;
 
 	placement_gen_points_cb cb;
-	cb.numGroupsX = cb.numGroupsY = dims;
 	cb.numMeshes = numMeshes;
 	cb.time = time;
 
@@ -197,14 +202,16 @@ void procedural_placement::generatePoints(dx_command_list* commandList, dx_textu
 
 	commandList->transitionBarrier(placementPointBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	commandList->transitionBarrier(numDrawCallsBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	commandList->transitionBarrier(poissonSampleBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 
 	commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, cb);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_POINTS, 0, 1, placementPointBuffer.uav);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_POINTS, 1, 1, numDrawCallsBuffer.uav);
 	commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_DENSITY, 0, densityMap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_DENSITY, 1, 1, poissonSampleBuffer.srv);
 
-	commandList->dispatch(dims, dims, 1);
+	commandList->dispatch((uint32)bucketize(arraysize(POISSON_SAMPLES), 512), 1, 1);
 
 	commandList->uavBarrier(placementPointBuffer.resource);
 	commandList->uavBarrier(numDrawCallsBuffer.resource);

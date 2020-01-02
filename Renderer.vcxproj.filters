@@ -245,6 +245,9 @@
     <ClInclude Include="src\procedural_placement.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\poisson_distribution.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\generate_mips.hlsl" />

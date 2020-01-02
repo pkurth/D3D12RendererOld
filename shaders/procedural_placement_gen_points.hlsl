@@ -19,30 +19,22 @@ struct placement_point
 
 cbuffer placement_cb : register(b0)
 {
-	uint numGroupsX;
-	uint numGroupsY;
 	uint numMeshes;
 	float time;
 };
 
 SamplerState densitySampler							: register(s0);
 Texture2D<float> densityMap							: register(t0);
+StructuredBuffer<float4> poissonMatrix				: register(t1);
 
 RWStructuredBuffer<placement_point> placementPoints : register(u0);
 RWStructuredBuffer<uint> atomicCounter				: register(u1);
 
-static const float4x4 ditherMatrix =
-{
-	{ 0, 8, 2, 10 },
-	{ 12, 4, 14, 6 },
-	{ 3, 11, 1, 9 },
-	{ 15, 7, 13, 5 }
-};
 
 groupshared uint groupCount;
 groupshared uint startOffset;
 
-[numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
+[numthreads(512, 1, 1)]
 void main(cs_input IN)
 {
 	if (IN.groupIndex == 0)
@@ -52,17 +44,14 @@ void main(cs_input IN)
 
 	GroupMemoryBarrierWithGroupSync();
 
-	uint densityWidth, densityHeight, numMipLevels;
-	densityMap.GetDimensions(0, densityWidth, densityHeight, numMipLevels);
+	float3 poisson = poissonMatrix[IN.dispatchThreadID.x].xyz;
 
-	float2 uv = float2(IN.dispatchThreadID.xy) / float2(numGroupsX * BLOCK_SIZE - 1, numGroupsY * BLOCK_SIZE - 1);
+	float2 uv = poisson.xy;
+	float threshold = poisson.z;
+	
 	float density = densityMap.SampleLevel(densitySampler, uv, 0);
 
-	uint ditherX = IN.dispatchThreadID.x % 4;
-	uint ditherY = IN.dispatchThreadID.y % 4;
-
-	float ditherThreshold = ditherMatrix[ditherX][ditherY] / 16.f;
-	uint valid = (uint)(density > ditherThreshold);
+	uint valid = (uint)(density > threshold);
 
 	uint groupIndex;
 	InterlockedAdd(groupCount, valid, groupIndex);
@@ -79,7 +68,7 @@ void main(cs_input IN)
 	if (valid)
 	{
 		placement_point result;
-		result.position = float4(IN.dispatchThreadID.x * 10.f, sin(time + random(float3(IN.dispatchThreadID))) + 80.f, IN.dispatchThreadID.y * 10.f, 1.f);
+		result.position = float4(uv.x * 100.f, sin(time + random(IN.dispatchThreadID.x)) + 40.f, uv.y * 100.f, 1.f);
 		result.normal = float4(0.f, 1.f, 0.f, 0.f);
 		placementPoints[startOffset + groupIndex] = result;
 	}

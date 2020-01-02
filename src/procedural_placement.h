@@ -8,14 +8,12 @@
 #define PROCEDURAL_PLACEMENT_ROOTPARAM_POINTS	1
 
 // Same value, because different shaders.
-#define PROCEDURAL_PLACEMENT_ROOTPARAM_DENSITY	2
+#define PROCEDURAL_PLACEMENT_ROOTPARAM_DENSITY	2 // Density map and poisson distribution.
 #define PROCEDURAL_PLACEMENT_ROOTPARAM_COMMANDS 2
 
 
 struct placement_gen_points_cb
 {
-	uint32 numGroupsX;
-	uint32 numGroupsY;
 	uint32 numMeshes;
 	float time;
 };
@@ -52,12 +50,11 @@ struct procedural_placement_render_resources
 
 struct procedural_placement
 {
-	void initialize(ComPtr<ID3D12Device2> device, uint32 dims);
+	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList);
 	void generate(const render_camera& camera, dx_texture& densityMap, 
 		placement_mesh* meshes, uint32 numMeshes, float dt);
 	
 	uint32 maxNumDrawCalls;
-	uint32 dims;
 
 	dx_structured_buffer numDrawCallsBuffer;
 	dx_structured_buffer commandBuffer;
@@ -65,6 +62,7 @@ struct procedural_placement
 
 
 private:
+	dx_structured_buffer poissonSampleBuffer;
 	dx_structured_buffer placementPointBuffer;
 
 	dx_root_signature clearCountRootSignature;

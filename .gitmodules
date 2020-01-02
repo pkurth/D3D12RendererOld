@@ -4,3 +4,6 @@
 [submodule "ext/tetgen"]
 	path = ext/tetgen
 	url = git@github.com:ufz/tetgen.git
+[submodule "ext/PoissonSamplingGenerator"]
+	path = ext/PoissonSamplingGenerator
+	url = git@github.com:bartwronski/PoissonSamplingGenerator.git

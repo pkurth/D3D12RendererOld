@@ -113,7 +113,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 	indirect.initialize(device, lightingRT, sunShadowMapRT->depthStencilFormat);
-	proceduralPlacement.initialize(device, 1);
+	proceduralPlacement.initialize(device, commandList);
 	commandList->loadTextureFromFile(densityMap, L"res/density.png", texture_type_noncolor, false);
 	SET_NAME(densityMap.resource, "Density");
 
