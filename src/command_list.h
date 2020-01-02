@@ -70,6 +70,11 @@ public:
 
 	void setGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 
+	D3D12_GPU_VIRTUAL_ADDRESS uploadAndSetComputeDynamicConstantBuffer(uint32 rootParameterIndex, uint32 sizeInBytes, const void* data);
+	template <typename T> D3D12_GPU_VIRTUAL_ADDRESS uploadAndSetComputeDynamicConstantBuffer(uint32 rootParameterIndex, const T& data);
+
+	void setComputeDynamicConstantBuffer(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+
 	// These buffers are temporary! They only last one frame!
 	template <typename vertex_t> D3D12_VERTEX_BUFFER_VIEW createDynamicVertexBuffer(const vertex_t* vertices, uint32 count);
 
@@ -149,6 +154,7 @@ public:
 	void draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance);
 	void drawIndexed(uint32 indexCount, uint32 instanceCount, uint32 startIndex, int32 baseVertex, uint32 startInstance);
 	void drawIndirect(ComPtr<ID3D12CommandSignature> commandSignature, uint32 numDraws, dx_buffer commandBuffer);
+	void drawIndirect(ComPtr<ID3D12CommandSignature> commandSignature, uint32 maxNumDraws, dx_buffer numDrawsBuffer, dx_buffer commandBuffer);
 
 	// Dispatch.
 	void dispatch(uint32 numGroupsX, uint32 numGroupsY = 1, uint32 numGroupsZ = 1);
@@ -216,6 +222,12 @@ template<typename T>
 inline D3D12_GPU_VIRTUAL_ADDRESS dx_command_list::uploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, const T& data)
 {
 	return uploadAndSetGraphicsDynamicConstantBuffer(rootParameterIndex, sizeof(T), &data);
+}
+
+template<typename T>
+inline D3D12_GPU_VIRTUAL_ADDRESS dx_command_list::uploadAndSetComputeDynamicConstantBuffer(uint32 rootParameterIndex, const T& data)
+{
+	return uploadAndSetComputeDynamicConstantBuffer(rootParameterIndex, sizeof(T), &data);
 }
 
 template<typename vertex_t>

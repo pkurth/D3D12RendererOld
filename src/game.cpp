@@ -11,13 +11,22 @@
 	Rendering TODOs:
 		- Anti aliasing.
 		- Multiple command lists.
-		- Frustum and occlusion culling.
+		- Async compute:
+			- Frustum and occlusion culling.
+			- Light culling.
+			- GPU procedural placement.
+			- SSAO.
+			- Particles.
 		- LOD.
+		- Specular reflections.
 		- Volumetrics?
 		- VFX.
+		- Raytracing.
 */
 
 #define ENABLE_PARTICLES 0
+#define ENABLE_PROCEDURAL 1
+#define ENABLE_PROCEDURAL_SHADOWS 0
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
 {
@@ -99,14 +108,15 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	}
 
 
-	// Indirect.
-	{
-		indirect.initialize(device, lightingRT, sunShadowMapRT->depthStencilFormat);
-	}
-
-
 	dx_command_queue& copyCommandQueue = dx_command_queue::copyCommandQueue;
 	dx_command_list* commandList = copyCommandQueue.getAvailableCommandList();
+
+
+	indirect.initialize(device, lightingRT, sunShadowMapRT->depthStencilFormat);
+	proceduralPlacement.initialize(device, 1);
+	commandList->loadTextureFromFile(densityMap, L"res/density.png", texture_type_noncolor, false);
+	SET_NAME(densityMap.resource, "Density");
+
 
 	{
 		PROFILE_BLOCK("Sky, lighting, particle, present pipeline");
@@ -116,22 +126,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		particles.initialize(device, lightingRT);
 
 		commandList->integrateBRDF(brdf);
-		dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, MAX_NUM_SUN_SHADOW_CASCADES);
-		defaultShadowMapSRV = allocation.getDescriptorHandle(0);
-
-		for (uint32 i = 0; i < MAX_NUM_SUN_SHADOW_CASCADES; ++i)
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.Texture2D.MipLevels = 0;
-
-			device->CreateShaderResourceView(
-				nullptr, &srvDesc,
-				allocation.getDescriptorHandle(i)
-			);
-		}
 	}
 
 #if ENABLE_PARTICLES
@@ -282,7 +276,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		// TODO: We cannot compute per vertex light probe indices for instanced objects.
 
-		indirectBuffer.push(mesh, { sphereSubmesh }, colors, roughnesses, metallics, transforms, 5, commandList);
+		indirectBuffer.push(mesh, { sphereSubmesh }, colors, roughnesses, metallics, transforms, 5);
 	}
 
 	{
@@ -302,7 +296,16 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
 		}
 
-		indirectBuffer.push(mesh, submeshes, vec4(1.f, 1.f, 1.f, 1.f), 0.5f, 1.f, model, commandList);
+		indirectBuffer.push(mesh, submeshes, vec4(1.f, 1.f, 1.f, 1.f), 0.5f, 1.f, model);
+	}
+
+	{
+		PROFILE_BLOCK("Big oak model");
+
+		cpu_triangle_mesh<vertex_3PUNTL> mesh;
+		auto [submeshes, materials] = mesh.pushFromFile("res/big_oak.obj");
+
+		indirectBuffer.push(mesh, submeshes, materials, createScaleMatrix(1.f), commandList);
 	}
 	
 	{
@@ -356,6 +359,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			commandList->transitionBarrier(indirectBuffer.indirectMaterials[i].roughness, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			commandList->transitionBarrier(indirectBuffer.indirectMaterials[i].metallic, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		}
+
+		commandList->transitionBarrier(densityMap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		
 		{
 			PROFILE_BLOCK("Execute transition command list");
@@ -488,6 +493,10 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 
 #if DEPTH_PREPASS
 	indirect.renderDepthOnly(commandList, camera, indirectBuffer);
+#if ENABLE_PROCEDURAL
+	indirect.renderDepthOnly(commandList, camera, indirectBuffer.indirectMesh, proceduralPlacement.depthOnlyCommandBuffer, 
+		proceduralPlacement.maxNumDrawCalls, proceduralPlacement.numDrawCallsBuffer);
+#endif
 #endif
 
 	commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -495,6 +504,11 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	commandList->transitionBarrier(lightProbeSystem.lightProbeTetrahedraBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	indirect.render(commandList, indirectBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
+#if ENABLE_PROCEDURAL
+	indirect.render(commandList, indirectBuffer.indirectMesh, indirectBuffer.descriptors, proceduralPlacement.commandBuffer, 
+		proceduralPlacement.maxNumDrawCalls, proceduralPlacement.numDrawCallsBuffer,
+		cameraCBAddress, sunCBAddress, spotLightCBAddress);
+#endif
 	sky.render(commandList, cameraCBAddress, cubemap);
 }
 
@@ -515,10 +529,29 @@ void dx_game::renderShadowmap(dx_command_list* commandList, dx_render_target& sh
 		indirect.depthOnlyCommandSignature,
 		indirectBuffer.numDrawCalls,
 		indirectBuffer.depthOnlyCommandBuffer);
+
+#if ENABLE_PROCEDURAL && ENABLE_PROCEDURAL_SHADOWS
+	// Procedurally generated scene.
+	commandList->drawIndirect(
+		indirect.depthOnlyCommandSignature,
+		proceduralPlacement.maxNumDrawCalls,
+		proceduralPlacement.numDrawCallsBuffer,
+		proceduralPlacement.depthOnlyCommandBuffer);
+#endif
 }
 
 uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
 {
+#if ENABLE_PROCEDURAL
+	placement_mesh placementMeshes[] =
+	{
+		{ 3984, 265919, 213153, 1572867 },
+		{ 3648, 269903, 218635, 1638403 },
+		{ 1920, 273551, 229579, 1703939 },
+	};
+	proceduralPlacement.generate(camera, densityMap, placementMeshes, arraysize(placementMeshes), dt);
+#endif
+
 	dx_command_list* commandList = dx_command_queue::renderCommandQueue.getAvailableCommandList();
 
 	PIXSetMarker(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 0, 0), "Frame start.");
@@ -674,8 +707,6 @@ uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR
 	commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
 	commandList->transitionBarrier(lightProbeSystem.lightProbeHDRTexture.resource, D3D12_RESOURCE_STATE_COMMON);
 	commandList->transitionBarrier(lightProbeSystem.tempSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
-
-
 
 
 

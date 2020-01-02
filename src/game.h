@@ -17,6 +17,7 @@
 
 #include "sky.h"
 #include "present.h"
+#include "procedural_placement.h"
 
 
 #define CAMERA_SENSITIVITY 4.f
@@ -49,6 +50,9 @@ private:
 	sky_pipeline sky;
 	present_pipeline present;
 
+	procedural_placement proceduralPlacement;
+	dx_texture densityMap;
+
 
 	particle_system particleSystem1;
 	particle_system particleSystem2;
@@ -67,8 +71,6 @@ private:
 	dx_texture irradiance;
 	dx_texture prefilteredEnvironment;
 	dx_texture brdf;
-
-	D3D12_CPU_DESCRIPTOR_HANDLE defaultShadowMapSRV;
 
 	vec3 inputMovement;
 	float inputSpeedModifier;

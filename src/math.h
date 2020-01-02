@@ -429,9 +429,9 @@ struct trs
 
 
 template <typename T>
-inline T bucketize(T value, size_t alignment)
+inline T bucketize(T problemSize, size_t bucketSize)
 {
-	return (T)((value + alignment - 1) / alignment);
+	return (T)((problemSize + bucketSize - 1) / bucketSize);
 }
 
 template <typename T>

@@ -18,56 +18,6 @@ static const float3 titaniumAlbedo =	float3(0.542f, 0.497f, 0.449f);
 static const float3 cobaltAlbedo =		float3(0.662f, 0.655f, 0.634f);
 static const float3 platinumAlbedo =	float3(0.672f, 0.637f, 0.585f);
 
-struct light_attenuation
-{
-	float c;
-	float l;
-	float q;
-};
-
-struct directional_light
-{
-	float4x4 vp[4];
-	float4 cascadeDistances;
-	float4 bias;
-
-	float4 worldSpaceDirection;
-	float4 color;
-
-	uint numShadowCascades;
-	float blendArea;
-	float texelSize;
-	uint shadowMapDimensions;
-};
-
-struct spot_light
-{
-	float4x4 vp;
-
-	float4 worldSpacePosition;
-	float4 worldSpaceDirection;
-	float4 color;
-
-	light_attenuation attenuation;
-
-	float innerAngle;
-	float outerAngle;
-	float innerCutoff;
-	float outerCutoff;
-	float texelSize;
-	float bias;
-};
-
-struct point_light
-{
-	float4 worldSpacePositionAndRadius;
-	float4 color;
-};
-
-static float getAttenuation(light_attenuation a, float distance)
-{
-	return 1.f / (a.c + a.l * distance + a.q * distance * distance);
-}
 
 static float3 fresnelSchlick(float cosTheta, float3 F0)
 {

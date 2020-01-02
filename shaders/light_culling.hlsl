@@ -1,5 +1,5 @@
 #include "camera.hlsli"
-#include "pbr.hlsli"
+#include "lighting.hlsli"
 
 #define BLOCK_SIZE 16
 
@@ -18,14 +18,17 @@ cbuffer light_culling_cb : register(b0)
 	uint numLights;
 };
 
-Texture2D<float> depthTexture		: register(t0);
-StructuredBuffer<point_light> lights : register(t1);
+Texture2D<float> depthTexture				: register(t0);
+StructuredBuffer<point_light> lights		: register(t1);
 
-ConstantBuffer<camera_cb> camera : register(b1);
+ConstantBuffer<camera_cb> camera			: register(b1);
 
-RWStructuredBuffer<uint> lightIndexCounter : register(u0);
-RWTexture2D<uint2> lightGrid : register(u1);
-RWStructuredBuffer<uint> lightIndices : register(u2);
+// Output.
+RWStructuredBuffer<uint> lightIndexCounter	: register(u0); // This is a single int. It is only needed in this shader, not afterwards.
+
+// These will be passed to the lighting shader.
+RWTexture2D<uint2> lightGrid				: register(u1);
+RWStructuredBuffer<uint> lightIndices		: register(u2);
 
 
 groupshared uint tileMinDepth;
@@ -77,6 +80,7 @@ void main(cs_input IN)
 	frustumPlanes[4] = float4(0.f, 0.f, -1.f, -minZ);
 	frustumPlanes[5] = float4(0.f, 0.f, 1.f, maxZ);
 
+	[unroll]
 	for (uint p = 0; p < 4; ++p)
 	{
 		frustumPlanes[p] /= length(frustumPlanes[p].xyz);

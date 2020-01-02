@@ -39,15 +39,26 @@ struct indirect_depth_only_command
 };
 #pragma pack(pop)
 
+struct indirect_descriptor_heap
+{
+	dx_descriptor_heap descriptorHeap;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE albedosOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE roughnessesOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE metallicsOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE brdfOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE shadowMapsOffset;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE lightProbeOffset;
+};
+
 struct indirect_draw_buffer
 {
 	void push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes, std::vector<submesh_material_info>& materialInfos, 
 		const mat4& transform, dx_command_list* commandList);
 	void push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes, vec4 color, float roughness, float metallic,
-		const mat4& transform, dx_command_list* commandList);
+		const mat4& transform);
 	void push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes, 
-		vec4* colors, float* roughnesses, float* metallics, const mat4* transforms, uint32 instanceCount, 
-		dx_command_list* commandList);
+		vec4* colors, float* roughnesses, float* metallics, const mat4* transforms, uint32 instanceCount);
 
 
 	void finish(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
@@ -68,14 +79,7 @@ struct indirect_draw_buffer
 	dx_buffer depthOnlyCommandBuffer;
 	uint32 numDrawCalls = 0;
 
-	dx_descriptor_heap descriptorHeap;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE albedosOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE normalsOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE roughnessesOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE metallicsOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE brdfOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE shadowMapsOffset;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE lightProbeOffset;
+	indirect_descriptor_heap descriptors;
 
 private:
 	void pushInternal(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info>& submeshes);
@@ -84,11 +88,30 @@ private:
 struct indirect_pipeline
 {
 	void initialize(ComPtr<ID3D12Device2> device, const dx_render_target& renderTarget, DXGI_FORMAT shadowMapFormat);
+
 	void render(dx_command_list* commandList, indirect_draw_buffer& indirectBuffer,
 		D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress,
 		D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress,
+		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress); 
+
+	void render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
+		dx_buffer& commandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer,
+		D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, 
+		D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, 
 		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress);
+
+	void render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
+		dx_buffer& commandBuffer, uint32 numDrawCalls,
+		D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress,
+		D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress,
+		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress);
+
+
 	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, indirect_draw_buffer& indirectBuffer);
+	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
+		dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls); 
+	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
+		dx_buffer& depthOnlyCommandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer);
 
 
 	ComPtr<ID3D12PipelineState> geometryPipelineState;
@@ -98,4 +121,13 @@ struct indirect_pipeline
 	ComPtr<ID3D12PipelineState> depthOnlyPipelineState;
 	dx_root_signature depthOnlyRootSignature;
 	ComPtr<ID3D12CommandSignature> depthOnlyCommandSignature;
+
+private:
+	void setupPipeline(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
+		dx_buffer& commandBuffer, 
+		D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress,
+		D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress,
+		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress);
+
+	void setupDepthOnlyPipeline(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh, dx_buffer& commandBuffer);
 };

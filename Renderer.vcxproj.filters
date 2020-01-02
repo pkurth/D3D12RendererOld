@@ -102,6 +102,9 @@
     <ClCompile Include="src\descriptor_heap.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\procedural_placement.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\common.h">
@@ -239,6 +242,9 @@
     <ClInclude Include="src\descriptor_heap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\procedural_placement.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\generate_mips.hlsl" />
@@ -269,8 +275,13 @@
     <FxCompile Include="shaders\unlit_textured_vs.hlsl" />
     <FxCompile Include="shaders\unlit_textured_ps.hlsl" />
     <FxCompile Include="shaders\particles_vs.hlsl" />
+    <FxCompile Include="shaders\procedural_placement_gen_points.hlsl" />
+    <FxCompile Include="shaders\procedural_placement_place_geometry.hlsl" />
+    <FxCompile Include="shaders\procedural_placement_clear_count.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="shaders\inc\lighting.hlsli" />
+    <None Include="shaders\inc\random.hlsli" />
   </ItemGroup>
 </Project>

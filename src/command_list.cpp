@@ -1122,6 +1122,18 @@ void dx_command_list::setGraphicsDynamicConstantBuffer(uint32 rootParameterIndex
 	commandList->SetGraphicsRootConstantBufferView(rootParameterIndex, address);
 }
 
+D3D12_GPU_VIRTUAL_ADDRESS dx_command_list::uploadAndSetComputeDynamicConstantBuffer(uint32 rootParameterIndex, uint32 sizeInBytes, const void* data)
+{
+	D3D12_GPU_VIRTUAL_ADDRESS address = uploadDynamicConstantBuffer(sizeInBytes, data);
+	commandList->SetComputeRootConstantBufferView(rootParameterIndex, address);
+	return address;
+}
+
+void dx_command_list::setComputeDynamicConstantBuffer(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+	commandList->SetComputeRootConstantBufferView(rootParameterIndex, address);
+}
+
 void dx_command_list::setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology)
 {
 	commandList->IASetPrimitiveTopology(topology);
@@ -1195,6 +1207,24 @@ void dx_command_list::drawIndirect(ComPtr<ID3D12CommandSignature> commandSignatu
 		commandBuffer.resource.Get(),
 		0,
 		nullptr,
+		0);
+}
+
+void dx_command_list::drawIndirect(ComPtr<ID3D12CommandSignature> commandSignature, uint32 maxNumDraws, dx_buffer numDrawsBuffer, dx_buffer commandBuffer)
+{
+	flushResourceBarriers();
+
+	for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
+	{
+		dynamicDescriptorHeaps[i].commitStagedDescriptorsForDraw(this);
+	}
+
+	commandList->ExecuteIndirect(
+		commandSignature.Get(),
+		maxNumDraws,
+		commandBuffer.resource.Get(),
+		0,
+		numDrawsBuffer.resource.Get(),
 		0);
 }
 

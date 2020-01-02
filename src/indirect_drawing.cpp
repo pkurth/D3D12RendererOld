@@ -40,10 +40,22 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 		for (uint32 i = 0; i < materialInfos.size(); ++i)
 		{
 			const submesh_material_info& mat = materialInfos[i];
-			commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].albedo, stringToWString(mat.albedoName), texture_type_color);
-			commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].normal, stringToWString(mat.normalName), texture_type_noncolor);
-			commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].roughness, stringToWString(mat.roughnessName), texture_type_noncolor);
-			commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].metallic, stringToWString(mat.metallicName), texture_type_noncolor);
+			if (mat.albedoName.length() > 0)
+			{
+				commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].albedo, stringToWString(mat.albedoName), texture_type_color);
+			}
+			if (mat.normalName.length() > 0)
+			{
+				commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].normal, stringToWString(mat.normalName), texture_type_noncolor);
+			}
+			if (mat.roughnessName.length() > 0)
+			{
+				commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].roughness, stringToWString(mat.roughnessName), texture_type_noncolor);
+			}
+			if (mat.metallicName.length() > 0)
+			{
+				commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].metallic, stringToWString(mat.metallicName), texture_type_noncolor);
+			}
 		}
 	}
 
@@ -60,9 +72,26 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 
 		command.modelMatrix = transform;
 
-		command.material.textureID_usageFlags = (mesh.materialIndex << 16) |
-			(USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE | USE_AO_TEXTURE);
+		command.material.textureID_usageFlags = (mesh.materialIndex << 16);
+		if (indirectMaterials[mesh.materialIndex].albedo.resource)
+		{
+			command.material.textureID_usageFlags |= USE_ALBEDO_TEXTURE;
+		}
+		if (indirectMaterials[mesh.materialIndex].normal.resource)
+		{
+			command.material.textureID_usageFlags |= USE_NORMAL_TEXTURE;
+		}
+		if (indirectMaterials[mesh.materialIndex].roughness.resource)
+		{
+			command.material.textureID_usageFlags |= USE_ROUGHNESS_TEXTURE;
+		}
+		if (indirectMaterials[mesh.materialIndex].metallic.resource)
+		{
+			command.material.textureID_usageFlags |= USE_METALLIC_TEXTURE;
+		}
 		command.material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
+		command.material.roughnessOverride = 1.f;
+		command.material.metallicOverride = 0.f;
 
 		command.drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
 		command.drawArguments.InstanceCount = 1;
@@ -78,7 +107,7 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 }
 
 void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes, vec4 color, float roughness, float metallic,
-	const mat4& transform, dx_command_list* commandList)
+	const mat4& transform)
 {
 	PROFILE_FUNCTION();
 
@@ -115,8 +144,7 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 }
 
 void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes,
-	vec4* colors, float* roughnesses, float* metallics, const mat4* transforms, uint32 instanceCount,
-	dx_command_list* commandList)
+	vec4* colors, float* roughnesses, float* metallics, const mat4* transforms, uint32 instanceCount)
 {
 	PROFILE_FUNCTION();
 
@@ -180,57 +208,85 @@ void indirect_draw_buffer::finish(ComPtr<ID3D12Device2> device, dx_command_list*
 	{
 		PROFILE_BLOCK("Set up indirect descriptor heap");
 
-		descriptorHeap.initialize(device, 
+		descriptors.descriptorHeap.initialize(device, 
 			(uint32)indirectMaterials.size() * 4	// Materials.
 			+ 3										// PBR Textures.
 			+ MAX_NUM_SUN_SHADOW_CASCADES			// Sun shadow map cascades.
 			+ 1										// Spot light shadow map.
 			+ 3										// Light probes.
 		);
-		SET_NAME(descriptorHeap.descriptorHeap, "Indirect descriptor heap");
+		SET_NAME(descriptors.descriptorHeap.descriptorHeap, "Indirect descriptor heap");
 
-		brdfOffset = descriptorHeap.gpuHandle;
-		descriptorHeap.pushCubemap(irradiance);
-		descriptorHeap.pushCubemap(prefilteredEnvironment);
-		descriptorHeap.push2DTexture(brdf);
+		descriptors.brdfOffset = descriptors.descriptorHeap.gpuHandle;
+		descriptors.descriptorHeap.pushCubemap(irradiance);
+		descriptors.descriptorHeap.pushCubemap(prefilteredEnvironment);
+		descriptors.descriptorHeap.push2DTexture(brdf);
 
-		shadowMapsOffset = descriptorHeap.gpuHandle;
+		descriptors.shadowMapsOffset = descriptors.descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < numSunShadowMapCascades; ++i)
 		{
-			descriptorHeap.pushDepthTexture(sunShadowMapCascades[i]);
+			descriptors.descriptorHeap.pushDepthTexture(sunShadowMapCascades[i]);
 		}
 		for (uint32 i = 0; i < MAX_NUM_SUN_SHADOW_CASCADES - numSunShadowMapCascades; ++i)
 		{
-			descriptorHeap.pushNullTexture();
+			descriptors.descriptorHeap.pushNullTexture();
 		}
-		descriptorHeap.pushDepthTexture(spotLightShadowMap);
+		descriptors.descriptorHeap.pushDepthTexture(spotLightShadowMap);
 
-		lightProbeOffset = descriptorHeap.gpuHandle;
-		descriptorHeap.pushStructuredBuffer(lightProbeSystem.lightProbePositionBuffer);
-		descriptorHeap.pushStructuredBuffer(lightProbeSystem.packedSphericalHarmonicsBuffer);
-		descriptorHeap.pushStructuredBuffer(lightProbeSystem.lightProbeTetrahedraBuffer);
+		descriptors.lightProbeOffset = descriptors.descriptorHeap.gpuHandle;
+		descriptors.descriptorHeap.pushStructuredBuffer(lightProbeSystem.lightProbePositionBuffer);
+		descriptors.descriptorHeap.pushStructuredBuffer(lightProbeSystem.packedSphericalHarmonicsBuffer);
+		descriptors.descriptorHeap.pushStructuredBuffer(lightProbeSystem.lightProbeTetrahedraBuffer);
 
 		// I am putting the material textures at the very end of the descriptor heap, since they are variably sized and the shader complains if there
 		// is a buffer coming after them.
-		albedosOffset = descriptorHeap.gpuHandle;
+		descriptors.albedosOffset = descriptors.descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 		{
-			descriptorHeap.push2DTexture(indirectMaterials[i].albedo);
+			if (indirectMaterials[i].albedo.resource)
+			{
+				descriptors.descriptorHeap.push2DTexture(indirectMaterials[i].albedo);
+			}
+			else
+			{
+				descriptors.descriptorHeap.pushNullTexture();
+			}
 		}
-		normalsOffset = descriptorHeap.gpuHandle;
+		descriptors.normalsOffset = descriptors.descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 		{
-			descriptorHeap.push2DTexture(indirectMaterials[i].normal);
+			if (indirectMaterials[i].normal.resource)
+			{
+				descriptors.descriptorHeap.push2DTexture(indirectMaterials[i].normal);
+			}
+			else
+			{
+				descriptors.descriptorHeap.pushNullTexture();
+			}
 		}
-		roughnessesOffset = descriptorHeap.gpuHandle;
+		descriptors.roughnessesOffset = descriptors.descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 		{
-			descriptorHeap.push2DTexture(indirectMaterials[i].roughness);
+			if (indirectMaterials[i].roughness.resource)
+			{
+				descriptors.descriptorHeap.push2DTexture(indirectMaterials[i].roughness);
+			}
+			else
+			{
+				descriptors.descriptorHeap.pushNullTexture();
+			}
 		}
-		metallicsOffset = descriptorHeap.gpuHandle;
+		descriptors.metallicsOffset = descriptors.descriptorHeap.gpuHandle;
 		for (uint32 i = 0; i < indirectMaterials.size(); ++i)
 		{
-			descriptorHeap.push2DTexture(indirectMaterials[i].metallic);
+			if (indirectMaterials[i].metallic.resource)
+			{
+				descriptors.descriptorHeap.push2DTexture(indirectMaterials[i].metallic);
+			}
+			else
+			{
+				descriptors.descriptorHeap.pushNullTexture();
+			}
 		}
 	}
 }
@@ -432,9 +488,93 @@ void indirect_pipeline::render(dx_command_list* commandList, indirect_draw_buffe
 	D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress,
 	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
 {
+	render(commandList, indirectBuffer.indirectMesh, indirectBuffer.descriptors,
+		indirectBuffer.commandBuffer, indirectBuffer.numDrawCalls, cameraCBAddress, sunCBAddress, spotLightCBAddress);
+}
+
+void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
+	dx_buffer& commandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer,
+	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
+{
 	PROFILE_FUNCTION();
 
-	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Geometry.");
+	setupPipeline(commandList, mesh, descriptors, commandBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
+
+	commandList->drawIndirect(
+		geometryCommandSignature,
+		maxNumDrawCalls, numDrawCallsBuffer,
+		commandBuffer);
+
+	commandList->resetToDynamicDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+}
+
+void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
+	dx_buffer& commandBuffer, uint32 numDrawCalls,
+	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
+{
+	PROFILE_FUNCTION();
+
+	setupPipeline(commandList, mesh, descriptors, commandBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
+
+	commandList->drawIndirect(
+		geometryCommandSignature,
+		numDrawCalls,
+		commandBuffer);
+
+	commandList->resetToDynamicDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+}
+
+void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const render_camera& camera, indirect_draw_buffer& indirectBuffer)
+{
+	renderDepthOnly(commandList, camera, indirectBuffer.indirectMesh, indirectBuffer.depthOnlyCommandBuffer, indirectBuffer.numDrawCalls);
+}
+
+void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
+	dx_buffer& depthOnlyCommandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer)
+{
+	setupDepthOnlyPipeline(commandList, camera, mesh, depthOnlyCommandBuffer);
+
+	commandList->drawIndirect(
+		depthOnlyCommandSignature,
+		maxNumDrawCalls, numDrawCallsBuffer,
+		depthOnlyCommandBuffer);
+}
+
+void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
+	dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls)
+{
+	setupDepthOnlyPipeline(commandList, camera, mesh, depthOnlyCommandBuffer);
+	
+	commandList->drawIndirect(
+		depthOnlyCommandSignature,
+		numDrawCalls,
+		depthOnlyCommandBuffer);
+}
+
+void indirect_pipeline::setupDepthOnlyPipeline(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh, dx_buffer& commandBuffer)
+{
+	commandList->setPipelineState(depthOnlyPipelineState);
+	commandList->setGraphicsRootSignature(depthOnlyRootSignature);
+
+	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	commandList->setVertexBuffer(0, mesh.vertexBuffer);
+	commandList->setIndexBuffer(mesh.indexBuffer);
+
+	// This only works, because the vertex shader expects the vp matrix as the first argument.
+	commandList->setGraphics32BitConstants(INDIRECT_ROOTPARAM_CAMERA, camera.viewProjectionMatrix);
+
+}
+
+void indirect_pipeline::setupPipeline(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
+	dx_buffer& commandBuffer,
+	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress,
+	D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress,
+	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
+{
+	PROFILE_FUNCTION();
+
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Setup indirect pipeline.");
 
 
 	commandList->setPipelineState(geometryPipelineState);
@@ -444,54 +584,28 @@ void indirect_pipeline::render(dx_command_list* commandList, indirect_draw_buffe
 
 	commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_CAMERA, cameraCBAddress);
 
-	commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, indirectBuffer.descriptorHeap.descriptorHeap);
+	commandList->setDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, descriptors.descriptorHeap.descriptorHeap);
 
 	// PBR.
-	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_BRDF_TEXTURES, indirectBuffer.brdfOffset);
+	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_BRDF_TEXTURES, descriptors.brdfOffset);
 
 	// Materials.
-	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_ALBEDOS, indirectBuffer.albedosOffset);
-	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_NORMALS, indirectBuffer.normalsOffset);
-	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_ROUGHNESSES, indirectBuffer.roughnessesOffset);
-	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_METALLICS, indirectBuffer.metallicsOffset);
+	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_ALBEDOS, descriptors.albedosOffset);
+	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_NORMALS, descriptors.normalsOffset);
+	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_ROUGHNESSES, descriptors.roughnessesOffset);
+	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_METALLICS, descriptors.metallicsOffset);
 
 	// Sun.
 	commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_DIRECTIONAL, sunCBAddress);
 	commandList->setGraphicsDynamicConstantBuffer(INDIRECT_ROOTPARAM_SPOT, spotLightCBAddress);
 
 	// Shadow maps.
-	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_SHADOWMAPS, indirectBuffer.shadowMapsOffset);
+	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_SHADOWMAPS, descriptors.shadowMapsOffset);
 
 	// Light probes.
-	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_LIGHTPROBES, indirectBuffer.lightProbeOffset);
+	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_LIGHTPROBES, descriptors.lightProbeOffset);
 
-	commandList->setVertexBuffer(0, indirectBuffer.indirectMesh.vertexBuffer);
-	commandList->setIndexBuffer(indirectBuffer.indirectMesh.indexBuffer);
+	commandList->setVertexBuffer(0, mesh.vertexBuffer);
+	commandList->setIndexBuffer(mesh.indexBuffer);
 
-
-	commandList->drawIndirect(
-		geometryCommandSignature,
-		indirectBuffer.numDrawCalls,
-		indirectBuffer.commandBuffer);
-
-	commandList->resetToDynamicDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-}
-
-void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const render_camera& camera, indirect_draw_buffer& indirectBuffer)
-{
-	commandList->setPipelineState(depthOnlyPipelineState);
-	commandList->setGraphicsRootSignature(depthOnlyRootSignature);
-
-	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-	commandList->setVertexBuffer(0, indirectBuffer.indirectMesh.vertexBuffer);
-	commandList->setIndexBuffer(indirectBuffer.indirectMesh.indexBuffer);
-
-	// This only works, because the vertex shader expects the vp matrix as the first argument.
-	commandList->setGraphics32BitConstants(INDIRECT_ROOTPARAM_CAMERA, camera.viewProjectionMatrix);
-
-	commandList->drawIndirect(
-		depthOnlyCommandSignature,
-		indirectBuffer.numDrawCalls,
-		indirectBuffer.depthOnlyCommandBuffer);
 }

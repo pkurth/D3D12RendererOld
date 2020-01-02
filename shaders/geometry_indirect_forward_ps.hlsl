@@ -3,6 +3,7 @@
 #include "pbr.hlsli"
 #include "camera.hlsli"
 #include "light_probe.hlsli"
+#include "lighting.hlsli"
 
 struct ps_input
 {
@@ -50,29 +51,6 @@ StructuredBuffer<packed_spherical_harmonics> sphericalHarmonics	: register(t1, s
 StructuredBuffer<light_probe_tetrahedron> lightProbeTetrahedra	: register(t2, space6);
 
 
-static float sampleShadowMap(float4x4 vp, float3 worldPosition, Texture2D<float> shadowMap, float texelSize, float bias)
-{
-	float4 lightProjected = mul(vp, float4(worldPosition, 1.f));
-	lightProjected.xyz /= lightProjected.w;
-
-	float2 lightUV = lightProjected.xy * 0.5f + float2(0.5f, 0.5f);
-	lightUV.y = 1.f - lightUV.y;
-
-	float visibility = 0.f;
-	uint count = 0;
-
-	for (int y = -2; y <= 2; ++y)
-	{
-		for (int x = -2; x <= 2; ++x)
-		{
-			visibility += shadowMap.SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - bias);
-			++count;
-		}
-	}
-	visibility /= count;
-	return visibility;
-}
-
 ps_output main(ps_input IN)
 {
 	uint textureID = material.textureID_usageFlags >> 16;
@@ -106,7 +84,6 @@ ps_output main(ps_input IN)
 
 
 	// Ambient.
-	
 #if 1
 	totalLighting.xyz += calculateAmbientLighting(albedo.xyz, irradianceTexture, environmentTexture, brdf, brdfSampler, N, V, F0, roughness, metallic, ao);
 #else
@@ -118,7 +95,6 @@ ps_output main(ps_input IN)
 #if 1
 	// Sun.
 	{
-		float visibility = 1.f;
 		uint numCascades = sun.numShadowCascades;
 		float4 cascadeDistances = sun.cascadeDistances;
 
@@ -132,10 +108,10 @@ ps_output main(ps_input IN)
 		int nextCascadeIndex = min(numCascades - 1, currentCascadeIndex + 1);
 
 		float4 bias = sun.bias;
-		visibility = sampleShadowMap(sun.vp[currentCascadeIndex], IN.worldPosition, sunShadowMapCascades[currentCascadeIndex], sun.texelSize, bias[currentCascadeIndex]);
+		float visibility = sampleShadowMap(sun.vp[currentCascadeIndex], IN.worldPosition, sunShadowMapCascades[currentCascadeIndex],
+			shadowMapSampler, sun.texelSize, bias[currentCascadeIndex]);
 
 		// Blend between cascades.
-
 		float currentPixelsBlendBandLocation = 1.f;
 		if (numCascades > 1)
 		{
@@ -151,7 +127,8 @@ ps_output main(ps_input IN)
 		if (currentPixelsBlendBandLocation < sun.blendArea) // Blend area is relative!
 		{
 			float blendBetweenCascadesAmount = currentPixelsBlendBandLocation / sun.blendArea;
-			float visibilityOfNextCascade = sampleShadowMap(sun.vp[nextCascadeIndex], IN.worldPosition, sunShadowMapCascades[nextCascadeIndex], sun.texelSize, bias[nextCascadeIndex]);
+			float visibilityOfNextCascade = sampleShadowMap(sun.vp[nextCascadeIndex], IN.worldPosition, sunShadowMapCascades[nextCascadeIndex], 
+				shadowMapSampler, sun.texelSize, bias[nextCascadeIndex]);
 			visibility = lerp(visibilityOfNextCascade, visibility, blendBetweenCascadesAmount);
 		}
 		
@@ -175,7 +152,7 @@ ps_output main(ps_input IN)
 			float epsilon = spotLight.innerCutoff - spotLight.outerCutoff;
 			float intensity = saturate((theta - spotLight.outerCutoff) / epsilon);
 
-			float visibility = sampleShadowMap(spotLight.vp, IN.worldPosition, spotLightShadowMap, spotLight.texelSize, spotLight.bias);
+			float visibility = sampleShadowMap(spotLight.vp, IN.worldPosition, spotLightShadowMap, shadowMapSampler, spotLight.texelSize, spotLight.bias);
 
 			float totalIntensity = intensity * attenuation * visibility;
 			if (totalIntensity > 0.f)
