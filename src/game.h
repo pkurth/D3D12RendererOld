@@ -52,6 +52,7 @@ private:
 
 	procedural_placement proceduralPlacement;
 	dx_texture densityMap;
+	dx_texture densityMap2;
 
 
 	particle_system particleSystem1;

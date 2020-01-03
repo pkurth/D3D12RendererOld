@@ -6,5 +6,6 @@ RWStructuredBuffer<uint> counter	: register(u0);
 void main(uint3 DTid : SV_DispatchThreadID)
 {
 	counter[0] = 0;
+	counter[1] = 0;
 }
 

@@ -7,7 +7,11 @@
 #include "profiling.h"
 #include "poisson_distribution.h"
 
-void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList)
+// Dither algorithms:
+// https://www.shadertoy.com/view/XlyXWW
+
+void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
+	std::vector<placement_mesh>& meshes, std::vector<placement_mesh_part>& meshParts)
 {
 	{
 		ComPtr<ID3DBlob> shaderBlob;
@@ -49,13 +53,13 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		ComPtr<ID3DBlob> shaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/procedural_placement_gen_points.cso", &shaderBlob));
 
-		CD3DX12_DESCRIPTOR_RANGE1 density(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
-		CD3DX12_DESCRIPTOR_RANGE1 placementPoints(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+		CD3DX12_DESCRIPTOR_RANGE1 srvs(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 5, 0); // Density map(s) and poisson samples.
+		CD3DX12_DESCRIPTOR_RANGE1 uavs(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); // Generated points and point count.
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_CB].InitAsConstants(sizeof(placement_gen_points_cb) / sizeof(float), 0);
-		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_POINTS].InitAsDescriptorTable(1, &placementPoints);
-		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_DENSITY].InitAsDescriptorTable(1, &density);
+		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS].InitAsDescriptorTable(1, &uavs);
+		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS].InitAsDescriptorTable(1, &srvs);
 
 		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
 
@@ -89,13 +93,13 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		ComPtr<ID3DBlob> shaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/procedural_placement_place_geometry.cso", &shaderBlob));
 
-		CD3DX12_DESCRIPTOR_RANGE1 placementPoints(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
-		CD3DX12_DESCRIPTOR_RANGE1 commands(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+		CD3DX12_DESCRIPTOR_RANGE1 srvs(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0);
+		CD3DX12_DESCRIPTOR_RANGE1 uavs(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_CB].InitAsConstants(sizeof(placement_place_geometry_cb) / sizeof(float), 0);
-		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_POINTS].InitAsDescriptorTable(1, &placementPoints);
-		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_COMMANDS].InitAsDescriptorTable(1, &commands);
+		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS].InitAsDescriptorTable(1, &uavs);
+		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS].InitAsDescriptorTable(1, &srvs);
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
@@ -130,19 +134,38 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 	}
 
 	maxNumDrawCalls = arraysize(POISSON_SAMPLES) * 4; // * 4, because multiple meshes per object.
-	placementPointBuffer.initialize<placement_point>(device, nullptr, maxNumDrawCalls);
+	placementPointBuffer.initialize<placement_point>(device, nullptr, arraysize(POISSON_SAMPLES));
 	poissonSampleBuffer.initialize(device, POISSON_SAMPLES, arraysize(POISSON_SAMPLES), commandList);
+
+	meshBuffer.initialize(device, meshes.data(), (uint32)meshes.size(), commandList);
+	meshPartBuffer.initialize(device, meshParts.data(), (uint32)meshParts.size(), commandList);
 
 	for (uint32 i = 0; i < NUM_BUFFERED_FRAMES; ++i)
 	{
-		renderResources[i].numDrawCallsBuffer.initialize<uint32>(device, nullptr, 1);
+		renderResources[i].numDrawCallsBuffer.initialize<uint32>(device, nullptr, 2);
 		renderResources[i].commandBuffer.initialize<indirect_command>(device, nullptr, maxNumDrawCalls);
 		renderResources[i].depthOnlyCommandBuffer.initialize<indirect_depth_only_command>(device, nullptr, maxNumDrawCalls);
 	}
+
+	dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4);
+	defaultSRV = allocation.getDescriptorHandle(0);
+
+	for (uint32 i = 0; i < 4; ++i)
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Format = DXGI_FORMAT_R8_UNORM;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Texture2D.MipLevels = -1;
+
+		device->CreateShaderResourceView(
+			nullptr, &srvDesc,
+			allocation.getDescriptorHandle(i)
+		);
+	}
 }
 
-void procedural_placement::generate(const render_camera& camera, dx_texture& densityMap,
-	placement_mesh* meshes, uint32 numMeshes, float dt)
+void procedural_placement::generate(const render_camera& camera, dx_texture& densityMap0, dx_texture& densityMap1, float dt)
 {
 	PROFILE_FUNCTION();
 
@@ -159,8 +182,8 @@ void procedural_placement::generate(const render_camera& camera, dx_texture& den
 	dx_command_list* commandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
 
 	clearCount(commandList);
-	generatePoints(commandList, densityMap, numMeshes, dt);
-	placeGeometry(commandList, meshes, numMeshes);
+	generatePoints(commandList, densityMap0, densityMap1, dt);
+	placeGeometry(commandList);
 
 	dx_command_queue::computeCommandQueue.executeCommandList(commandList);
 	
@@ -186,7 +209,7 @@ void procedural_placement::clearCount(dx_command_list* commandList)
 	commandList->uavBarrier(numDrawCallsBuffer.resource);
 }
 
-void procedural_placement::generatePoints(dx_command_list* commandList, dx_texture& densityMap, uint32 numMeshes, float dt)
+void procedural_placement::generatePoints(dx_command_list* commandList, dx_texture& densityMap0, dx_texture& densityMap1, float dt)
 {
 	PROFILE_FUNCTION();
 
@@ -194,7 +217,7 @@ void procedural_placement::generatePoints(dx_command_list* commandList, dx_textu
 	time += dt;
 
 	placement_gen_points_cb cb;
-	cb.numMeshes = numMeshes;
+	cb.numDensityMaps = 2;
 	cb.time = time;
 
 	commandList->setPipelineState(generatePointsPipelineState);
@@ -206,10 +229,13 @@ void procedural_placement::generatePoints(dx_command_list* commandList, dx_textu
 
 
 	commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, cb);
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_POINTS, 0, 1, placementPointBuffer.uav);
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_POINTS, 1, 1, numDrawCallsBuffer.uav);
-	commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_DENSITY, 0, densityMap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_DENSITY, 1, 1, poissonSampleBuffer.srv);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 0, 1, placementPointBuffer.uav);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 1, 1, numDrawCallsBuffer.uav);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 0, 1, poissonSampleBuffer.srv);
+	commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1, densityMap0, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 2, densityMap1, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 3, 4 - 2, defaultSRV);
 
 	commandList->dispatch((uint32)bucketize(arraysize(POISSON_SAMPLES), 512), 1, 1);
 
@@ -217,48 +243,38 @@ void procedural_placement::generatePoints(dx_command_list* commandList, dx_textu
 	commandList->uavBarrier(numDrawCallsBuffer.resource);
 }
 
-void procedural_placement::placeGeometry(dx_command_list* commandList, placement_mesh* meshes, uint32 numMeshes)
+void procedural_placement::placeGeometry(dx_command_list* commandList)
 {
 	PROFILE_FUNCTION();
 
-	assert(numMeshes > 0);
-
 	placement_place_geometry_cb cb;
-	cb.mesh0 = meshes[0];
-	if (numMeshes > 1)
-	{
-		cb.mesh1 = meshes[1];
-	}
-	if (numMeshes > 2)
-	{
-		cb.mesh2 = meshes[2];
-	}
-	if (numMeshes > 3)
-	{
-		cb.mesh3 = meshes[3];
-	}
-	cb.numMeshes = min(4u, numMeshes);
+	cb.numMeshes = 1;
 
 	commandList->setPipelineState(placeGeometryPipelineState);
 	commandList->setComputeRootSignature(placeGeometryRootSignature);
 
 	commandList->transitionBarrier(placementPointBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	commandList->transitionBarrier(numDrawCallsBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	commandList->transitionBarrier(meshBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	commandList->transitionBarrier(meshPartBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 	commandList->transitionBarrier(commandBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 	commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, cb);
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_POINTS, 0, 1, placementPointBuffer.srv);
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_POINTS, 1, 1, numDrawCallsBuffer.srv);
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_COMMANDS, 0, 1, commandBuffer.uav);
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_COMMANDS, 1, 1, depthOnlyCommandBuffer.uav);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 0, 1, placementPointBuffer.srv);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1, 1, meshBuffer.srv);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 2, 1, meshPartBuffer.srv);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 0, 1, commandBuffer.uav);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 1, 1, depthOnlyCommandBuffer.uav);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 2, 1, numDrawCallsBuffer.uav);
 
 	commandList->dispatch(bucketize(maxNumDrawCalls, 512), 1, 1);
 
 	//commandList->uavBarrier(commandBuffer.resource);
 	//commandList->uavBarrier(depthOnlyCommandBuffer.resource);
+	commandList->uavBarrier(numDrawCallsBuffer.resource);
 
+	commandList->transitionBarrier(numDrawCallsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
 	commandList->transitionBarrier(commandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
 	commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
 }

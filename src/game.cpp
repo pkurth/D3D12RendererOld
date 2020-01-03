@@ -24,6 +24,7 @@
 		- Raytracing.
 */
 
+#define ENABLE_SPONZA 0
 #define ENABLE_PARTICLES 0
 #define ENABLE_PROCEDURAL 1
 #define ENABLE_PROCEDURAL_SHADOWS 0
@@ -113,9 +114,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 
 	indirect.initialize(device, lightingRT, sunShadowMapRT->depthStencilFormat);
-	proceduralPlacement.initialize(device, commandList);
-	commandList->loadTextureFromFile(densityMap, L"res/density.png", texture_type_noncolor, false);
-	SET_NAME(densityMap.resource, "Density");
 
 
 	{
@@ -242,6 +240,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		debugDisplay.initialize(device, commandList, lightingRT);
 	}
 
+#if ENABLE_SPONZA
 	{
 		PROFILE_BLOCK("Load sponza model");
 
@@ -256,12 +255,16 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		indirectBuffer.push(mesh, submeshes, materials, createScaleMatrix(0.03f), commandList);
 	}
+#endif
 
+	submesh_info cubeSubmesh;
+	submesh_info sphereSubmesh;
 	{
-		PROFILE_BLOCK("Load sphere model");
+		PROFILE_BLOCK("Load sphere and cube model");
 
 		cpu_triangle_mesh<vertex_3PUNTL> mesh;
-		submesh_info sphereSubmesh = mesh.pushSphere(21, 21, 1.f);
+		cubeSubmesh = mesh.pushCube(1.f);
+		sphereSubmesh = mesh.pushSphere(15, 15);
 
 		vec4 colors[] = { vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f) };
 		float roughnesses[] = { 0.f, 0.25f, 0.5f, 0.75f, 1.f };
@@ -276,9 +279,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		// TODO: We cannot compute per vertex light probe indices for instanced objects.
 
-		indirectBuffer.push(mesh, { sphereSubmesh }, colors, roughnesses, metallics, transforms, 5);
+		indirectBuffer.push(mesh, { cubeSubmesh, sphereSubmesh }, colors, roughnesses, metallics, transforms, 5);
 	}
 
+#if 0
 	{
 		PROFILE_BLOCK("Load flood light model");
 
@@ -298,6 +302,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		indirectBuffer.push(mesh, submeshes, vec4(1.f, 1.f, 1.f, 1.f), 0.5f, 1.f, model);
 	}
+#endif
 
 	{
 		PROFILE_BLOCK("Big oak model");
@@ -307,7 +312,28 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 		indirectBuffer.push(mesh, submeshes, materials, createScaleMatrix(1.f), commandList);
 	}
-	
+
+
+	std::vector<placement_mesh_part> placementMeshParts =
+	{
+		{ cubeSubmesh.numTriangles, cubeSubmesh.firstTriangle, cubeSubmesh.baseVertex, 0 },
+		{ sphereSubmesh.numTriangles, sphereSubmesh.firstTriangle, sphereSubmesh.baseVertex, 0 },
+	};
+
+	std::vector<placement_mesh> placementMeshes =
+	{
+		{ 0, 1 },
+		{ 1, 1 },
+	};
+
+	proceduralPlacement.initialize(device, commandList, placementMeshes, placementMeshParts);
+	commandList->loadTextureFromFile(densityMap, L"res/density.png", texture_type_noncolor, false);
+	commandList->loadTextureFromFile(densityMap2, L"res/density2.png", texture_type_noncolor, false);
+	SET_NAME(densityMap.resource, "Density");
+	SET_NAME(densityMap2.resource, "Density2");
+
+
+
 	{
 		PROFILE_BLOCK("Load environment");
 
@@ -543,13 +569,7 @@ void dx_game::renderShadowmap(dx_command_list* commandList, dx_render_target& sh
 uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
 {
 #if ENABLE_PROCEDURAL
-	placement_mesh placementMeshes[] =
-	{
-		{ 3984, 265919, 213153, 1572867 },
-		{ 3648, 269903, 218635, 1638403 },
-		{ 1920, 273551, 229579, 1703939 },
-	};
-	proceduralPlacement.generate(camera, densityMap, placementMeshes, arraysize(placementMeshes), dt);
+	proceduralPlacement.generate(camera, densityMap, densityMap2, dt);
 #endif
 
 	dx_command_list* commandList = dx_command_queue::renderCommandQueue.getAvailableCommandList();
