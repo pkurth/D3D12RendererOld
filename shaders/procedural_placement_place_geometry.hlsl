@@ -1,5 +1,6 @@
 #include "material.hlsli"
 #include "random.hlsli"
+#include "camera.hlsli"
 
 struct cs_input
 {
@@ -18,8 +19,10 @@ struct placement_point
 	uint id;
 };
 
-struct placement_mesh_part
+struct submesh_info
 {
+	float4 aabbMin;
+	float4 aabbMax;
 	uint numTriangles;
 	uint firstTriangle;
 	uint baseVertex;
@@ -32,9 +35,9 @@ struct placement_mesh
 	uint count;
 };
 
-cbuffer placement_cb : register(b0)
+cbuffer camera_frustum_cb : register(b0)
 {
-	uint numMeshes;
+	camera_frustum_planes cameraFrustum;
 };
 
 struct D3D12_DRAW_INDEXED_ARGUMENTS
@@ -62,7 +65,7 @@ struct indirect_depth_only_command
 
 StructuredBuffer<placement_point> placementPoints	: register(t0);
 StructuredBuffer<placement_mesh> meshes				: register(t1);
-StructuredBuffer<placement_mesh_part> meshParts		: register(t2);
+StructuredBuffer<submesh_info> submeshes			: register(t2);
 
 RWStructuredBuffer<indirect_command> outCommands	: register(u0);
 RWStructuredBuffer<indirect_depth_only_command> outDepthOnlyCommands : register(u1);
@@ -71,8 +74,11 @@ RWStructuredBuffer<uint> pointCounter				: register(u2);
 
 #define BLOCK_SIZE 512
 
-static void placeGeometry(float4x4 modelMatrix, placement_mesh_part mesh, float4 color, uint outIndex)
+
+static void placeGeometry(float4x4 modelMatrix, submesh_info mesh, float4 color, uint outIndex)
 {
+	bool cull = cullModelSpaceAABB(cameraFrustum, mesh.aabbMin, mesh.aabbMax, modelMatrix);
+
 	indirect_command result;
 	result.modelMatrix = modelMatrix;
 
@@ -82,7 +88,7 @@ static void placeGeometry(float4x4 modelMatrix, placement_mesh_part mesh, float4
 	result.material.metallicOverride = 0.f;
 
 	result.drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
-	result.drawArguments.InstanceCount = 1;
+	result.drawArguments.InstanceCount = cull ? 0 : 1;
 	result.drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
 	result.drawArguments.BaseVertexLocation = mesh.baseVertex;
 	result.drawArguments.StartInstanceLocation = 0;
@@ -165,10 +171,11 @@ void main(cs_input IN)
 			{ 0, 0, 0, 1 }
 		};
 
+
+
 		for (uint i = 0; i < count; ++i)
 		{
-			placement_mesh_part mesh = meshParts[offset + i];
-			modelMatrix._m13 += i * 2.f * scale;
+			submesh_info mesh = submeshes[offset + i];
 			float4 color = offset == 0 ? float4(1, 1, 1, 1) : float4(1, 0, 0, 1);
 			placeGeometry(modelMatrix, mesh, color, startOffset + groupIndex + i);
 		}

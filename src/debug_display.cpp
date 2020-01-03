@@ -301,7 +301,7 @@ void debug_display::renderLine(dx_command_list* commandList, const render_camera
 	renderLineStrip(commandList, camera, vertices, 2, color);
 }
 
-void debug_display::renderFrustum(dx_command_list* commandList, const render_camera& camera, const camera_frustum& frustum, vec4 color)
+void debug_display::renderFrustum(dx_command_list* commandList, const render_camera& camera, const camera_frustum_corners& frustum, vec4 color)
 {
 	PROFILE_FUNCTION();
 

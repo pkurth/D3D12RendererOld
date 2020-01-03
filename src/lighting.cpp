@@ -671,7 +671,7 @@ void directional_light::updateMatrices(const render_camera& camera)
 	comp_mat viewMatrix = createLookAt(vec3(0.f, 0.f, 0.f), worldSpaceDirection, vec3(0.f, 1.f, 0.f));
 
 	vec3 worldForward = camera.rotation * vec3(0.f, 0.f, -1.f);
-	camera_frustum worldFrustum = camera.getWorldSpaceFrustum();
+	camera_frustum_corners worldFrustum = camera.getWorldSpaceFrustumCorners();
 
 	comp_vec worldBottomLeft = worldFrustum.farBottomLeft - worldFrustum.nearBottomLeft;
 	comp_vec worldBottomRight = worldFrustum.farBottomRight - worldFrustum.nearBottomRight;

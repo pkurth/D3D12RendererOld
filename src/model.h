@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "math.h"
+#include "material.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/Exporter.hpp>
@@ -106,11 +107,13 @@ void setUV(vertex_t& v, vec2 uv)
 
 struct submesh_info
 {
-	uint32 firstTriangle;
+	vec4 aabbMax;
+	vec4 aabbMin;
 	uint32 numTriangles;
+	uint32 firstTriangle;
 	uint32 baseVertex;
 
-	uint32 materialIndex;
+	uint32 textureID_usageFlags = 0;
 };
 
 struct submesh_material_info
@@ -212,6 +215,34 @@ inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> 
 		{
 			submeshMaterials[i] = loadAssimpMaterial(scene->mMaterials[i], parent);
 		}
+
+
+		for (submesh_info& submesh : submeshes)
+		{
+			uint32 materialIndex = submesh.textureID_usageFlags >> 16;
+
+			uint32 usageFlags = 0;
+
+			if (submeshMaterials[materialIndex].albedoName.length() > 0)
+			{
+				usageFlags |= USE_ALBEDO_TEXTURE;
+			}
+			if (submeshMaterials[materialIndex].normalName.length() > 0)
+			{
+				usageFlags |= USE_NORMAL_TEXTURE;
+			}
+			if (submeshMaterials[materialIndex].roughnessName.length() > 0)
+			{
+				usageFlags |= USE_ROUGHNESS_TEXTURE;
+			}
+			if (submeshMaterials[materialIndex].metallicName.length() > 0)
+			{
+				usageFlags |= USE_METALLIC_TEXTURE;
+			}
+			
+			submesh.textureID_usageFlags = (materialIndex << 16) | usageFlags;
+		}
+
 	}
 
 	return { submeshes, submeshMaterials };
@@ -268,7 +299,15 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::loadAssimpMesh(const aiMesh* me
 		triangles[i + firstTriangle].c = face.mIndices[2];
 	}
 
-	return submesh_info{ firstTriangle, numTriangles, baseVertex, mesh->mMaterialIndex };
+	submesh_info result;
+	result.firstTriangle = firstTriangle;
+	result.numTriangles = numTriangles;
+	result.baseVertex = baseVertex;
+	bounding_box bb = computeBoundingBox(result, vertices, triangles);
+	result.aabbMin = vec4(bb.min, 1.f);
+	result.aabbMax = vec4(bb.max, 1.f);
+	result.textureID_usageFlags = mesh->mMaterialIndex << 16;
+	return result;
 }
 
 template<typename vertex_t>
@@ -320,7 +359,13 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushQuad(float radius)
 
 	memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(triangles));
 
-	return submesh_info{ firstTriangle, numTriangles, baseVertex };
+	submesh_info result;
+	result.firstTriangle = firstTriangle;
+	result.numTriangles = numTriangles;
+	result.baseVertex = baseVertex;
+	result.aabbMin = vec4(vec3(1.f, 1.f, 0.f) * -radius, 1.f);
+	result.aabbMax = vec4(vec3(1.f, 1.f, 0.f) * radius, 1.f);
+	return result;
 }
 
 template<typename vertex_t>
@@ -382,7 +427,13 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushCube(float radius, bool inv
 
 		memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(triangles));
 
-		return submesh_info{ firstTriangle, numTriangles, baseVertex };
+		submesh_info result;
+		result.firstTriangle = firstTriangle;
+		result.numTriangles = numTriangles;
+		result.baseVertex = baseVertex;
+		result.aabbMin = vec4(vec3(1.f, 1.f, 1.f) * -radius, 1.f);
+		result.aabbMax = vec4(vec3(1.f, 1.f, 1.f) * radius, 1.f);
+		return result;
 	}
 	else
 	{
@@ -457,7 +508,13 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushCube(float radius, bool inv
 
 		memcpy(this->triangles.data() + firstTriangle, triangles, sizeof(triangles));
 
-		return submesh_info{ firstTriangle, numTriangles, baseVertex };
+		submesh_info result;
+		result.firstTriangle = firstTriangle;
+		result.numTriangles = numTriangles;
+		result.baseVertex = baseVertex;
+		result.aabbMin = vec4(vec3(1.f, 1.f, 1.f) * -radius, 1.f);
+		result.aabbMax = vec4(vec3(1.f, 1.f, 1.f) * radius, 1.f);
+		return result;
 	}
 }
 
@@ -560,7 +617,13 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushSphere(uint16 slices, uint1
 	delete[] vertices;
 	delete[] triangles;
 
-	return submesh_info{ firstTriangle, numTriangles, baseVertex };
+	submesh_info result;
+	result.firstTriangle = firstTriangle;
+	result.numTriangles = numTriangles;
+	result.baseVertex = baseVertex;
+	result.aabbMin = vec4(vec3(1.f, 1.f, 1.f) * -radius, 1.f);
+	result.aabbMax = vec4(vec3(1.f, 1.f, 1.f) * radius, 1.f);
+	return result;
 }
 
 template<typename vertex_t>
@@ -677,7 +740,13 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushCapsule(uint16 slices, uint
 	delete[] vertices;
 	delete[] triangles;
 
-	return submesh_info{ firstTriangle, numTriangles, baseVertex };
+	submesh_info result;
+	result.firstTriangle = firstTriangle;
+	result.numTriangles = numTriangles;
+	result.baseVertex = baseVertex;
+	result.aabbMin = vec4(-radius, -halfHeight - radius, -radius, 1.f);
+	result.aabbMax = vec4(radius, halfHeight + radius, radius, 1.f);
+	return result;
 }
 
 template<typename vertex_t>
@@ -742,12 +811,12 @@ static void splitSubmeshHelper(submesh_info submesh, const std::vector<vertex_t>
 			subA.firstTriangle = submesh.firstTriangle;
 			subA.numTriangles = submesh.numTriangles / 2; // Mean split.
 			subA.baseVertex = submesh.baseVertex;
-			subA.materialIndex = submesh.materialIndex;
+			subA.textureID_usageFlags = submesh.textureID_usageFlags;
 
 			subB.firstTriangle = submesh.firstTriangle + subA.numTriangles;
 			subB.numTriangles = submesh.numTriangles - subA.numTriangles;
 			subB.baseVertex = submesh.baseVertex;
-			subB.materialIndex = submesh.materialIndex;
+			subB.textureID_usageFlags = submesh.textureID_usageFlags;
 
 			splitSubmeshHelper(subA, vertices, triangles, maxDim, maxNumTriangles, result);
 			splitSubmeshHelper(subB, vertices, triangles, maxDim, maxNumTriangles, result);

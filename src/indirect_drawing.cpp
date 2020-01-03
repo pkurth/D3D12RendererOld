@@ -20,7 +20,10 @@ void indirect_draw_buffer::pushInternal(cpu_triangle_mesh<vertex_3PUNTL>& mesh, 
 	{
 		s.baseVertex += vertexOffset;
 		s.firstTriangle += triangleOffset;
-		s.materialIndex += materialOffset;
+
+		uint32 currentMaterialOffset = s.textureID_usageFlags >> 16;
+		currentMaterialOffset += materialOffset;
+		s.textureID_usageFlags = (s.textureID_usageFlags & 0xFFFF) | (currentMaterialOffset << 16);
 	}
 }
 
@@ -72,23 +75,7 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 
 		command.modelMatrix = transform;
 
-		command.material.textureID_usageFlags = (mesh.materialIndex << 16);
-		if (indirectMaterials[mesh.materialIndex].albedo.resource)
-		{
-			command.material.textureID_usageFlags |= USE_ALBEDO_TEXTURE;
-		}
-		if (indirectMaterials[mesh.materialIndex].normal.resource)
-		{
-			command.material.textureID_usageFlags |= USE_NORMAL_TEXTURE;
-		}
-		if (indirectMaterials[mesh.materialIndex].roughness.resource)
-		{
-			command.material.textureID_usageFlags |= USE_ROUGHNESS_TEXTURE;
-		}
-		if (indirectMaterials[mesh.materialIndex].metallic.resource)
-		{
-			command.material.textureID_usageFlags |= USE_METALLIC_TEXTURE;
-		}
+		command.material.textureID_usageFlags = mesh.textureID_usageFlags;
 		command.material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
 		command.material.roughnessOverride = 1.f;
 		command.material.metallicOverride = 0.f;

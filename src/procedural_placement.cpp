@@ -11,7 +11,7 @@
 // https://www.shadertoy.com/view/XlyXWW
 
 void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
-	std::vector<placement_mesh>& meshes, std::vector<placement_mesh_part>& meshParts)
+	std::vector<placement_mesh>& meshes, std::vector<submesh_info>& subMeshes)
 {
 	{
 		ComPtr<ID3DBlob> shaderBlob;
@@ -97,7 +97,7 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		CD3DX12_DESCRIPTOR_RANGE1 uavs(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
-		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_CB].InitAsConstants(sizeof(placement_place_geometry_cb) / sizeof(float), 0);
+		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_CAMERA].InitAsConstants(sizeof(camera_frustum_planes) / sizeof(float), 0);
 		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS].InitAsDescriptorTable(1, &uavs);
 		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS].InitAsDescriptorTable(1, &srvs);
 
@@ -138,7 +138,7 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 	poissonSampleBuffer.initialize(device, POISSON_SAMPLES, arraysize(POISSON_SAMPLES), commandList);
 
 	meshBuffer.initialize(device, meshes.data(), (uint32)meshes.size(), commandList);
-	meshPartBuffer.initialize(device, meshParts.data(), (uint32)meshParts.size(), commandList);
+	submeshBuffer.initialize(device, subMeshes.data(), (uint32)subMeshes.size(), commandList);
 
 	for (uint32 i = 0; i < NUM_BUFFERED_FRAMES; ++i)
 	{
@@ -183,7 +183,7 @@ void procedural_placement::generate(const render_camera& camera, dx_texture& den
 
 	clearCount(commandList);
 	generatePoints(commandList, densityMap0, densityMap1, dt);
-	placeGeometry(commandList);
+	placeGeometry(commandList, camera);
 
 	dx_command_queue::computeCommandQueue.executeCommandList(commandList);
 	
@@ -243,27 +243,27 @@ void procedural_placement::generatePoints(dx_command_list* commandList, dx_textu
 	commandList->uavBarrier(numDrawCallsBuffer.resource);
 }
 
-void procedural_placement::placeGeometry(dx_command_list* commandList)
+void procedural_placement::placeGeometry(dx_command_list* commandList, const render_camera& camera)
 {
 	PROFILE_FUNCTION();
 
-	placement_place_geometry_cb cb;
-	cb.numMeshes = 1;
 
 	commandList->setPipelineState(placeGeometryPipelineState);
 	commandList->setComputeRootSignature(placeGeometryRootSignature);
 
 	commandList->transitionBarrier(placementPointBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	commandList->transitionBarrier(meshBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	commandList->transitionBarrier(meshPartBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	commandList->transitionBarrier(submeshBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 	commandList->transitionBarrier(commandBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-	commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, cb);
+	camera_frustum_planes frustum = camera.getWorldSpaceFrustumPlanes();
+
+	commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CAMERA, frustum);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 0, 1, placementPointBuffer.srv);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1, 1, meshBuffer.srv);
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 2, 1, meshPartBuffer.srv);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 2, 1, submeshBuffer.srv);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 0, 1, commandBuffer.uav);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 1, 1, depthOnlyCommandBuffer.uav);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 2, 1, numDrawCallsBuffer.uav);

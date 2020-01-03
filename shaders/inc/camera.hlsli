@@ -57,4 +57,67 @@ static float depthBufferDepthToLinearWorldDepthEyeToFarPlane(float depthBufferDe
 	return depthBufferDepthToLinearNormalizedDepthEyeToFarPlane(depthBufferDepth, projectionParams) * projectionParams.y;
 }
 
+struct camera_frustum_planes
+{
+	float4 planes[6];
+};
+
+// Returns true, if object should be culled.
+static bool cullWorldSpaceAABB(camera_frustum_planes planes, float4 min, float4 max)
+{
+	for (uint i = 0; i < 6; ++i)
+	{
+		float4 plane = planes.planes[i];
+		float4 vertex = float4(
+			(plane.x < 0.f) ? min.x : max.x,
+			(plane.y < 0.f) ? min.y : max.y,
+			(plane.z < 0.f) ? min.z : max.z,
+			1.f
+		);
+		if (dot(plane, vertex) < 0.f)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool cullModelSpaceAABB(camera_frustum_planes planes, float4 min, float4 max, float4x4 transform)
+{
+	float4 worldSpaceCorners[] =
+	{
+		mul(transform, float4(min.x, min.y, min.z, 1.f)),
+		mul(transform, float4(max.x, min.y, min.z, 1.f)),
+		mul(transform, float4(min.x, max.y, min.z, 1.f)),
+		mul(transform, float4(max.x, max.y, min.z, 1.f)),
+		mul(transform, float4(min.x, min.y, max.z, 1.f)),
+		mul(transform, float4(max.x, min.y, max.z, 1.f)),
+		mul(transform, float4(min.x, max.y, max.z, 1.f)),
+		mul(transform, float4(max.x, max.y, max.z, 1.f)),
+	};
+
+	for (uint i = 0; i < 6; ++i)
+	{
+		float4 plane = planes.planes[i];
+
+		bool inside = false;
+
+		for (uint j = 0; j < 8; ++j)
+		{
+			if (dot(plane, worldSpaceCorners[j]) > 0.f)
+			{
+				inside = true;
+				break;
+			}
+		}
+
+		if (!inside)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 #endif

@@ -16,7 +16,7 @@ struct debug_display
 	void renderLineMesh(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh, mat4 transform);
 	void renderLineStrip(dx_command_list* commandList, const render_camera& camera, vec3* vertices, uint32 numVertices, vec4 color);
 	void renderLine(dx_command_list* commandList, const render_camera& camera, vec3 from, vec3 to, vec4 color);
-	void renderFrustum(dx_command_list* commandList, const render_camera& camera, const camera_frustum& frustum, vec4 color);
+	void renderFrustum(dx_command_list* commandList, const render_camera& camera, const camera_frustum_corners& frustum, vec4 color);
 
 	ComPtr<ID3D12PipelineState> unlitTexturedPipelineState;
 	dx_root_signature unlitTexturedRootSignature;

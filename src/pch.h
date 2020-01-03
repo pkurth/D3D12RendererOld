@@ -32,4 +32,5 @@ namespace fs = std::filesystem;
 #include <wrl.h> 
 using namespace Microsoft::WRL;
 
-
+#undef near
+#undef far

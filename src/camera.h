@@ -3,7 +3,7 @@
 #include "common.h"
 #include "math.h"
 
-union camera_frustum
+union camera_frustum_corners
 {
 	vec3 eye;
 
@@ -23,7 +23,27 @@ union camera_frustum
 		vec3 corners[8];
 	};
 
-	camera_frustum() {}
+	camera_frustum_corners() {}
+};
+
+union camera_frustum_planes
+{
+	struct
+	{
+		vec4 left;
+		vec4 right;
+		vec4 top;
+		vec4 bottom;
+		vec4 near;
+		vec4 far;
+	};
+	vec4 planes[6];
+
+	camera_frustum_planes() {}
+
+	// Returns true, if object should be culled.
+	bool cullWorldSpaceAABB(const bounding_box& aabb);
+	bool cullModelSpaceAABB(const bounding_box& aabb, const mat4& transform);
 };
 
 struct camera_cb
@@ -62,116 +82,18 @@ struct render_camera
 	mat4 viewProjectionMatrix;
 
 
-	void updateMatrices(uint32 width, uint32 height)
-	{
-		float aspectRatio = (float)width / (float)height;
-		projectionMatrix = createPerspectiveMatrix(fovY, aspectRatio, nearPlane, farPlane);
-		invProjectionMatrix = projectionMatrix.invert();
-
-		viewMatrix = createModelMatrix(position, rotation).invert();
-		invViewMatrix = viewMatrix.invert();
-
-		viewProjectionMatrix = projectionMatrix * viewMatrix;
-		invViewProjectionMatrix = invViewMatrix * invProjectionMatrix;
-	}
-
-	void fillConstantBuffer(camera_cb& cb) const
-	{
-		cb.vp = viewProjectionMatrix;
-		cb.v = viewMatrix;
-		cb.p = projectionMatrix;
-		cb.invV = invViewMatrix;
-		cb.invP = invProjectionMatrix;
-		cb.invVP = invViewProjectionMatrix;
-		cb.pos = vec4(position.x, position.y, position.z, 1.f);
-		cb.forward = rotation * vec3(0.f, 0.f, -1.f);
-		cb.projectionParams = vec4(nearPlane, farPlane, farPlane / nearPlane, 1.f - farPlane / nearPlane);
-
-		mat4 v = viewMatrix;
-		v.m03 = 0.f; v.m13 = 0.f; v.m23 = 0.f;
-		cb.skyVP = projectionMatrix * v;
-	}
-
-	comp_vec restoreViewSpacePosition(vec2 uv, float depthBufferDepth) const
-	{
-		uv.y = 1.f - uv.y; // Screen uvs start at the top left, so flip y.
-		vec3 ndc = vec3(uv * 2.f - vec2(1.f, 1.f), depthBufferDepth);
-		comp_vec homPosition = invProjectionMatrix * vec4(ndc, 1.f);
-		comp_vec position = homPosition / homPosition.dxvector.m128_f32[3];
-		return position;
-	}
-
-	comp_vec restoreWorldSpacePosition(vec2 uv, float depthBufferDepth) const
-	{
-		uv.y = 1.f - uv.y; // Screen uvs start at the top left, so flip y.
-		vec3 ndc = vec3(uv * 2.f - vec2(1.f, 1.f), depthBufferDepth);
-		comp_vec homPosition = invViewProjectionMatrix * vec4(ndc, 1.f);
-		comp_vec position = homPosition / homPosition.dxvector.m128_f32[3];
-		return position;
-	}
-
-	float depthBufferDepthToLinearNormalizedDepthEyeToFarPlane(float depthBufferDepth) const
-	{
-		float c1 = farPlane / nearPlane;
-		float c0 = 1.f - c1;
-		return 1.f / (c0 * depthBufferDepth + c1);
-	}
-
-	float eyeDepthToDepthBufferDepth(float eyeDepth) const
-	{
-		return -projectionMatrix.m22 + projectionMatrix.m23 / eyeDepth;
-	}
-
-	camera_frustum getWorldSpaceFrustum(float alternativeFarPlane = 0.f) const
-	{
-		if (alternativeFarPlane <= 0.f)
-		{
-			alternativeFarPlane = farPlane;
-		}
-
-		float depthValue = eyeDepthToDepthBufferDepth(alternativeFarPlane);
-
-		camera_frustum result;
-
-		result.eye = position;
-
-		result.nearBottomLeft =  restoreWorldSpacePosition(vec2(0.f, 1.f), 0.f);
-		result.nearBottomRight = restoreWorldSpacePosition(vec2(1.f, 1.f), 0.f);
-		result.nearTopLeft =	 restoreWorldSpacePosition(vec2(0.f, 0.f), 0.f);
-		result.nearTopRight =	 restoreWorldSpacePosition(vec2(1.f, 0.f), 0.f);
-		result.farBottomLeft =	 restoreWorldSpacePosition(vec2(0.f, 1.f), depthValue);
-		result.farBottomRight =  restoreWorldSpacePosition(vec2(1.f, 1.f), depthValue);
-		result.farTopLeft =		 restoreWorldSpacePosition(vec2(0.f, 0.f), depthValue);
-		result.farTopRight =	 restoreWorldSpacePosition(vec2(1.f, 0.f), depthValue);
-
-		return result;
-	}
+	void updateMatrices(uint32 width, uint32 height);
+	void fillConstantBuffer(camera_cb& cb) const;
+	comp_vec restoreViewSpacePosition(vec2 uv, float depthBufferDepth) const;
+	comp_vec restoreWorldSpacePosition(vec2 uv, float depthBufferDepth) const;
+	float depthBufferDepthToLinearNormalizedDepthEyeToFarPlane(float depthBufferDepth) const;
+	float eyeDepthToDepthBufferDepth(float eyeDepth) const;
+	camera_frustum_corners getWorldSpaceFrustumCorners(float alternativeFarPlane = 0.f) const;
+	camera_frustum_planes getWorldSpaceFrustumPlanes() const;
 };
 
 struct cubemap_camera : render_camera
 {
-	void initialize(vec3 position, uint32 cubemapIndex)
-	{
-		this->position = position;
-
-		// We flip to z order here, to account for our right-handed coordinate system.
-		// Unfortunately this means, we need to again flip the z coordinate of our texture coordinates in the shader.
-		switch (cubemapIndex)
-		{
-		case 0: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(-90.f)); break;	// +X.
-		case 1: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(90.f)); break;		// -X.
-		case 2: this->rotation = createQuaternionFromAxisAngle(vec3::right, DirectX::XMConvertToRadians(90.f)); break;	// +Y.
-		case 3: this->rotation = createQuaternionFromAxisAngle(vec3::right, DirectX::XMConvertToRadians(-90.f)); break; // -Y.
-		case 4: this->rotation = quat::identity; break; 																// -Z.
-		case 5: this->rotation = createQuaternionFromAxisAngle(vec3::up, DirectX::XMConvertToRadians(180.f)); break;	// +Z.
-		default: assert(false);
-		}
-
-		this->fovY = DirectX::XMConvertToRadians(90.f);
-		this->nearPlane = 0.1f;
-		this->farPlane = 1000.f;
-
-		updateMatrices(1, 1);
-	}
+	void initialize(vec3 position, uint32 cubemapIndex);
 };
 

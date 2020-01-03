@@ -60,7 +60,7 @@ void main(cs_input IN)
 		densitySum += density;
 	}
 
-	densitySum = max(densitySum, 1.f);
+	densitySum = max(densitySum, 1.f); // Only normalize if we are above 1.
 	densities /= densitySum;
 
 	densities.y += densities.x;

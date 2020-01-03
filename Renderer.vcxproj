@@ -143,6 +143,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\buffer.cpp" />
+    <ClCompile Include="src\camera.cpp" />
     <ClCompile Include="src\command_list.cpp" />
     <ClCompile Include="src\command_queue.cpp" />
     <ClCompile Include="src\debug_display.cpp" />

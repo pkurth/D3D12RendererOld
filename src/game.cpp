@@ -266,20 +266,21 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		cubeSubmesh = mesh.pushCube(1.f);
 		sphereSubmesh = mesh.pushSphere(15, 15);
 
-		vec4 colors[] = { vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f) };
-		float roughnesses[] = { 0.f, 0.25f, 0.5f, 0.75f, 1.f };
-		float metallics[] = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
+		vec4 colors[] = { vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f) };
+		float roughnesses[] = { 0.f, 0.25f, 0.5f, 0.75f, 1.f, 1.f };
+		float metallics[] = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5 };
 		mat4 transforms[] = {
 			createModelMatrix(vec3(-10.f + 0.f * 4.f, 3.f, 0.f), quat::identity),
 			createModelMatrix(vec3(-10.f + 1.f * 4.f, 3.f, 0.f), quat::identity),
 			createModelMatrix(vec3(-10.f + 2.f * 4.f, 3.f, 0.f), quat::identity),
 			createModelMatrix(vec3(-10.f + 3.f * 4.f, 3.f, 0.f), quat::identity),
 			createModelMatrix(vec3(-10.f + 4.f * 4.f, 3.f, 0.f), quat::identity),
+			createModelMatrix(vec3(30.f, 10.f, 10.f), createQuaternionFromAxisAngle(vec3(1.f, 0.f, 0.f), 0.3f), 10.f),
 		};
 
 		// TODO: We cannot compute per vertex light probe indices for instanced objects.
 
-		indirectBuffer.push(mesh, { cubeSubmesh, sphereSubmesh }, colors, roughnesses, metallics, transforms, 5);
+		indirectBuffer.push(mesh, { cubeSubmesh }, colors, roughnesses, metallics, transforms, 6);
 	}
 
 #if 0
@@ -303,7 +304,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		indirectBuffer.push(mesh, submeshes, vec4(1.f, 1.f, 1.f, 1.f), 0.5f, 1.f, model);
 	}
 #endif
-
+		
 	{
 		PROFILE_BLOCK("Big oak model");
 
@@ -314,19 +315,19 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	}
 
 
-	std::vector<placement_mesh_part> placementMeshParts =
+	std::vector<submesh_info> placementSubmeshes =
 	{
-		{ cubeSubmesh.numTriangles, cubeSubmesh.firstTriangle, cubeSubmesh.baseVertex, 0 },
-		{ sphereSubmesh.numTriangles, sphereSubmesh.firstTriangle, sphereSubmesh.baseVertex, 0 },
+		cubeSubmesh,
+		sphereSubmesh,
 	};
 
 	std::vector<placement_mesh> placementMeshes =
 	{
-		{ 0, 1 },
-		{ 1, 1 },
+		{ 0, 1 }, // Cube.
+		{ 1, 1 }, // Sphere.
 	};
 
-	proceduralPlacement.initialize(device, commandList, placementMeshes, placementMeshParts);
+	proceduralPlacement.initialize(device, commandList, placementMeshes, placementSubmeshes);
 	commandList->loadTextureFromFile(densityMap, L"res/density.png", texture_type_noncolor, false);
 	commandList->loadTextureFromFile(densityMap2, L"res/density2.png", texture_type_noncolor, false);
 	SET_NAME(densityMap.resource, "Density");
@@ -460,11 +461,24 @@ void dx_game::update(float dt)
 
 	this->dt = dt;
 
+	camera_frustum_planes cameraFrustumPlanes = camera.getWorldSpaceFrustumPlanes();
+	bounding_box testBB = { vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f) };
+
+	bool testCull = cameraFrustumPlanes.cullModelSpaceAABB(testBB, createModelMatrix(vec3(30.f, 10.f, 10.f), createQuaternionFromAxisAngle(vec3(1.f, 0.f, 0.f), 0.3f), 10.f));
+
 	DEBUG_TAB(gui, "General")
 	{
 		gui.textF("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
 		DEBUG_GROUP(gui, "Camera")
 		{
+			if (testCull)
+			{
+				gui.text("NOT VISIBLE");
+			}
+			else
+			{
+				gui.text("VISIBLE");
+			}
 			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
 			gui.textF("Input movement: %.2f, %.2f, %.2f", inputMovement.x, inputMovement.y, inputMovement.z);
 			gui.slider("Near plane", camera.nearPlane, 0.1f, 10.f);
@@ -569,7 +583,7 @@ void dx_game::renderShadowmap(dx_command_list* commandList, dx_render_target& sh
 uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
 {
 #if ENABLE_PROCEDURAL
-	proceduralPlacement.generate(camera, densityMap, densityMap2, dt);
+	proceduralPlacement.generate(isDebugCamera ? mainCameraCopy : camera, densityMap, densityMap2, dt);
 #endif
 
 	dx_command_list* commandList = dx_command_queue::renderCommandQueue.getAvailableCommandList();
@@ -780,7 +794,8 @@ bool dx_game::keyUpCallback(keyboard_event event)
 		isDebugCamera = !isDebugCamera;
 		if (isDebugCamera)
 		{
-			mainCameraFrustum = camera.getWorldSpaceFrustum(20.f);
+			mainCameraCopy = camera;
+			mainCameraFrustum = camera.getWorldSpaceFrustumCorners(20.f);
 		}
 	} break;
 	}

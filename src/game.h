@@ -84,8 +84,9 @@ private:
 	D3D12_RECT scissorRect;
 
 	render_camera camera;
+	render_camera mainCameraCopy;
 	bool isDebugCamera = false;
-	camera_frustum mainCameraFrustum;
+	camera_frustum_corners mainCameraFrustum;
 
 	debug_gui gui;
 	debug_display debugDisplay;
