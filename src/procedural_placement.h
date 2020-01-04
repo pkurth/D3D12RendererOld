@@ -14,10 +14,17 @@
 #define PROCEDURAL_TILE_SIZE 100.f
 #define PROCEDURAL_MIN_FOOTPRINT 4.f
 
-struct placement_mesh
+struct placement_lod
 {
 	uint32 firstSubmesh;
 	uint32 numSubmeshes;
+};
+
+struct placement_mesh
+{
+	placement_lod lods[4];
+	vec3 lodDistances; // Last LOD has infinite distance.
+	uint32 numLODs;
 };
 
 struct placement_tile

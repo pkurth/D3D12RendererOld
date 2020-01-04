@@ -245,7 +245,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		PROFILE_BLOCK("Load sponza model");
 
 		cpu_triangle_mesh<vertex_3PUNTL> mesh;
-		auto [submeshes, materials] = mesh.pushFromFile("res/sponza/sponza.obj");
+		auto [lodSubmeshes, lodMaterials] = mesh.pushFromFile("res/sponza/sponza.obj");
 
 		for (auto& vertex : mesh.vertices)
 		{
@@ -253,18 +253,24 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
 		}
 
-		indirectBuffer.push(mesh, submeshes, materials, createScaleMatrix(0.03f), commandList);
+		indirectBuffer.push(mesh, lodSubmeshes, lodMaterials, createScaleMatrix(0.03f), commandList);
 	}
 #endif
 
 	submesh_info cubeSubmesh;
-	submesh_info sphereSubmesh;
+	submesh_info sphereSubmeshLOD0;
+	submesh_info sphereSubmeshLOD1;
+	submesh_info sphereSubmeshLOD2;
+	submesh_info sphereSubmeshLOD3;
 	{
 		PROFILE_BLOCK("Load sphere and cube model");
 
 		cpu_triangle_mesh<vertex_3PUNTL> mesh;
 		cubeSubmesh = mesh.pushCube(1.f);
-		sphereSubmesh = mesh.pushSphere(15, 15);
+		sphereSubmeshLOD0 = mesh.pushSphere(15, 15);
+		sphereSubmeshLOD1 = mesh.pushSphere(11, 11);
+		sphereSubmeshLOD2 = mesh.pushSphere(7, 7);
+		sphereSubmeshLOD3 = mesh.pushSphere(3, 3);
 
 		vec4 colors[] = { vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f) };
 		float roughnesses[] = { 0.f, 0.25f, 0.5f, 0.75f, 1.f, 1.f };
@@ -288,7 +294,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		PROFILE_BLOCK("Load flood light model");
 
 		cpu_triangle_mesh<vertex_3PUNTL> mesh;
-		auto [submeshes, materials] = mesh.pushFromFile("res/floodlight.fbx");
+		auto [lodSubmeshes, lodMaterials] = mesh.pushFromFile("res/floodlight.fbx");
 
 		mat4 model = createModelMatrix(vec3(spotLight.worldSpacePosition.x, 0.f, spotLight.worldSpacePosition.z - 1.f),
 			createQuaternionFromAxisAngle(vec3(0.f, 1.f, 0.f), DirectX::XM_PIDIV2) *
@@ -301,34 +307,62 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
 		}
 
-		indirectBuffer.push(mesh, submeshes, vec4(1.f, 1.f, 1.f, 1.f), 0.5f, 1.f, model);
+		indirectBuffer.push(mesh, lodSubmeshes, vec4(1.f, 1.f, 1.f, 1.f), 0.5f, 1.f, model);
 	}
 #endif
 	
-	submesh_info oakSubmesh0;
-	submesh_info oakSubmesh1;
-	submesh_info oakSubmesh2;
+	submesh_info oakSubmesh0[3];
+	submesh_info oakSubmesh1[3];
+	submesh_info oakSubmesh2[3];
 	{
 		PROFILE_BLOCK("Big oak model");
 
+
+		uint32 vertexOffset = 436;
+		uint32 triangleOffset = 820;
+
+
+		std::vector<submesh_info> submeshes;
+		std::vector<submesh_material_info> materials;
+
 		cpu_triangle_mesh<vertex_3PUNTL> mesh;
-		auto [submeshes, materials] = mesh.pushFromFile("res/big_oak.obj");
+		for (uint32 lod = 0; lod < 3; ++lod)
+		{
+			std::string name = "res/big_oak_lod" + std::to_string(lod) + ".obj";
+			auto [lodSubmeshes, lodMaterials] = mesh.pushFromFile(name);
 
-		indirectBuffer.push(mesh, submeshes, materials, createScaleMatrix(1.f), commandList);
+			append(submeshes, lodSubmeshes);
+			append(materials, lodMaterials);
 
-		oakSubmesh0 = submeshes[0]; oakSubmesh0.baseVertex += 251; oakSubmesh0.firstTriangle += 462;
-		oakSubmesh1 = submeshes[1]; oakSubmesh1.baseVertex += 251; oakSubmesh1.firstTriangle += 462;
-		oakSubmesh2 = submeshes[2]; oakSubmesh2.baseVertex += 251; oakSubmesh2.firstTriangle += 462;
+			oakSubmesh0[lod] = lodSubmeshes[0]; oakSubmesh0[lod].baseVertex += vertexOffset; oakSubmesh0[lod].firstTriangle += triangleOffset;
+			oakSubmesh1[lod] = lodSubmeshes[1]; oakSubmesh1[lod].baseVertex += vertexOffset; oakSubmesh1[lod].firstTriangle += triangleOffset;
+			oakSubmesh2[lod] = lodSubmeshes[2]; oakSubmesh2[lod].baseVertex += vertexOffset; oakSubmesh2[lod].firstTriangle += triangleOffset;
+		}
+
+		indirectBuffer.push(mesh, submeshes, materials, createModelMatrix(vec3(0.f, 0.f, 8.f), quat::identity, 1.f), commandList);
 	}
 
 
 	std::vector<submesh_info> placementSubmeshes =
 	{
 		cubeSubmesh,
-		sphereSubmesh,
-		oakSubmesh0,
-		oakSubmesh1,
-		oakSubmesh2,
+
+		sphereSubmeshLOD0,
+		sphereSubmeshLOD1,
+		sphereSubmeshLOD2,
+		sphereSubmeshLOD3,
+
+		oakSubmesh0[0],
+		oakSubmesh1[0],
+		oakSubmesh2[0],
+
+		oakSubmesh0[1],
+		oakSubmesh1[1],
+		oakSubmesh2[1],
+
+		oakSubmesh0[2],
+		oakSubmesh1[2],
+		oakSubmesh2[2],
 	};
 
 	commandList->loadTextureFromFile(cubeDensity, L"res/density.png", texture_type_noncolor, false);
@@ -342,8 +376,14 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	tile0.groundHeight = 0.f;
 	tile0.maximumHeight = 20.f;
 	tile0.numMeshes = 2;
-	tile0.meshes[0] = { 0, 1 }; // Cube.
-	tile0.meshes[1] = { 1, 1 }; // Sphere.
+	tile0.meshes[0].numLODs = 1; // Cube.
+	tile0.meshes[0].lods[0]	= { 0, 1 }; 
+	tile0.meshes[1].numLODs = 4; // Sphere.
+	tile0.meshes[1].lods[0] = { 1, 1 };
+	tile0.meshes[1].lods[1] = { 2, 1 };
+	tile0.meshes[1].lods[2] = { 3, 1 };
+	tile0.meshes[1].lods[3] = { 4, 1 };
+	tile0.meshes[1].lodDistances = vec3(10.f, 30.f, 100.f);
 	tile0.densities[0] = &cubeDensity;
 	tile0.densities[1] = &sphereDensity;
 	tile0.objectFootprint = PROCEDURAL_MIN_FOOTPRINT;
@@ -353,8 +393,12 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	tile1.cornerZ = 0;
 	tile1.groundHeight = 0.f;
 	tile1.maximumHeight = 20.f;
-	tile1.numMeshes = 1;
-	tile1.meshes[0] = { 2, 3 }; // Oak.
+	tile1.numMeshes = 1; // Oak.
+	tile1.meshes[0].numLODs = 3;
+	tile1.meshes[0].lods[0] = { 5, 3 };
+	tile1.meshes[0].lods[1] = { 8, 3 };
+	tile1.meshes[0].lods[2] = { 11, 3 };
+	tile1.meshes[0].lodDistances = vec3(10.f, 30.f, 100.f);
 	tile1.densities[0] = &sphereDensity;
 	tile1.objectFootprint = PROCEDURAL_MIN_FOOTPRINT;
 

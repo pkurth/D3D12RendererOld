@@ -485,6 +485,8 @@ void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indi
 {
 	PROFILE_FUNCTION();
 
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw indirect.");
+
 	setupPipeline(commandList, mesh, descriptors, commandBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
 
 	commandList->drawIndirect(
@@ -500,6 +502,8 @@ void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indi
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
 {
 	PROFILE_FUNCTION();
+
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw indirect.");
 
 	setupPipeline(commandList, mesh, descriptors, commandBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
 
@@ -521,6 +525,8 @@ void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const rend
 {
 	setupDepthOnlyPipeline(commandList, camera, mesh, depthOnlyCommandBuffer);
 
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw depth only indirect.");
+
 	commandList->drawIndirect(
 		depthOnlyCommandSignature,
 		maxNumDrawCalls, numDrawCallsBuffer,
@@ -531,6 +537,8 @@ void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const rend
 	dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls)
 {
 	setupDepthOnlyPipeline(commandList, camera, mesh, depthOnlyCommandBuffer);
+
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw depth only indirect.");
 	
 	commandList->drawIndirect(
 		depthOnlyCommandSignature,
@@ -540,6 +548,10 @@ void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const rend
 
 void indirect_pipeline::setupDepthOnlyPipeline(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh, dx_buffer& commandBuffer)
 {
+	PROFILE_FUNCTION();
+
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Setup depth only indirect pipeline.");
+
 	commandList->setPipelineState(depthOnlyPipelineState);
 	commandList->setGraphicsRootSignature(depthOnlyRootSignature);
 

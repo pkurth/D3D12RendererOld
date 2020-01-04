@@ -7,6 +7,8 @@
 #include "profiling.h"
 #include "poisson_distribution.h"
 
+#include <pix3.h>
+
 struct placement_gen_points_cb
 {
 	vec2 tileCorner;
@@ -244,20 +246,23 @@ void procedural_placement::generate(const render_camera& camera)
 
 	camera_frustum_planes frustum = camera.getWorldSpaceFrustumPlanes();
 
-	clearCount(commandList);
-	uint32 maxNumGeneratedPlacementPoints = generatePoints(commandList, frustum);
-
-	if (maxNumGeneratedPlacementPoints > 0)
 	{
-		placeGeometry(commandList, frustum, maxNumGeneratedPlacementPoints);
+		PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Generate procedural.");
+
+		clearCount(commandList);
+		uint32 maxNumGeneratedPlacementPoints = generatePoints(commandList, frustum);
+
+		if (maxNumGeneratedPlacementPoints > 0)
+		{
+			placeGeometry(commandList, frustum, maxNumGeneratedPlacementPoints);
+		}
+
+		commandList->uavBarrier(numDrawCallsBuffer.resource);
+
+		commandList->transitionBarrier(numDrawCallsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
+		commandList->transitionBarrier(commandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
+		commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
 	}
-
-	commandList->uavBarrier(numDrawCallsBuffer.resource);
-
-	commandList->transitionBarrier(numDrawCallsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
-	commandList->transitionBarrier(commandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
-	commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
-
 	dx_command_queue::computeCommandQueue.executeCommandList(commandList);
 	
 	{
@@ -269,6 +274,7 @@ void procedural_placement::generate(const render_camera& camera)
 void procedural_placement::clearCount(dx_command_list* commandList)
 {
 	PROFILE_FUNCTION();
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Clear procedural count.");
 
 	commandList->setPipelineState(clearCountPipelineState);
 	commandList->setComputeRootSignature(clearCountRootSignature);
@@ -285,6 +291,7 @@ void procedural_placement::clearCount(dx_command_list* commandList)
 uint32 procedural_placement::generatePoints(dx_command_list* commandList, const camera_frustum_planes& frustum)
 {
 	PROFILE_FUNCTION();
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Generate procedural points.");
 
 	commandList->setPipelineState(generatePointsPipelineState);
 	commandList->setComputeRootSignature(generatePointsRootSignature);
@@ -354,6 +361,7 @@ uint32 procedural_placement::generatePoints(dx_command_list* commandList, const 
 void procedural_placement::placeGeometry(dx_command_list* commandList, const camera_frustum_planes& frustum, uint32 maxNumGeneratedPlacementPoints)
 {
 	PROFILE_FUNCTION();
+	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Place procedural geometry.");
 
 
 	commandList->setPipelineState(placeGeometryPipelineState);

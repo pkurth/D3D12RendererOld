@@ -29,10 +29,17 @@ struct submesh_info
 	uint textureID_usageFlags;
 };
 
-struct placement_mesh
+struct placement_lod
 {
 	uint firstSubmesh;
 	uint numSubmeshes;
+};
+
+struct placement_mesh
+{
+	placement_lod lods[4];
+	float3 lodDistances; // Last LOD has infinite distance.
+	uint numLODs;
 };
 
 cbuffer camera_frustum_cb : register(b0)
@@ -127,8 +134,20 @@ void main(cs_input IN)
 	if (IN.dispatchThreadID.x < numPlacementPoints)
 	{
 		placement_mesh mesh = meshes[placementPoint.id];
-		firstSubmesh = mesh.firstSubmesh;
-		numSubmeshes = mesh.numSubmeshes;
+
+		float4 nearPlane = cameraFrustum.planes[0];
+		float distance = dot(placementPoint.position, nearPlane);
+
+		uint numLODs = mesh.numLODs;
+		float4 comparison = (float4)distance > float4(mesh.lodDistances, 999999.f);
+		uint lodIndex = (uint)dot(float4(numLODs > 0, numLODs > 1, numLODs > 2, numLODs > 3), comparison);
+
+		lodIndex = min(lodIndex, numLODs - 1);
+
+		placement_lod lod = mesh.lods[lodIndex];
+
+		firstSubmesh = lod.firstSubmesh;
+		numSubmeshes = lod.numSubmeshes;
 	}
 
 	InterlockedAdd(groupCount, numSubmeshes, groupIndex);

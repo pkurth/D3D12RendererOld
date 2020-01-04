@@ -30,12 +30,12 @@ union camera_frustum_planes
 {
 	struct
 	{
+		vec4 near;
+		vec4 far;
 		vec4 left;
 		vec4 right;
 		vec4 top;
 		vec4 bottom;
-		vec4 near;
-		vec4 far;
 	};
 	vec4 planes[6];
 
