@@ -7,11 +7,29 @@
 #include "profiling.h"
 #include "poisson_distribution.h"
 
+struct placement_gen_points_cb
+{
+	vec2 tileCorner;
+	float tileSize;
+	uint32 numDensityMaps;
+	uint32 meshOffset;
+	float groundHeight;
+
+	float uvScale;
+	float uvOffset;
+};
+
+struct placement_point
+{
+	vec4 position;
+	vec4 normal;
+};
+
 // Dither algorithms:
 // https://www.shadertoy.com/view/XlyXWW
 
 void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
-	std::vector<placement_mesh>& meshes, std::vector<submesh_info>& subMeshes)
+	std::vector<placement_tile>& tiles, std::vector<submesh_info>& subMeshes)
 {
 	{
 		ComPtr<ID3DBlob> shaderBlob;
@@ -127,18 +145,57 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		SET_NAME(placeGeometryPipelineState, "Procedural Placement Place Geometry Pipeline");
 	}
 
+	this->tiles = tiles;
+
+	std::vector<placement_mesh> meshes;
+	meshes.reserve(tiles.size() * 4);
+	for (uint32 i = 0; i < (uint32)tiles.size(); ++i)
+	{
+		placement_tile& tile = this->tiles[i];
+		assert(tile.numMeshes > 0);
+		assert(tile.numMeshes <= 4);
+
+		tile.meshOffset = (uint32)meshes.size();
+
+		for (uint32 j = 0; j < tile.numMeshes; ++j)
+		{
+			meshes.push_back(tile.meshes[j]);
+		}
+
+		tile.objectFootprint = max(tile.objectFootprint, PROCEDURAL_MIN_FOOTPRINT);
+	}
+
+	radiusInUVSpace = sqrt(1.f / (2.f * sqrt(3.f) * arraysize(POISSON_SAMPLES)));
+	float diameterInUVSpace = radiusInUVSpace * 2.f;
+
+	float diameterInWorldSpace = diameterInUVSpace * PROCEDURAL_TILE_SIZE;
+
+	float scaling = diameterInWorldSpace / PROCEDURAL_MIN_FOOTPRINT;
+	uint32 numGroupsPerDim = (uint32)ceil(scaling);
+	uint32 maxNumObjectFactor = numGroupsPerDim * numGroupsPerDim;
+
+
+
 
 	for (uint32 i = 0; i < arraysize(POISSON_SAMPLES); ++i)
 	{
 		POISSON_SAMPLES[i].z = randomFloat(0.f, 1.f);
 	}
 
-	maxNumDrawCalls = arraysize(POISSON_SAMPLES) * 4; // * 4, because multiple meshes per object.
-	placementPointBuffer.initialize<placement_point>(device, nullptr, arraysize(POISSON_SAMPLES));
 	poissonSampleBuffer.initialize(device, POISSON_SAMPLES, arraysize(POISSON_SAMPLES), commandList);
 
 	meshBuffer.initialize(device, meshes.data(), (uint32)meshes.size(), commandList);
 	submeshBuffer.initialize(device, subMeshes.data(), (uint32)subMeshes.size(), commandList);
+
+
+	placementPointBuffer.initialize<placement_point>(device, nullptr, (uint32)tiles.size() * arraysize(POISSON_SAMPLES) * maxNumObjectFactor);
+
+
+	maxNumDrawCalls =
+		(uint32)tiles.size()
+		* arraysize(POISSON_SAMPLES) // Each sample produces at maximum one of the specified meshes.
+		* 4 // We allow maximum 4 submeshes per object.
+		* maxNumObjectFactor;
 
 	for (uint32 i = 0; i < NUM_BUFFERED_FRAMES; ++i)
 	{
@@ -146,6 +203,10 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		renderResources[i].commandBuffer.initialize<indirect_command>(device, nullptr, maxNumDrawCalls);
 		renderResources[i].depthOnlyCommandBuffer.initialize<indirect_depth_only_command>(device, nullptr, maxNumDrawCalls);
 	}
+
+
+
+
 
 	dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4);
 	defaultSRV = allocation.getDescriptorHandle(0);
@@ -165,7 +226,7 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 	}
 }
 
-void procedural_placement::generate(const render_camera& camera, dx_texture& densityMap0, dx_texture& densityMap1, float dt)
+void procedural_placement::generate(const render_camera& camera)
 {
 	PROFILE_FUNCTION();
 
@@ -181,9 +242,21 @@ void procedural_placement::generate(const render_camera& camera, dx_texture& den
 
 	dx_command_list* commandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
 
+	camera_frustum_planes frustum = camera.getWorldSpaceFrustumPlanes();
+
 	clearCount(commandList);
-	generatePoints(commandList, densityMap0, densityMap1, dt);
-	placeGeometry(commandList, camera);
+	uint32 maxNumGeneratedPlacementPoints = generatePoints(commandList, frustum);
+
+	if (maxNumGeneratedPlacementPoints > 0)
+	{
+		placeGeometry(commandList, frustum, maxNumGeneratedPlacementPoints);
+	}
+
+	commandList->uavBarrier(numDrawCallsBuffer.resource);
+
+	commandList->transitionBarrier(numDrawCallsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
+	commandList->transitionBarrier(commandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
+	commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
 
 	dx_command_queue::computeCommandQueue.executeCommandList(commandList);
 	
@@ -209,16 +282,9 @@ void procedural_placement::clearCount(dx_command_list* commandList)
 	commandList->uavBarrier(numDrawCallsBuffer.resource);
 }
 
-void procedural_placement::generatePoints(dx_command_list* commandList, dx_texture& densityMap0, dx_texture& densityMap1, float dt)
+uint32 procedural_placement::generatePoints(dx_command_list* commandList, const camera_frustum_planes& frustum)
 {
 	PROFILE_FUNCTION();
-
-	static float time = 0.f;
-	time += dt;
-
-	placement_gen_points_cb cb;
-	cb.numDensityMaps = 2;
-	cb.time = time;
 
 	commandList->setPipelineState(generatePointsPipelineState);
 	commandList->setComputeRootSignature(generatePointsRootSignature);
@@ -227,23 +293,65 @@ void procedural_placement::generatePoints(dx_command_list* commandList, dx_textu
 	commandList->transitionBarrier(numDrawCallsBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	commandList->transitionBarrier(poissonSampleBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-
-	commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, cb);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 0, 1, placementPointBuffer.uav);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 1, 1, numDrawCallsBuffer.uav);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 0, 1, poissonSampleBuffer.srv);
-	commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1, densityMap0, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 2, densityMap1, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 3, 4 - 2, defaultSRV);
+	uint32 maxNumGeneratedPlacementPoints = 0;
 
-	commandList->dispatch((uint32)bucketize(arraysize(POISSON_SAMPLES), 512), 1, 1);
 
-	commandList->uavBarrier(placementPointBuffer.resource);
-	commandList->uavBarrier(numDrawCallsBuffer.resource);
+	float diameterInUVSpace = radiusInUVSpace * 2.f;
+
+
+	for (uint32 tileIndex = 0; tileIndex < (uint32)tiles.size(); ++tileIndex)
+	{
+		placement_tile& tile = tiles[tileIndex];
+
+		bounding_box tileBB = bounding_box::negativeInfinity();
+		vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
+		tileBB.grow(vec3(corner.x, tile.groundHeight, corner.y));
+		tileBB.grow(vec3(corner.x + PROCEDURAL_TILE_SIZE, tile.groundHeight + tile.maximumHeight, corner.y + PROCEDURAL_TILE_SIZE));
+
+		if (!frustum.cullWorldSpaceAABB(tileBB))
+		{
+			float footprint = tile.objectFootprint;
+			float diameterInWorldSpace = diameterInUVSpace * PROCEDURAL_TILE_SIZE;
+
+			float scaling = diameterInWorldSpace / footprint;
+			uint32 numGroupsPerDim = (uint32)ceil(scaling);
+
+			placement_gen_points_cb cb;
+			cb.tileCorner = corner;
+			cb.tileSize = PROCEDURAL_TILE_SIZE;
+			cb.groundHeight = tile.groundHeight;
+			cb.meshOffset = tile.meshOffset;
+			cb.numDensityMaps = tile.numMeshes;
+			cb.uvScale = 1.f / scaling;
+			cb.uvOffset = 1.f / scaling;
+
+			maxNumGeneratedPlacementPoints += numGroupsPerDim * numGroupsPerDim * arraysize(POISSON_SAMPLES);
+
+			commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, cb);
+
+			for (uint32 i = 0; i < tile.numMeshes; ++i)
+			{
+				commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1 + i, *tile.densities[i], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			}
+
+			commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1 + tile.numMeshes, 4 - tile.numMeshes, defaultSRV);
+
+			commandList->dispatch(numGroupsPerDim, numGroupsPerDim, 1);
+
+			commandList->uavBarrier(placementPointBuffer.resource);
+			commandList->uavBarrier(numDrawCallsBuffer.resource);
+
+		}
+	}
+
+	return maxNumGeneratedPlacementPoints;
 }
 
-void procedural_placement::placeGeometry(dx_command_list* commandList, const render_camera& camera)
+void procedural_placement::placeGeometry(dx_command_list* commandList, const camera_frustum_planes& frustum, uint32 maxNumGeneratedPlacementPoints)
 {
 	PROFILE_FUNCTION();
 
@@ -258,8 +366,6 @@ void procedural_placement::placeGeometry(dx_command_list* commandList, const ren
 	commandList->transitionBarrier(commandBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-	camera_frustum_planes frustum = camera.getWorldSpaceFrustumPlanes();
-
 	commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CAMERA, frustum);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 0, 1, placementPointBuffer.srv);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1, 1, meshBuffer.srv);
@@ -268,13 +374,5 @@ void procedural_placement::placeGeometry(dx_command_list* commandList, const ren
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 1, 1, depthOnlyCommandBuffer.uav);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 2, 1, numDrawCallsBuffer.uav);
 
-	commandList->dispatch(bucketize(maxNumDrawCalls, 512), 1, 1);
-
-	//commandList->uavBarrier(commandBuffer.resource);
-	//commandList->uavBarrier(depthOnlyCommandBuffer.resource);
-	commandList->uavBarrier(numDrawCallsBuffer.resource);
-
-	commandList->transitionBarrier(numDrawCallsBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
-	commandList->transitionBarrier(commandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
-	commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
+	commandList->dispatch(bucketize(maxNumGeneratedPlacementPoints, 512), 1, 1);
 }

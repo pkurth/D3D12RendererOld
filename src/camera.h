@@ -42,8 +42,8 @@ union camera_frustum_planes
 	camera_frustum_planes() {}
 
 	// Returns true, if object should be culled.
-	bool cullWorldSpaceAABB(const bounding_box& aabb);
-	bool cullModelSpaceAABB(const bounding_box& aabb, const mat4& transform);
+	bool cullWorldSpaceAABB(const bounding_box& aabb) const;
+	bool cullModelSpaceAABB(const bounding_box& aabb, const mat4& transform) const;
 };
 
 struct camera_cb

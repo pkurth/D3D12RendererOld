@@ -5,51 +5,71 @@
 #include "platform.h"
 #include "math.h"
 
-#define PROCEDURAL_PLACEMENT_ROOTPARAM_CB		0
-#define PROCEDURAL_PLACEMENT_ROOTPARAM_CAMERA	0
+#define PROCEDURAL_PLACEMENT_ROOTPARAM_CB		0 // For point generation.
+#define PROCEDURAL_PLACEMENT_ROOTPARAM_CAMERA	0 // For geometry placement.
 #define PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS		1
 #define PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS		2
 
 
-struct placement_gen_points_cb
-{
-	uint32 numDensityMaps;
-	float time;
-};
+#define PROCEDURAL_TILE_SIZE 100.f
+#define PROCEDURAL_MIN_FOOTPRINT 4.f
 
 struct placement_mesh
 {
-	uint32 offset;
-	uint32 count;
+	uint32 firstSubmesh;
+	uint32 numSubmeshes;
 };
 
-struct placement_point
+struct placement_tile
 {
-	vec4 position;
-	vec4 normal;
-};
+	// Multiples of tile size.
+	uint32 cornerX;
+	uint32 cornerZ;
 
-struct procedural_placement_render_resources
-{
-	dx_structured_buffer numDrawCallsBuffer;
-	dx_structured_buffer commandBuffer;
-	dx_structured_buffer depthOnlyCommandBuffer;
+	float groundHeight;
+	float maximumHeight;
+
+	float objectFootprint; // Diameter of one object in world space.
+	uint32 numMeshes;
+
+	placement_mesh meshes[4];
+	dx_texture* densities[4];
+
+
+	// Filled out by placement system.
+	uint32 meshOffset;
 };
 
 struct procedural_placement
 {
 	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, 
-		std::vector<placement_mesh>& meshes, std::vector<submesh_info>& subMeshes);
-	void generate(const render_camera& camera, dx_texture& densityMap0, dx_texture& densityMap1, float dt);
+		std::vector<placement_tile>& tiles, std::vector<submesh_info>& subMeshes);
+
+	void generate(const render_camera& camera);
 	
 	uint32 maxNumDrawCalls;
 
+	// For this frame.
 	dx_structured_buffer numDrawCallsBuffer;
 	dx_structured_buffer commandBuffer;
 	dx_structured_buffer depthOnlyCommandBuffer;
 
 
+	std::vector<placement_tile> tiles;
+
 private:
+
+
+	float radiusInUVSpace;
+
+	struct procedural_placement_render_resources
+	{
+		dx_structured_buffer numDrawCallsBuffer;
+		dx_structured_buffer commandBuffer;
+		dx_structured_buffer depthOnlyCommandBuffer;
+	};
+
+
 	D3D12_CPU_DESCRIPTOR_HANDLE defaultSRV;
 
 	dx_structured_buffer poissonSampleBuffer;
@@ -71,6 +91,6 @@ private:
 	uint32 currentRenderResources = 0;
 
 	void clearCount(dx_command_list* commandList);
-	void generatePoints(dx_command_list* commandList, dx_texture& densityMap0, dx_texture& densityMap1, float dt);
-	void placeGeometry(dx_command_list* commandList, const render_camera& camera);
+	uint32 generatePoints(dx_command_list* commandList, const camera_frustum_planes& frustum);
+	void placeGeometry(dx_command_list* commandList, const camera_frustum_planes& frustum, uint32 maxNumGeneratedPlacementPoints);
 };

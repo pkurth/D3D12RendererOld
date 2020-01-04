@@ -266,10 +266,6 @@
     <FxCompile Include="shaders\font_vs.hlsl" />
     <FxCompile Include="shaders\flat_2d_ps.hlsl" />
     <FxCompile Include="shaders\flat_2d_vs.hlsl" />
-    <FxCompile Include="shaders\geometry_indirect_vs.hlsl" />
-    <FxCompile Include="shaders\geometry_indirect_deferred_ps.hlsl" />
-    <FxCompile Include="shaders\lighting_deferred_ps.hlsl" />
-    <FxCompile Include="shaders\geometry_indirect_forward_ps.hlsl" />
     <FxCompile Include="shaders\light_culling.hlsl" />
     <FxCompile Include="shaders\cubemap_to_sh.hlsl" />
     <FxCompile Include="shaders\visualize_light_probe_vs.hlsl" />
@@ -284,6 +280,8 @@
     <FxCompile Include="shaders\procedural_placement_gen_points.hlsl" />
     <FxCompile Include="shaders\procedural_placement_place_geometry.hlsl" />
     <FxCompile Include="shaders\procedural_placement_clear_count.hlsl" />
+    <FxCompile Include="shaders\geometry_vs.hlsl" />
+    <FxCompile Include="shaders\geometry_ps.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

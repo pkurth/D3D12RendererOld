@@ -51,8 +51,8 @@ private:
 	present_pipeline present;
 
 	procedural_placement proceduralPlacement;
-	dx_texture densityMap;
-	dx_texture densityMap2;
+	dx_texture cubeDensity;
+	dx_texture sphereDensity;
 
 
 	particle_system particleSystem1;

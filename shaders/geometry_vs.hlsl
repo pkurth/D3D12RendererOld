@@ -31,7 +31,7 @@ vs_output main(vs_input IN)
 {
 	vs_output OUT;
 
-	matrix mvp = mul(camera.vp, model.m);
+	float4x4 mvp = mul(camera.vp, model.m);
 	OUT.position = mul(mvp, float4(IN.position, 1.f));
 	OUT.worldPosition = (mul(model.m, float4(IN.position, 1.f))).xyz;
 	OUT.uv = IN.uv;

@@ -283,9 +283,9 @@ void indirect_pipeline::initialize(ComPtr<ID3D12Device2> device, const dx_render
 	PROFILE_BLOCK("Indirect pipeline");
 
 	ComPtr<ID3DBlob> vertexShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_indirect_vs.cso", &vertexShaderBlob));
+	checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_vs.cso", &vertexShaderBlob));
 	ComPtr<ID3DBlob> pixelShaderBlob;
-	checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_indirect_forward_ps.cso", &pixelShaderBlob));
+	checkResult(D3DReadFileToBlob(L"shaders/bin/geometry_ps.cso", &pixelShaderBlob));
 
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },

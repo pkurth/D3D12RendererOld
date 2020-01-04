@@ -1,4 +1,5 @@
-
+#ifndef LIGHTING_H
+#define LIGHTING_H
 
 struct light_attenuation
 {
@@ -74,3 +75,5 @@ static float sampleShadowMap(float4x4 vp, float3 worldPosition, Texture2D<float>
 	visibility /= count;
 	return visibility;
 }
+
+#endif

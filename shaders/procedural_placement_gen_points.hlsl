@@ -20,13 +20,19 @@ struct placement_point
 
 cbuffer placement_cb : register(b0)
 {
+	float2 tileCorner;
+	float tileSize;
 	uint numDensityMaps;
-	float time;
+	uint meshOffset;
+	float groundHeight;
+
+	float uvScale;
+	float uvOffset;
 };
 
 SamplerState densitySampler							: register(s0);
 StructuredBuffer<float4> poissonMatrix				: register(t0);
-Texture2D<float> densityMaps[4]						: register(t1);
+Texture2D<float> densityMaps[4]						: register(t1); // TODO: Pack these together?
 
 RWStructuredBuffer<placement_point> placementPoints : register(u0);
 RWStructuredBuffer<uint> pointCounter				: register(u1);
@@ -36,7 +42,7 @@ groupshared uint groupCount;
 groupshared uint startOffset;
 
 
-[numthreads(512, 1, 1)]
+[numthreads(32, 32, 1)]
 void main(cs_input IN)
 {
 	if (IN.groupIndex == 0)
@@ -46,31 +52,35 @@ void main(cs_input IN)
 
 	GroupMemoryBarrierWithGroupSync();
 
-	float3 poisson = poissonMatrix[IN.dispatchThreadID.x].xyz;
+	float3 poisson = poissonMatrix[IN.groupIndex].xyz;
 
-	float2 uv = poisson.xy;
+	float2 uv = poisson.xy * uvScale + IN.groupID.xy * uvOffset;
 	
-	float4 densities = (float4)4; // Initialize to high.
-	float densitySum = 0;
-	[unroll]
-	for (uint i = 0; i < numDensityMaps; ++i)
+	uint index = 100;
+	if (all(uv >= 0.f && uv <= 1.f))
 	{
-		float density = densityMaps[i].SampleLevel(densitySampler, uv, 0);
-		densities[i] = density;
-		densitySum += density;
+		float4 densities = (float4)4; // Initialize to high.
+		float densitySum = 0;
+		[unroll]
+		for (uint i = 0; i < numDensityMaps; ++i)
+		{
+			float density = densityMaps[i].SampleLevel(densitySampler, uv, 0);
+			densities[i] = density;
+			densitySum += density;
+		}
+
+		densitySum = max(densitySum, 1.f); // Only normalize if we are above 1.
+		densities /= densitySum;
+
+		densities.y += densities.x;
+		densities.z += densities.y;
+		densities.w += densities.z;
+
+		float threshold = random(uv);
+
+		float4 comparison = (float4)threshold > densities;
+		index = (uint)dot(comparison, comparison);
 	}
-
-	densitySum = max(densitySum, 1.f); // Only normalize if we are above 1.
-	densities /= densitySum;
-
-	densities.y += densities.x;
-	densities.z += densities.y;
-	densities.w += densities.z;
-
-	float threshold = random(uv);
-
-	float4 comparison = (float4)threshold > densities;
-	uint index = (uint)dot(comparison, comparison);
 
 	uint valid = index < numDensityMaps;
 
@@ -89,9 +99,12 @@ void main(cs_input IN)
 	if (valid)
 	{
 		placement_point result;
-		result.position = float4(uv.x * 100.f, sin(time + random(IN.dispatchThreadID.x)) + 40.f, uv.y * 100.f, 1.f);
+
+		float2 xz = uv * tileSize + tileCorner;
+
+		result.position = float4(xz.x, groundHeight, xz.y, 1.f);
 		result.normal = float3(0.f, 1.f, 0.f);
-		result.id = index;
+		result.id = index + meshOffset;
 		placementPoints[startOffset + groupIndex] = result;
 	}
 

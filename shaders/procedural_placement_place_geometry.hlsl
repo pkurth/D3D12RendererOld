@@ -31,8 +31,8 @@ struct submesh_info
 
 struct placement_mesh
 {
-	uint offset;
-	uint count;
+	uint firstSubmesh;
+	uint numSubmeshes;
 };
 
 cbuffer camera_frustum_cb : register(b0)
@@ -121,17 +121,17 @@ void main(cs_input IN)
 
 	placement_point placementPoint = placementPoints[IN.dispatchThreadID.x];
 
-	uint offset = 0;
-	uint count = 0;
+	uint firstSubmesh = 0;
+	uint numSubmeshes = 0;
 
 	if (IN.dispatchThreadID.x < numPlacementPoints)
 	{
 		placement_mesh mesh = meshes[placementPoint.id];
-		offset = mesh.offset;
-		count = mesh.count;
+		firstSubmesh = mesh.firstSubmesh;
+		numSubmeshes = mesh.numSubmeshes;
 	}
 
-	InterlockedAdd(groupCount, count, groupIndex);
+	InterlockedAdd(groupCount, numSubmeshes, groupIndex);
 
 	GroupMemoryBarrierWithGroupSync();
 
@@ -143,7 +143,7 @@ void main(cs_input IN)
 	GroupMemoryBarrierWithGroupSync();
 
 
-	if (count > 0)
+	if (numSubmeshes > 0)
 	{
 		float3 position = placementPoints[IN.dispatchThreadID.x].position.xyz;
 		float3 yAxis = placementPoints[IN.dispatchThreadID.x].normal.xyz;
@@ -173,10 +173,10 @@ void main(cs_input IN)
 
 
 
-		for (uint i = 0; i < count; ++i)
+		for (uint i = 0; i < numSubmeshes; ++i)
 		{
-			submesh_info mesh = submeshes[offset + i];
-			float4 color = offset == 0 ? float4(1, 1, 1, 1) : float4(1, 0, 0, 1);
+			submesh_info mesh = submeshes[firstSubmesh + i];
+			float4 color = firstSubmesh == 0 ? float4(1, 0, 0, 1) : float4(1, 1, 1, 1);
 			placeGeometry(modelMatrix, mesh, color, startOffset + groupIndex + i);
 		}
 	}

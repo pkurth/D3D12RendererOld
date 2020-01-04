@@ -130,7 +130,7 @@ void cubemap_camera::initialize(vec3 position, uint32 cubemapIndex)
 	updateMatrices(1, 1);
 }
 
-bool camera_frustum_planes::cullWorldSpaceAABB(const bounding_box& aabb)
+bool camera_frustum_planes::cullWorldSpaceAABB(const bounding_box& aabb) const
 {
 	for (uint32 i = 0; i < 6; ++i)
 	{
@@ -149,7 +149,7 @@ bool camera_frustum_planes::cullWorldSpaceAABB(const bounding_box& aabb)
 	return false;
 }
 
-bool camera_frustum_planes::cullModelSpaceAABB(const bounding_box& aabb, const mat4& transform)
+bool camera_frustum_planes::cullModelSpaceAABB(const bounding_box& aabb, const mat4& transform) const
 {
 	comp_mat m = transform;
 	comp_vec worldSpaceCorners[] =

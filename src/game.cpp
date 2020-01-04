@@ -304,7 +304,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		indirectBuffer.push(mesh, submeshes, vec4(1.f, 1.f, 1.f, 1.f), 0.5f, 1.f, model);
 	}
 #endif
-		
+	
+	submesh_info oakSubmesh0;
+	submesh_info oakSubmesh1;
+	submesh_info oakSubmesh2;
 	{
 		PROFILE_BLOCK("Big oak model");
 
@@ -312,6 +315,10 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		auto [submeshes, materials] = mesh.pushFromFile("res/big_oak.obj");
 
 		indirectBuffer.push(mesh, submeshes, materials, createScaleMatrix(1.f), commandList);
+
+		oakSubmesh0 = submeshes[0]; oakSubmesh0.baseVertex += 251; oakSubmesh0.firstTriangle += 462;
+		oakSubmesh1 = submeshes[1]; oakSubmesh1.baseVertex += 251; oakSubmesh1.firstTriangle += 462;
+		oakSubmesh2 = submeshes[2]; oakSubmesh2.baseVertex += 251; oakSubmesh2.firstTriangle += 462;
 	}
 
 
@@ -319,19 +326,41 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	{
 		cubeSubmesh,
 		sphereSubmesh,
+		oakSubmesh0,
+		oakSubmesh1,
+		oakSubmesh2,
 	};
 
-	std::vector<placement_mesh> placementMeshes =
-	{
-		{ 0, 1 }, // Cube.
-		{ 1, 1 }, // Sphere.
-	};
+	commandList->loadTextureFromFile(cubeDensity, L"res/density.png", texture_type_noncolor, false);
+	commandList->loadTextureFromFile(sphereDensity, L"res/density2.png", texture_type_noncolor, false);
+	SET_NAME(cubeDensity.resource, "Cube Density");
+	SET_NAME(sphereDensity.resource, "Sphere Density");
 
-	proceduralPlacement.initialize(device, commandList, placementMeshes, placementSubmeshes);
-	commandList->loadTextureFromFile(densityMap, L"res/density.png", texture_type_noncolor, false);
-	commandList->loadTextureFromFile(densityMap2, L"res/density2.png", texture_type_noncolor, false);
-	SET_NAME(densityMap.resource, "Density");
-	SET_NAME(densityMap2.resource, "Density2");
+	placement_tile tile0;
+	tile0.cornerX = 0;
+	tile0.cornerZ = 0;
+	tile0.groundHeight = 0.f;
+	tile0.maximumHeight = 20.f;
+	tile0.numMeshes = 2;
+	tile0.meshes[0] = { 0, 1 }; // Cube.
+	tile0.meshes[1] = { 1, 1 }; // Sphere.
+	tile0.densities[0] = &cubeDensity;
+	tile0.densities[1] = &sphereDensity;
+	tile0.objectFootprint = PROCEDURAL_MIN_FOOTPRINT;
+
+	placement_tile tile1;
+	tile1.cornerX = 1;
+	tile1.cornerZ = 0;
+	tile1.groundHeight = 0.f;
+	tile1.maximumHeight = 20.f;
+	tile1.numMeshes = 1;
+	tile1.meshes[0] = { 2, 3 }; // Oak.
+	tile1.densities[0] = &sphereDensity;
+	tile1.objectFootprint = PROCEDURAL_MIN_FOOTPRINT;
+
+	std::vector<placement_tile> placementTiles = { tile0, tile1 };
+
+	proceduralPlacement.initialize(device, commandList, placementTiles, placementSubmeshes);
 
 
 
@@ -387,7 +416,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			commandList->transitionBarrier(indirectBuffer.indirectMaterials[i].metallic, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		}
 
-		commandList->transitionBarrier(densityMap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		commandList->transitionBarrier(cubeDensity, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		
 		{
 			PROFILE_BLOCK("Execute transition command list");
@@ -520,6 +549,12 @@ void dx_game::update(float dt)
 
 	sun.updateMatrices(camera);
 	spotLight.updateMatrices();
+
+	DEBUG_TAB(gui, "Procedural placement")
+	{
+		gui.slider("Tile 0 Object footprint", proceduralPlacement.tiles[0].objectFootprint, PROCEDURAL_MIN_FOOTPRINT, 10.f);
+		gui.slider("Tile 1 Object footprint", proceduralPlacement.tiles[1].objectFootprint, PROCEDURAL_MIN_FOOTPRINT, 10.f);
+	}
 }
 
 void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
@@ -583,7 +618,7 @@ void dx_game::renderShadowmap(dx_command_list* commandList, dx_render_target& sh
 uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR_HANDLE screenRTV)
 {
 #if ENABLE_PROCEDURAL
-	proceduralPlacement.generate(isDebugCamera ? mainCameraCopy : camera, densityMap, densityMap2, dt);
+	proceduralPlacement.generate(isDebugCamera ? mainCameraCopy : camera);
 #endif
 
 	dx_command_list* commandList = dx_command_queue::renderCommandQueue.getAvailableCommandList();
