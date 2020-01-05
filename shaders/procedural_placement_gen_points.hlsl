@@ -43,7 +43,6 @@ void main(cs_input IN)
 {
 	if (IN.groupIndex == 0)
 	{
-		pointCount[0] = 14;
 		groupCount = 0;
 	}
 
@@ -87,7 +86,7 @@ void main(cs_input IN)
 
 	if (IN.groupIndex == 0)
 	{
-		InterlockedAdd(pointCount[1], groupCount, groupStartOffset);
+		InterlockedAdd(pointCount[0], groupCount, groupStartOffset);
 	}
 
 	GroupMemoryBarrierWithGroupSync();

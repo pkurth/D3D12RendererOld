@@ -50,14 +50,13 @@ struct placement_tile
 struct procedural_placement
 {
 	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, 
-		std::vector<placement_tile>& tiles, std::vector<submesh_info>& subMeshes);
+		std::vector<placement_tile>& tiles, std::vector<submesh_info>& submeshes);
 
 	void generate(const render_camera& camera);
 	
-	uint32 maxNumDrawCalls;
+	uint32 numDrawCalls;
 
 	// For this frame.
-	dx_structured_buffer numDrawCallsBuffer;
 	dx_structured_buffer commandBuffer;
 	dx_structured_buffer depthOnlyCommandBuffer;
 	dx_vertex_buffer instanceBuffer;
@@ -73,7 +72,6 @@ private:
 
 	struct procedural_placement_render_resources
 	{
-		dx_structured_buffer numDrawCallsBuffer;
 		dx_structured_buffer commandBuffer;
 		dx_structured_buffer depthOnlyCommandBuffer;
 		dx_structured_buffer instanceBuffer;
@@ -83,7 +81,8 @@ private:
 	D3D12_CPU_DESCRIPTOR_HANDLE defaultSRV;
 
 	dx_structured_buffer samplePointsBuffer;
-	dx_structured_buffer placementPointBuffer;
+	dx_structured_buffer placementPointsBuffer;
+	dx_structured_buffer numPlacementPointsBuffer;
 	dx_structured_buffer meshBuffer;
 	dx_structured_buffer submeshBuffer;
 	dx_structured_buffer submeshCountBuffer;

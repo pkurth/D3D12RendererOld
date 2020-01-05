@@ -92,7 +92,7 @@ struct indirect_pipeline
 		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress); 
 
 	void render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
-		dx_buffer& commandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer, dx_vertex_buffer& instanceBuffer,
+		dx_buffer& commandBuffer, uint32 numDrawCalls, dx_vertex_buffer& instanceBuffer,
 		D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, 
 		D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, 
 		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress);
@@ -108,7 +108,7 @@ struct indirect_pipeline
 	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
 		dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls); 
 	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
-		dx_buffer& depthOnlyCommandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer, dx_vertex_buffer& instanceBuffer);
+		dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls, dx_vertex_buffer& instanceBuffer);
 
 
 	ComPtr<ID3D12PipelineState> geometryPipelineState;

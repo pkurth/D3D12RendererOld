@@ -416,9 +416,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 #endif
 
 	std::vector<placement_tile> placementTiles;
-	for (int32 z = -15; z < 15; ++z)
+	for (int32 z = -5; z < 5; ++z)
 	{
-		for (int32 x = -15; x < 15; ++x)
+		for (int32 x = -5; x < 5; ++x)
 		{
 			placement_tile& tile = tile0;
 
@@ -628,7 +628,7 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	//indirect.renderDepthOnly(commandList, camera, indirectBuffer);
 #if ENABLE_PROCEDURAL
 	indirect.renderDepthOnly(commandList, camera, indirectBuffer.indirectMesh, proceduralPlacement.depthOnlyCommandBuffer, 
-		proceduralPlacement.maxNumDrawCalls, proceduralPlacement.numDrawCallsBuffer, proceduralPlacement.instanceBuffer);
+		proceduralPlacement.numDrawCalls, proceduralPlacement.instanceBuffer);
 #endif
 #endif
 
@@ -639,7 +639,7 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	//indirect.render(commandList, indirectBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
 #if ENABLE_PROCEDURAL
 	indirect.render(commandList, indirectBuffer.indirectMesh, indirectBuffer.descriptors, proceduralPlacement.commandBuffer, 
-		proceduralPlacement.maxNumDrawCalls, proceduralPlacement.numDrawCallsBuffer, proceduralPlacement.instanceBuffer,
+		proceduralPlacement.numDrawCalls, proceduralPlacement.instanceBuffer,
 		cameraCBAddress, sunCBAddress, spotLightCBAddress);
 #endif
 	sky.render(commandList, cameraCBAddress, cubemap);
@@ -668,7 +668,7 @@ void dx_game::renderShadowmap(dx_command_list* commandList, dx_render_target& sh
 	commandList->drawIndirect(
 		indirect.depthOnlyCommandSignature,
 		proceduralPlacement.maxNumInstances,
-		proceduralPlacement.numDrawCallsBuffer,
+		proceduralPlacement.numPlacementPointsBuffer,
 		proceduralPlacement.depthOnlyCommandBuffer);
 #endif
 }

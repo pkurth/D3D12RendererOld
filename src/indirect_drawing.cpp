@@ -474,7 +474,7 @@ void indirect_pipeline::render(dx_command_list* commandList, indirect_draw_buffe
 }
 
 void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
-	dx_buffer& commandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer, dx_vertex_buffer& instanceBuffer,
+	dx_buffer& commandBuffer, uint32 numDrawCalls, dx_vertex_buffer& instanceBuffer,
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
 {
 	PROFILE_FUNCTION();
@@ -487,7 +487,7 @@ void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indi
 
 	commandList->drawIndirect(
 		geometryCommandSignature,
-		maxNumDrawCalls, numDrawCallsBuffer,
+		numDrawCalls,
 		commandBuffer);
 
 	commandList->resetToDynamicDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -517,7 +517,7 @@ void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const rend
 }
 
 void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
-	dx_buffer& depthOnlyCommandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer, dx_vertex_buffer& instanceBuffer)
+	dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls, dx_vertex_buffer& instanceBuffer)
 {
 	setupDepthOnlyPipeline(commandList, camera, mesh, depthOnlyCommandBuffer);
 
@@ -527,7 +527,7 @@ void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const rend
 
 	commandList->drawIndirect(
 		depthOnlyCommandSignature,
-		maxNumDrawCalls, numDrawCallsBuffer,
+		numDrawCalls,
 		depthOnlyCommandBuffer);
 }
 

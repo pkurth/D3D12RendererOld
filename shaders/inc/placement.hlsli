@@ -3,14 +3,10 @@
 
 
 
-struct submesh_info
+struct placement_submesh
 {
 	float4 aabbMin;
 	float4 aabbMax;
-	uint numTriangles;
-	uint firstTriangle;
-	uint baseVertex;
-	uint textureID_usageFlags;
 };
 
 struct placement_lod

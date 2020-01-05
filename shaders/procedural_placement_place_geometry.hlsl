@@ -20,7 +20,7 @@ cbuffer camera_frustum_cb : register(b0)
 
 StructuredBuffer<placement_point> placementPoints	: register(t0);
 StructuredBuffer<placement_mesh> meshes				: register(t1);
-StructuredBuffer<submesh_info> submeshes			: register(t2);
+StructuredBuffer<placement_submesh> submeshes		: register(t2);
 StructuredBuffer<uint> submeshOffsets				: register(t3);
 
 RWStructuredBuffer<uint> pointCount					: register(u0);
@@ -30,7 +30,7 @@ RWStructuredBuffer<float4x4> instanceData			: register(u2);
 #define BLOCK_SIZE 512
 
 
-static void placeGeometry(float4x4 modelMatrix, submesh_info mesh, uint submeshIndex)
+static void placeGeometry(float4x4 modelMatrix, placement_submesh mesh, uint submeshIndex)
 {
 	bool cull = cullModelSpaceAABB(cameraFrustum, mesh.aabbMin, mesh.aabbMax, modelMatrix);
 
@@ -51,7 +51,7 @@ static void placeGeometry(float4x4 modelMatrix, submesh_info mesh, uint submeshI
 [numthreads(BLOCK_SIZE, 1, 1)]
 void main(cs_input IN)
 {
-	uint numPlacementPoints = pointCount[1];
+	uint numPlacementPoints = pointCount[0];
 
 	if (IN.dispatchThreadID.x >= numPlacementPoints)
 	{
@@ -96,7 +96,7 @@ void main(cs_input IN)
 		for (uint i = 0; i < numSubmeshes; ++i)
 		{
 			uint submeshIndex = firstSubmesh + i;
-			submesh_info mesh = submeshes[submeshIndex];
+			placement_submesh mesh = submeshes[submeshIndex];
 			float4 color = firstSubmesh == 0 ? float4(1, 0, 0, 1) : float4(1, 1, 1, 1);
 			placeGeometry(modelMatrix, mesh, submeshIndex);
 		}
