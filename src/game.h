@@ -18,6 +18,7 @@
 #include "sky.h"
 #include "present.h"
 #include "procedural_placement.h"
+#include "procedural_placement_editor.h"
 
 
 #define CAMERA_SENSITIVITY 4.f
@@ -54,6 +55,8 @@ private:
 	dx_texture cubeDensity;
 	dx_texture sphereDensity;
 	dx_texture oakDensity;
+
+	procedural_placement_editor proceduralPlacementEditor;
 
 
 	particle_system particleSystem1;

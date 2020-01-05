@@ -819,6 +819,36 @@ bool debug_gui::multislider(const char* name, float* values, uint32 numValues, f
 	return result;
 }
 
+bool debug_gui::radio(const char* name, const char** values, uint32 numValues, uint32& currentValue)
+{
+	uint32 originalValue = currentValue;
+
+	currentValue = clamp(currentValue, 0u, numValues - 1);
+
+	text(name);
+	++level;
+
+	for (uint32 i = 0; i < numValues; ++i)
+	{
+		uint64 id = hashLabel(values[i]);
+
+		uint32 color = DEBUG_GUI_TEXT_COLOR;
+		if (i == currentValue)
+		{
+			color = DEBUG_GUI_TOGGLE_COLOR;
+		}
+
+		if (buttonInternal(id, values[i], color))
+		{
+			currentValue = i;
+		}
+	}
+
+	--level;
+
+	return originalValue != currentValue;
+}
+
 bool debug_gui::beginGroupInternal(const char* name, bool& isOpen)
 {
 	const float scale = 1.1f;

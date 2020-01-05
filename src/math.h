@@ -427,7 +427,6 @@ struct trs
 		: position(position), rotation(rotation), scale(scale) { }
 };
 
-
 template <typename T>
 inline T bucketize(T problemSize, size_t bucketSize)
 {
@@ -486,6 +485,15 @@ struct bounding_box
 		min = min - vec3(v, v, v);
 		max = max + vec3(v, v, v);
 	}
+};
+
+struct ray
+{
+	vec3 origin;
+	vec3 direction;
+
+	bool intersectPlane(vec4 plane, float& t) const;
+	bool intersectAABB(const bounding_box& aabb, float& t) const;
 };
 
 #define padded_sizeof(str, paddedTo) ((sizeof(str) + (paddedTo - 1))& ~(paddedTo - 1))

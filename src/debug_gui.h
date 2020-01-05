@@ -80,7 +80,7 @@ public:
 	bool button(const char* name);
 	bool slider(const char* name, float& v, float min, float max);
 	bool multislider(const char* name, float* values, uint32 numValues, float min, float max, float minDistance);
-
+	bool radio(const char* name, const char** values, uint32 numValues, uint32& currentValue);
 
 	void quad(float left, float right, float top, float bottom, uint32 color);
 	bool quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color, const char* formatOnHover = nullptr, ...);

@@ -90,6 +90,7 @@ struct render_camera
 	float eyeDepthToDepthBufferDepth(float eyeDepth) const;
 	camera_frustum_corners getWorldSpaceFrustumCorners(float alternativeFarPlane = 0.f) const;
 	camera_frustum_planes getWorldSpaceFrustumPlanes() const;
+	ray getWorldSpaceRay(float relX, float relY) const;
 };
 
 struct cubemap_camera : render_camera

@@ -24,9 +24,9 @@
 		- Raytracing.
 */
 
-#define ENABLE_SPONZA 1
+#define ENABLE_SPONZA 0
 #define ENABLE_PARTICLES 0
-#define ENABLE_PROCEDURAL 0
+#define ENABLE_PROCEDURAL 1
 #define ENABLE_PROCEDURAL_SHADOWS 0
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
@@ -413,6 +413,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	//placementTiles.push_back(tile0);
 
 	proceduralPlacement.initialize(device, commandList, placementTiles, placementSubmeshes);
+	proceduralPlacementEditor.initialize();
 
 
 	{
@@ -559,11 +560,7 @@ void dx_game::update(float dt)
 	sun.updateMatrices(camera);
 	spotLight.updateMatrices();
 
-	DEBUG_TAB(gui, "Procedural placement")
-	{
-		gui.slider("Tile 0 Object footprint", proceduralPlacement.tiles[0].objectFootprint, PROCEDURAL_MIN_FOOTPRINT, 10.f);
-		gui.slider("Tile 1 Object footprint", proceduralPlacement.tiles[1].objectFootprint, PROCEDURAL_MIN_FOOTPRINT, 10.f);
-	}
+	proceduralPlacementEditor.update(camera, proceduralPlacement, gui);
 }
 
 void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)

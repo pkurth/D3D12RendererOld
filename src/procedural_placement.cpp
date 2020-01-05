@@ -270,8 +270,8 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 
 	for (uint32 i = 0; i < numDrawCalls; ++i)
 	{
-		placementSubmeshes[i].aabbMin = submeshes[i].aabbMin;
-		placementSubmeshes[i].aabbMax = submeshes[i].aabbMax;
+		placementSubmeshes[i].aabbMin = vec4(submeshes[i].aabb.min, 1.f);
+		placementSubmeshes[i].aabbMax = vec4(submeshes[i].aabb.max, 1.f);
 
 		commands[i].material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
 		commands[i].material.roughnessOverride = 1.f;

@@ -117,3 +117,34 @@ namespace std
 #define COMPOSITE_VARNAME_(a, b) a##b
 #define COMPOSITE_VARNAME(a, b) COMPOSITE_VARNAME_(a, b)
 
+
+
+#define EXPAND(a) a
+
+#define DECLARE_ENUM_VALUE(enum_value, enum_name) enum_value,
+#define DECLARE_ENUM_NAME(enum_value, enum_name) enum_name,
+
+#define FOR_EACH_MEMBER_1(macro,  enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name))
+#define FOR_EACH_MEMBER_2(macro,  enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name)	EXPAND(FOR_EACH_MEMBER_1(macro, __VA_ARGS__)))
+#define FOR_EACH_MEMBER_3(macro,  enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name)	EXPAND(FOR_EACH_MEMBER_2(macro, __VA_ARGS__)))
+#define FOR_EACH_MEMBER_4(macro,  enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name)	EXPAND(FOR_EACH_MEMBER_3(macro, __VA_ARGS__)))
+#define FOR_EACH_MEMBER_5(macro,  enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name)	EXPAND(FOR_EACH_MEMBER_4(macro, __VA_ARGS__)))
+#define FOR_EACH_MEMBER_6(macro,  enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name)	EXPAND(FOR_EACH_MEMBER_5(macro, __VA_ARGS__)))
+#define FOR_EACH_MEMBER_7(macro,  enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name)	EXPAND(FOR_EACH_MEMBER_6(macro, __VA_ARGS__)))
+#define FOR_EACH_MEMBER_8(macro,  enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name)	EXPAND(FOR_EACH_MEMBER_7(macro, __VA_ARGS__)))
+#define FOR_EACH_MEMBER_9(macro,  enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name)	EXPAND(FOR_EACH_MEMBER_8(macro, __VA_ARGS__)))
+#define FOR_EACH_MEMBER_10(macro, enum_value, enum_name, ...)	EXPAND(macro(enum_value, enum_name)	EXPAND(FOR_EACH_MEMBER_9(macro, __VA_ARGS__)))
+
+
+#define GET_EVERY_SECOND_MACRO_(_1,__1,_2,__2,_3,__3,_4,__4,_5,__5,_6,__6,_7,__7,_8,__8,_9,__9,_10,__10,num,...) num
+#define GET_EVERY_SECOND_MACRO(...) EXPAND(GET_EVERY_SECOND_MACRO_(__VA_ARGS__,INVALID,FOR_EACH_MEMBER_9,INVALID,FOR_EACH_MEMBER_8,INVALID,FOR_EACH_MEMBER_7,INVALID,FOR_EACH_MEMBER_6,INVALID,FOR_EACH_MEMBER_5,INVALID,FOR_EACH_MEMBER_4,INVALID,FOR_EACH_MEMBER_3,INVALID,FOR_EACH_MEMBER_2,INVALID,FOR_EACH_MEMBER_1,INVALID,INVALID))
+
+
+
+#define STRINGIFY_ENUM(name, ...) \
+	EXPAND(GET_EVERY_SECOND_MACRO(__VA_ARGS__)(DECLARE_ENUM_VALUE, __VA_ARGS__)) }; \
+	static const char* name[] = { \
+		EXPAND(GET_EVERY_SECOND_MACRO(__VA_ARGS__)(DECLARE_ENUM_NAME, __VA_ARGS__)) \
+	};
+
+

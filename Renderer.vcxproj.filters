@@ -108,6 +108,9 @@
     <ClCompile Include="src\camera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\procedural_placement_editor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\common.h">
@@ -251,6 +254,9 @@
     <ClInclude Include="src\poisson_distribution.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\procedural_placement_editor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\generate_mips.hlsl" />
@@ -284,6 +290,7 @@
     <FxCompile Include="shaders\procedural_placement_prefix_sum.hlsl" />
     <FxCompile Include="shaders\procedural_placement_clear_buffer.hlsl" />
     <FxCompile Include="shaders\procedural_placement_create_commands.hlsl" />
+    <FxCompile Include="shaders\draw_to_texture.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
