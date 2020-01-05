@@ -279,13 +279,16 @@
     <FxCompile Include="shaders\particles_vs.hlsl" />
     <FxCompile Include="shaders\procedural_placement_gen_points.hlsl" />
     <FxCompile Include="shaders\procedural_placement_place_geometry.hlsl" />
-    <FxCompile Include="shaders\procedural_placement_clear_count.hlsl" />
     <FxCompile Include="shaders\geometry_vs.hlsl" />
     <FxCompile Include="shaders\geometry_ps.hlsl" />
+    <FxCompile Include="shaders\procedural_placement_prefix_sum.hlsl" />
+    <FxCompile Include="shaders\procedural_placement_clear_buffer.hlsl" />
+    <FxCompile Include="shaders\procedural_placement_create_commands.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="shaders\inc\lighting.hlsli" />
     <None Include="shaders\inc\random.hlsli" />
+    <None Include="shaders\inc\placement.hlsli" />
   </ItemGroup>
 </Project>

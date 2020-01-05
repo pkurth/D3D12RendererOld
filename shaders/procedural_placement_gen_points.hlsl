@@ -1,5 +1,6 @@
 #include "random.hlsli"
 #include "camera.hlsli"
+#include "placement.hlsli"
 
 struct cs_input
 {
@@ -11,15 +12,9 @@ struct cs_input
 
 #define BLOCK_SIZE 16
 
-struct placement_point
-{
-	float4 position;
-	float3 normal;
-	uint id;
-};
-
 cbuffer placement_cb : register(b0)
 {
+	float4 cameraPosition;
 	float2 tileCorner;
 	float tileSize;
 	uint numDensityMaps;
@@ -31,15 +26,16 @@ cbuffer placement_cb : register(b0)
 };
 
 SamplerState densitySampler							: register(s0);
-StructuredBuffer<float4> poissonMatrix				: register(t0);
+StructuredBuffer<float2> samplePoints				: register(t0);
 Texture2D<float> densityMaps[4]						: register(t1); // TODO: Pack these together?
+StructuredBuffer<placement_mesh> meshes				: register(t5);
 
 RWStructuredBuffer<placement_point> placementPoints : register(u0);
-RWStructuredBuffer<uint> pointCounter				: register(u1);
-
+RWStructuredBuffer<uint> pointCount					: register(u1);
+RWStructuredBuffer<uint> submeshCount				: register(u2);
 
 groupshared uint groupCount;
-groupshared uint startOffset;
+groupshared uint groupStartOffset;
 
 
 [numthreads(32, 32, 1)]
@@ -47,14 +43,14 @@ void main(cs_input IN)
 {
 	if (IN.groupIndex == 0)
 	{
+		pointCount[0] = 14;
 		groupCount = 0;
 	}
 
 	GroupMemoryBarrierWithGroupSync();
 
-	float3 poisson = poissonMatrix[IN.groupIndex].xyz;
-
-	float2 uv = poisson.xy * uvScale + IN.groupID.xy * uvOffset;
+	float2 samplePoint = samplePoints[IN.groupIndex];
+	float2 uv = samplePoint * uvScale + IN.groupID.xy * uvOffset;
 	
 	uint index = 100;
 	if (all(uv >= 0.f && uv <= 1.f))
@@ -84,28 +80,53 @@ void main(cs_input IN)
 
 	uint valid = index < numDensityMaps;
 
-	uint groupIndex;
-	InterlockedAdd(groupCount, valid, groupIndex);
+	uint innerGroupIndex;
+	InterlockedAdd(groupCount, valid, innerGroupIndex);
 
 	GroupMemoryBarrierWithGroupSync();
 
 	if (IN.groupIndex == 0)
 	{
-		InterlockedAdd(pointCounter[1], groupCount, startOffset);
+		InterlockedAdd(pointCount[1], groupCount, groupStartOffset);
 	}
 
 	GroupMemoryBarrierWithGroupSync();
 
 	if (valid)
 	{
-		placement_point result;
-
 		float2 xz = uv * tileSize + tileCorner;
+		float3 position = float3(xz.x, groundHeight, xz.y);
 
-		result.position = float4(xz.x, groundHeight, xz.y, 1.f);
+		uint meshIndex = index + meshOffset;
+
+
+		// Calculate LOD.
+		float distance = length(position - cameraPosition.xyz);
+
+		placement_mesh mesh = meshes[meshIndex];
+		uint numLODs = mesh.numLODs;
+		float4 comparison = (float4)distance > float4(mesh.lodDistances, 999999.f);
+		uint lodIndex = (uint)dot(float4(numLODs > 0, numLODs > 1, numLODs > 2, numLODs > 3), comparison);
+
+		lodIndex = min(lodIndex, numLODs - 1);
+
+		placement_lod lod = mesh.lods[lodIndex];
+
+		uint firstSubmesh = lod.firstSubmesh;
+		uint numSubmeshes = lod.numSubmeshes;
+
+		for (uint i = firstSubmesh; i < firstSubmesh + numSubmeshes; ++i)
+		{
+			InterlockedAdd(submeshCount[i], 1);
+		}
+
+
+		placement_point result;
+		result.position = position;
 		result.normal = float3(0.f, 1.f, 0.f);
-		result.id = index + meshOffset;
-		placementPoints[startOffset + groupIndex] = result;
+		result.meshID = meshIndex;
+		result.lod = lodIndex;
+		placementPoints[groupStartOffset + innerGroupIndex] = result;
 	}
 
 }

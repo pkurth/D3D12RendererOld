@@ -73,8 +73,6 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 		indirect_command& command = commands[i + currentSize];
 		indirect_depth_only_command& depthOnlyCommand = depthOnlyCommands[i + currentSize];
 
-		command.modelMatrix = transform;
-
 		command.material.textureID_usageFlags = mesh.textureID_usageFlags;
 		command.material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
 		command.material.roughnessOverride = 1.f;
@@ -86,7 +84,6 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 		command.drawArguments.BaseVertexLocation = mesh.baseVertex;
 		command.drawArguments.StartInstanceLocation = 0;
 
-		depthOnlyCommand.modelMatrix = transform;
 		depthOnlyCommand.drawArguments = command.drawArguments;
 	}
 
@@ -111,7 +108,6 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 		indirect_command& command = commands[i + currentSize];
 		indirect_depth_only_command& depthOnlyCommand = depthOnlyCommands[i + currentSize];
 
-		command.modelMatrix = transform;
 		command.material.textureID_usageFlags = 0;
 		command.material.albedoTint = color;
 		command.material.roughnessOverride = roughness;
@@ -123,7 +119,6 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 		command.drawArguments.BaseVertexLocation = mesh.baseVertex;
 		command.drawArguments.StartInstanceLocation = 0;
 
-		depthOnlyCommand.modelMatrix = transform;
 		depthOnlyCommand.drawArguments = command.drawArguments;
 	}
 
@@ -150,7 +145,6 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 			indirect_command& command = commands[instance + instanceCount * i + currentSize];
 			indirect_depth_only_command& depthOnlyCommand = depthOnlyCommands[instance + instanceCount * i + currentSize];
 
-			command.modelMatrix = transforms[instance];
 			command.material.textureID_usageFlags = 0;
 			command.material.albedoTint = colors[instance];
 			command.material.roughnessOverride = roughnesses[instance];
@@ -162,7 +156,6 @@ void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vec
 			command.drawArguments.BaseVertexLocation = mesh.baseVertex;
 			command.drawArguments.StartInstanceLocation = 0;
 
-			depthOnlyCommand.modelMatrix = transforms[instance];
 			depthOnlyCommand.drawArguments = command.drawArguments;
 		}
 	}
@@ -293,6 +286,12 @@ void indirect_pipeline::initialize(ComPtr<ID3D12Device2> device, const dx_render
 		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		{ "LIGHTPROBE_TETRAHEDRON", 0, DXGI_FORMAT_R32_UINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+
+
+		{ "MODELMATRIX", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+		{ "MODELMATRIX", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+		{ "MODELMATRIX", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+		{ "MODELMATRIX", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
 	};
 
 
@@ -321,9 +320,9 @@ void indirect_pipeline::initialize(ComPtr<ID3D12Device2> device, const dx_render
 		CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 6), // Tetrahedra.
 	};
 
-	CD3DX12_ROOT_PARAMETER1 rootParameters[12];
+	CD3DX12_ROOT_PARAMETER1 rootParameters[11];
 	rootParameters[INDIRECT_ROOTPARAM_CAMERA].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_ALL); // Camera.
-	rootParameters[INDIRECT_ROOTPARAM_MODEL].InitAsConstants(16, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // Model matrix (mat4).
+
 	rootParameters[INDIRECT_ROOTPARAM_MATERIAL].InitAsConstants(sizeof(material_cb) / sizeof(float), 2, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Material.
 
 	// PBR.
@@ -400,7 +399,7 @@ void indirect_pipeline::initialize(ComPtr<ID3D12Device2> device, const dx_render
 
 	// Depth only pass (for depth pre pass and shadow maps).
 	rootParameters[INDIRECT_ROOTPARAM_CAMERA].InitAsConstants(16, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);  // VP matrix.
-	rootSignatureDesc.NumParameters = 2; // Don't need the materials.
+	rootSignatureDesc.NumParameters = 1; // Don't need the materials.
 	rootSignatureDesc.NumStaticSamplers = 0;
 	rootSignatureDesc.Flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 	depthOnlyRootSignature.initialize(device, rootSignatureDesc);
@@ -438,18 +437,13 @@ void indirect_pipeline::initialize(ComPtr<ID3D12Device2> device, const dx_render
 
 	// Command Signature.
 
-	D3D12_INDIRECT_ARGUMENT_DESC argumentDescs[3];
+	D3D12_INDIRECT_ARGUMENT_DESC argumentDescs[2];
 	argumentDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
-	argumentDescs[0].Constant.RootParameterIndex = INDIRECT_ROOTPARAM_MODEL;
+	argumentDescs[0].Constant.RootParameterIndex = INDIRECT_ROOTPARAM_MATERIAL;
 	argumentDescs[0].Constant.DestOffsetIn32BitValues = 0;
-	argumentDescs[0].Constant.Num32BitValuesToSet = 16;
+	argumentDescs[0].Constant.Num32BitValuesToSet = rootParameters[INDIRECT_ROOTPARAM_MATERIAL].Constants.Num32BitValues;
 
-	argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
-	argumentDescs[1].Constant.RootParameterIndex = INDIRECT_ROOTPARAM_MATERIAL;
-	argumentDescs[1].Constant.DestOffsetIn32BitValues = 0;
-	argumentDescs[1].Constant.Num32BitValuesToSet = rootParameters[INDIRECT_ROOTPARAM_MATERIAL].Constants.Num32BitValues;
-
-	argumentDescs[2].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+	argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 
 	D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc = {};
 	commandSignatureDesc.pArgumentDescs = argumentDescs;
@@ -461,11 +455,11 @@ void indirect_pipeline::initialize(ComPtr<ID3D12Device2> device, const dx_render
 	SET_NAME(geometryCommandSignature, "Indirect Command Signature");
 
 
-	argumentDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
-	commandSignatureDesc.NumArgumentDescs = 2;
+	argumentDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+	commandSignatureDesc.NumArgumentDescs = 1;
 	commandSignatureDesc.ByteStride = sizeof(indirect_depth_only_command);
 
-	checkResult(device->CreateCommandSignature(&commandSignatureDesc, depthOnlyRootSignature.rootSignature.Get(),
+	checkResult(device->CreateCommandSignature(&commandSignatureDesc, nullptr, //depthOnlyRootSignature.rootSignature.Get(),
 		IID_PPV_ARGS(&depthOnlyCommandSignature)));
 	SET_NAME(depthOnlyCommandSignature, "Indirect Shadow Command Signature");
 }
@@ -480,7 +474,7 @@ void indirect_pipeline::render(dx_command_list* commandList, indirect_draw_buffe
 }
 
 void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
-	dx_buffer& commandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer,
+	dx_buffer& commandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer, dx_vertex_buffer& instanceBuffer,
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
 {
 	PROFILE_FUNCTION();
@@ -488,6 +482,8 @@ void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indi
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw indirect.");
 
 	setupPipeline(commandList, mesh, descriptors, commandBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
+
+	commandList->setVertexBuffer(1, instanceBuffer);
 
 	commandList->drawIndirect(
 		geometryCommandSignature,
@@ -521,11 +517,13 @@ void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const rend
 }
 
 void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
-	dx_buffer& depthOnlyCommandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer)
+	dx_buffer& depthOnlyCommandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer, dx_vertex_buffer& instanceBuffer)
 {
 	setupDepthOnlyPipeline(commandList, camera, mesh, depthOnlyCommandBuffer);
 
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw depth only indirect.");
+
+	commandList->setVertexBuffer(1, instanceBuffer);
 
 	commandList->drawIndirect(
 		depthOnlyCommandSignature,

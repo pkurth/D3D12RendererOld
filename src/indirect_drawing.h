@@ -7,17 +7,16 @@
 #include "descriptor_heap.h"
 
 #define INDIRECT_ROOTPARAM_CAMERA			0
-#define INDIRECT_ROOTPARAM_MODEL			1
-#define INDIRECT_ROOTPARAM_MATERIAL			2
-#define INDIRECT_ROOTPARAM_BRDF_TEXTURES	3
-#define INDIRECT_ROOTPARAM_ALBEDOS			4
-#define INDIRECT_ROOTPARAM_NORMALS			5
-#define INDIRECT_ROOTPARAM_ROUGHNESSES		6
-#define INDIRECT_ROOTPARAM_METALLICS		7
-#define INDIRECT_ROOTPARAM_DIRECTIONAL		8
-#define INDIRECT_ROOTPARAM_SPOT				9
-#define INDIRECT_ROOTPARAM_SHADOWMAPS		10
-#define INDIRECT_ROOTPARAM_LIGHTPROBES		11
+#define INDIRECT_ROOTPARAM_MATERIAL			1
+#define INDIRECT_ROOTPARAM_BRDF_TEXTURES	2
+#define INDIRECT_ROOTPARAM_ALBEDOS			3
+#define INDIRECT_ROOTPARAM_NORMALS			4
+#define INDIRECT_ROOTPARAM_ROUGHNESSES		5
+#define INDIRECT_ROOTPARAM_METALLICS		6
+#define INDIRECT_ROOTPARAM_DIRECTIONAL		7
+#define INDIRECT_ROOTPARAM_SPOT				8
+#define INDIRECT_ROOTPARAM_SHADOWMAPS		9
+#define INDIRECT_ROOTPARAM_LIGHTPROBES		10
 
 
 #define DEPTH_PREPASS 1
@@ -26,14 +25,12 @@
 #pragma pack(push, 1)
 struct indirect_command
 {
-	mat4 modelMatrix;
 	material_cb material;
 	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
 };
 
 struct indirect_depth_only_command
 {
-	mat4 modelMatrix;
 	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
 	uint32 padding[3];
 };
@@ -95,7 +92,7 @@ struct indirect_pipeline
 		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress); 
 
 	void render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
-		dx_buffer& commandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer,
+		dx_buffer& commandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer, dx_vertex_buffer& instanceBuffer,
 		D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, 
 		D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, 
 		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress);
@@ -111,7 +108,7 @@ struct indirect_pipeline
 	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
 		dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls); 
 	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
-		dx_buffer& depthOnlyCommandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer);
+		dx_buffer& depthOnlyCommandBuffer, uint32 maxNumDrawCalls, dx_buffer& numDrawCallsBuffer, dx_vertex_buffer& instanceBuffer);
 
 
 	ComPtr<ID3D12PipelineState> geometryPipelineState;

@@ -365,10 +365,31 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		oakSubmesh2[2],
 	};
 
+	placement_mesh cubePlacementMesh;
+	cubePlacementMesh.numLODs = 1; // Cube.
+	cubePlacementMesh.lods[0] = { 0, 1 };
+
+	placement_mesh spherePlacementMesh; 
+	spherePlacementMesh.numLODs = 4; // Sphere.
+	spherePlacementMesh.lods[0] = { 1, 1 };
+	spherePlacementMesh.lods[1] = { 2, 1 };
+	spherePlacementMesh.lods[2] = { 3, 1 };
+	spherePlacementMesh.lods[3] = { 4, 1 };
+	spherePlacementMesh.lodDistances = vec3(10.f, 30.f, 100.f);
+
+	placement_mesh oakPlacementMesh;
+	oakPlacementMesh.numLODs = 3;
+	oakPlacementMesh.lods[0] = { 5, 3 };
+	oakPlacementMesh.lods[1] = { 8, 3 };
+	oakPlacementMesh.lods[2] = { 11, 3 };
+	oakPlacementMesh.lodDistances = vec3(10.f, 20.f, 50.f);
+
 	commandList->loadTextureFromFile(cubeDensity, L"res/density.png", texture_type_noncolor, false);
 	commandList->loadTextureFromFile(sphereDensity, L"res/density2.png", texture_type_noncolor, false);
+	commandList->loadTextureFromFile(oakDensity, L"res/density3.png", texture_type_noncolor, false);
 	SET_NAME(cubeDensity.resource, "Cube Density");
 	SET_NAME(sphereDensity.resource, "Sphere Density");
+	SET_NAME(oakDensity.resource, "Oak Density");
 
 	placement_tile tile0;
 	tile0.cornerX = 0;
@@ -376,33 +397,39 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	tile0.groundHeight = 0.f;
 	tile0.maximumHeight = 20.f;
 	tile0.numMeshes = 2;
-	tile0.meshes[0].numLODs = 1; // Cube.
-	tile0.meshes[0].lods[0]	= { 0, 1 }; 
-	tile0.meshes[1].numLODs = 4; // Sphere.
-	tile0.meshes[1].lods[0] = { 1, 1 };
-	tile0.meshes[1].lods[1] = { 2, 1 };
-	tile0.meshes[1].lods[2] = { 3, 1 };
-	tile0.meshes[1].lods[3] = { 4, 1 };
-	tile0.meshes[1].lodDistances = vec3(10.f, 30.f, 100.f);
+	tile0.meshes[0] = cubePlacementMesh;
+	tile0.meshes[1] = spherePlacementMesh;
 	tile0.densities[0] = &cubeDensity;
 	tile0.densities[1] = &sphereDensity;
 	tile0.objectFootprint = PROCEDURAL_MIN_FOOTPRINT;
 
+#if 1
 	placement_tile tile1;
 	tile1.cornerX = 1;
 	tile1.cornerZ = 0;
 	tile1.groundHeight = 0.f;
 	tile1.maximumHeight = 20.f;
 	tile1.numMeshes = 1; // Oak.
-	tile1.meshes[0].numLODs = 3;
-	tile1.meshes[0].lods[0] = { 5, 3 };
-	tile1.meshes[0].lods[1] = { 8, 3 };
-	tile1.meshes[0].lods[2] = { 11, 3 };
-	tile1.meshes[0].lodDistances = vec3(10.f, 30.f, 100.f);
-	tile1.densities[0] = &sphereDensity;
-	tile1.objectFootprint = PROCEDURAL_MIN_FOOTPRINT;
+	tile1.meshes[0] = oakPlacementMesh;
+	tile1.densities[0] = &oakDensity;
+	tile1.objectFootprint = 8.f;
+#endif
 
-	std::vector<placement_tile> placementTiles = { tile0, tile1 };
+	std::vector<placement_tile> placementTiles;
+	for (int32 z = -15; z < 15; ++z)
+	{
+		for (int32 x = -15; x < 15; ++x)
+		{
+			placement_tile& tile = tile0;
+
+			tile.cornerX = x;
+			tile.cornerZ = z;
+
+			placementTiles.push_back(tile);
+		}
+	}
+
+	//placementTiles.push_back(tile0);
 
 	proceduralPlacement.initialize(device, commandList, placementTiles, placementSubmeshes);
 
@@ -480,7 +507,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	camera.fovY = DirectX::XMConvertToRadians(70.f);
 	camera.nearPlane = 0.1f;
-	camera.farPlane = 1000.f;
+	camera.farPlane = 10000.f;
 	camera.position = vec3(0.f, 5.f, 5.f);
 	camera.rotation = quat::identity;
 	camera.updateMatrices(width, height);
@@ -534,26 +561,13 @@ void dx_game::update(float dt)
 
 	this->dt = dt;
 
-	camera_frustum_planes cameraFrustumPlanes = camera.getWorldSpaceFrustumPlanes();
-	bounding_box testBB = { vec3(-1.f, -1.f, -1.f), vec3(1.f, 1.f, 1.f) };
-
-	bool testCull = cameraFrustumPlanes.cullModelSpaceAABB(testBB, createModelMatrix(vec3(30.f, 10.f, 10.f), createQuaternionFromAxisAngle(vec3(1.f, 0.f, 0.f), 0.3f), 10.f));
 
 	DEBUG_TAB(gui, "General")
 	{
 		gui.textF("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
 		DEBUG_GROUP(gui, "Camera")
 		{
-			if (testCull)
-			{
-				gui.text("NOT VISIBLE");
-			}
-			else
-			{
-				gui.text("VISIBLE");
-			}
 			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
-			gui.textF("Input movement: %.2f, %.2f, %.2f", inputMovement.x, inputMovement.y, inputMovement.z);
 			gui.slider("Near plane", camera.nearPlane, 0.1f, 10.f);
 		}
 
@@ -571,7 +585,7 @@ void dx_game::update(float dt)
 			DEBUG_GROUP(gui, "Spot light")
 			{
 				float angles[] = { DirectX::XMConvertToDegrees(spotLight.innerAngle), DirectX::XMConvertToDegrees(spotLight.outerAngle) };
-				if (gui.multislider("Radii", angles, 2, 0.f, 90.f, 1.f))
+				if (gui.multislider("Inner/outer radius", angles, 2, 0.f, 90.f, 1.f))
 				{
 					spotLight.innerAngle = DirectX::XMConvertToRadians(angles[0]);
 					spotLight.outerAngle = DirectX::XMConvertToRadians(angles[1]);
@@ -611,10 +625,10 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress = commandList->uploadDynamicConstantBuffer(spotLight);
 
 #if DEPTH_PREPASS
-	indirect.renderDepthOnly(commandList, camera, indirectBuffer);
+	//indirect.renderDepthOnly(commandList, camera, indirectBuffer);
 #if ENABLE_PROCEDURAL
 	indirect.renderDepthOnly(commandList, camera, indirectBuffer.indirectMesh, proceduralPlacement.depthOnlyCommandBuffer, 
-		proceduralPlacement.maxNumDrawCalls, proceduralPlacement.numDrawCallsBuffer);
+		proceduralPlacement.maxNumDrawCalls, proceduralPlacement.numDrawCallsBuffer, proceduralPlacement.instanceBuffer);
 #endif
 #endif
 
@@ -622,10 +636,10 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	commandList->transitionBarrier(lightProbeSystem.lightProbePositionBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	commandList->transitionBarrier(lightProbeSystem.lightProbeTetrahedraBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	indirect.render(commandList, indirectBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
+	//indirect.render(commandList, indirectBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
 #if ENABLE_PROCEDURAL
 	indirect.render(commandList, indirectBuffer.indirectMesh, indirectBuffer.descriptors, proceduralPlacement.commandBuffer, 
-		proceduralPlacement.maxNumDrawCalls, proceduralPlacement.numDrawCallsBuffer,
+		proceduralPlacement.maxNumDrawCalls, proceduralPlacement.numDrawCallsBuffer, proceduralPlacement.instanceBuffer,
 		cameraCBAddress, sunCBAddress, spotLightCBAddress);
 #endif
 	sky.render(commandList, cameraCBAddress, cubemap);
@@ -653,7 +667,7 @@ void dx_game::renderShadowmap(dx_command_list* commandList, dx_render_target& sh
 	// Procedurally generated scene.
 	commandList->drawIndirect(
 		indirect.depthOnlyCommandSignature,
-		proceduralPlacement.maxNumDrawCalls,
+		proceduralPlacement.maxNumInstances,
 		proceduralPlacement.numDrawCallsBuffer,
 		proceduralPlacement.depthOnlyCommandBuffer);
 #endif
@@ -675,6 +689,7 @@ uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR
 	commandList->transitionBarrier(prefilteredEnvironment, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	commandList->transitionBarrier(brdf, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
+#if 0
 	// Render to sun shadow map.
 	{
 		PROFILE_BLOCK("Record shadow map commands");
@@ -704,6 +719,7 @@ uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR
 		commandList->transitionBarrier(spotLightShadowMapTexture,
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	}
+#endif
 
 
 	if (lightProbeRecording)

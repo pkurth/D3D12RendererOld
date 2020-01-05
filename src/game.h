@@ -53,6 +53,7 @@ private:
 	procedural_placement proceduralPlacement;
 	dx_texture cubeDensity;
 	dx_texture sphereDensity;
+	dx_texture oakDensity;
 
 
 	particle_system particleSystem1;

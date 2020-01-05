@@ -30,8 +30,8 @@ struct placement_mesh
 struct placement_tile
 {
 	// Multiples of tile size.
-	uint32 cornerX;
-	uint32 cornerZ;
+	int32 cornerX;
+	int32 cornerZ;
 
 	float groundHeight;
 	float maximumHeight;
@@ -60,12 +60,14 @@ struct procedural_placement
 	dx_structured_buffer numDrawCallsBuffer;
 	dx_structured_buffer commandBuffer;
 	dx_structured_buffer depthOnlyCommandBuffer;
-
+	dx_vertex_buffer instanceBuffer;
 
 	std::vector<placement_tile> tiles;
 
 private:
+	uint32 maxNumInstances;
 
+	dx_structured_buffer instanceBufferInternal;
 
 	float radiusInUVSpace;
 
@@ -74,18 +76,24 @@ private:
 		dx_structured_buffer numDrawCallsBuffer;
 		dx_structured_buffer commandBuffer;
 		dx_structured_buffer depthOnlyCommandBuffer;
+		dx_structured_buffer instanceBuffer;
 	};
 
 
 	D3D12_CPU_DESCRIPTOR_HANDLE defaultSRV;
 
-	dx_structured_buffer poissonSampleBuffer;
+	dx_structured_buffer samplePointsBuffer;
 	dx_structured_buffer placementPointBuffer;
 	dx_structured_buffer meshBuffer;
 	dx_structured_buffer submeshBuffer;
+	dx_structured_buffer submeshCountBuffer;
+	dx_structured_buffer submeshOffsetBuffer;
 
-	dx_root_signature clearCountRootSignature;
-	ComPtr<ID3D12PipelineState> clearCountPipelineState;
+	dx_root_signature clearBufferRootSignature;
+	ComPtr<ID3D12PipelineState> clearBufferPipelineState;
+
+	dx_root_signature prefixSumRootSignature;
+	ComPtr<ID3D12PipelineState> prefixSumPipelineState;
 
 	dx_root_signature generatePointsRootSignature;
 	ComPtr<ID3D12PipelineState> generatePointsPipelineState;
@@ -93,11 +101,16 @@ private:
 	dx_root_signature placeGeometryRootSignature;
 	ComPtr<ID3D12PipelineState> placeGeometryPipelineState;
 
+	dx_root_signature createCommandsRootSignature;
+	ComPtr<ID3D12PipelineState> createCommandsPipelineState;
+
 
 	procedural_placement_render_resources renderResources[NUM_BUFFERED_FRAMES];
 	uint32 currentRenderResources = 0;
 
-	void clearCount(dx_command_list* commandList);
-	uint32 generatePoints(dx_command_list* commandList, const camera_frustum_planes& frustum);
+	void clearBuffer(dx_command_list* commandList, dx_structured_buffer& buffer);
+	uint32 generatePoints(dx_command_list* commandList, vec3 cameraPosition, const camera_frustum_planes& frustum);
+	void computeSubmeshOffsets(dx_command_list* commandList);
 	void placeGeometry(dx_command_list* commandList, const camera_frustum_planes& frustum, uint32 maxNumGeneratedPlacementPoints);
+	void createCommands(dx_command_list* commandList);
 };

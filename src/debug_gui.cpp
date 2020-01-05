@@ -877,7 +877,13 @@ bool debug_gui::tab(const char* name)
 
 		++numActiveTabs;
 
-		if (buttonInternal(id, name, DEBUG_GUI_TAB_COLOR, scale, true))
+		uint32 color = DEBUG_GUI_TAB_COLOR;
+		if (openTab != id)
+		{
+			color = DEBUG_GUI_UNSELECTED_TAB_COLOR;
+		}
+
+		if (buttonInternal(id, name, color, scale, true))
 		{
 			openTab = id;
 		}

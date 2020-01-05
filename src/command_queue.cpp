@@ -2,6 +2,7 @@
 #include "command_queue.h"
 #include "error.h"
 #include "resource_state_tracker.h"
+#include "profiling.h"
 
 
 dx_command_queue dx_command_queue::renderCommandQueue;
@@ -40,6 +41,8 @@ dx_command_queue::~dx_command_queue()
 
 dx_command_list* dx_command_queue::getAvailableCommandList()
 {
+	PROFILE_FUNCTION();
+
 	dx_command_list* result;
 
 	if (!freeCommandLists.tryPop(result))
@@ -68,66 +71,78 @@ dx_command_queue::dx_transition_command_list* dx_command_queue::getAvailableTran
 
 uint64 dx_command_queue::executeCommandList(dx_command_list* commandList)
 {
-	return executeCommandLists({ commandList });
+	return executeCommandLists(&commandList, 1);
 }
 
-uint64 dx_command_queue::executeCommandLists(const std::vector<dx_command_list*>& commandLists)
+uint64 dx_command_queue::executeCommandLists(dx_command_list** commandLists, uint32 numCommandLists)
 {
+	PROFILE_FUNCTION();
+
 	dx_resource_state_tracker::lock();
 
-	std::vector<command_list_entry> toBeQueued;
-	toBeQueued.reserve(commandLists.size() * 2);
+	command_list_entry toBeQueued[128];
+	uint32 numToBeQueued = 0;
 
-	std::vector<ID3D12CommandList*> d3d12CommandLists;
-	d3d12CommandLists.reserve(commandLists.size() * 2);
+	ID3D12CommandList* d3d12CommandLists[128];
+	uint32 numD3D12CommandLists = 0;
 
-	std::vector<dx_command_list*> extraComputeCommandLists;
-	extraComputeCommandLists.reserve(commandLists.size());
+	dx_command_list* extraComputeCommandLists[128];
+	uint32 numExtraComputeCommandLists = 0;
 
-	for (dx_command_list* list : commandLists)
 	{
-		dx_transition_command_list* pendingCommandList = getAvailableTransitionCommandList();
-		bool hasPendingBarriers = list->close(pendingCommandList->commandList);
+		PROFILE_BLOCK("Gather lists to execute");
 
-		if (hasPendingBarriers)
+		for (uint32 i = 0; i < numCommandLists; ++i)
 		{
-			checkResult(pendingCommandList->commandList->Close());
-			d3d12CommandLists.push_back(pendingCommandList->commandList.Get());
-			toBeQueued.emplace_back(pendingCommandList);
-		}
-		else
-		{
-			checkResult(pendingCommandList->commandAllocator->Reset());
-			checkResult(pendingCommandList->commandList->Reset(pendingCommandList->commandAllocator.Get(), nullptr));
-			freeTransitionCommandLists.pushBack(pendingCommandList);
-		}
-		d3d12CommandLists.push_back(list->getD3D12CommandList().Get());
+			dx_command_list* list = commandLists[i];
 
-		toBeQueued.emplace_back(list);
+			dx_transition_command_list* pendingCommandList = getAvailableTransitionCommandList();
+			bool hasPendingBarriers = list->close(pendingCommandList->commandList);
 
-		dx_command_list* extraComputeCommandList = list->getComputeCommandList();
-		if (extraComputeCommandList)
-		{
-			extraComputeCommandLists.push_back(extraComputeCommandList);
+			if (hasPendingBarriers)
+			{
+				checkResult(pendingCommandList->commandList->Close());
+				d3d12CommandLists[numD3D12CommandLists++] = pendingCommandList->commandList.Get();
+				toBeQueued[numToBeQueued++] = pendingCommandList;
+			}
+			else
+			{
+				checkResult(pendingCommandList->commandAllocator->Reset());
+				checkResult(pendingCommandList->commandList->Reset(pendingCommandList->commandAllocator.Get(), nullptr));
+				freeTransitionCommandLists.pushBack(pendingCommandList);
+			}
+
+			d3d12CommandLists[numD3D12CommandLists++] = list->commandList.Get();
+			toBeQueued[numToBeQueued++] = list;
+
+			dx_command_list* extraComputeCommandList = list->getComputeCommandList();
+			if (extraComputeCommandList)
+			{
+				extraComputeCommandLists[numExtraComputeCommandLists++] = extraComputeCommandList;
+			}
 		}
 	}
 
-	uint32 numCommandLists = (uint32)d3d12CommandLists.size();
-	commandQueue->ExecuteCommandLists(numCommandLists, d3d12CommandLists.data());
+	{
+		PROFILE_BLOCK("Execute");
+		commandQueue->ExecuteCommandLists(numD3D12CommandLists, d3d12CommandLists);
+	}
 	uint64 fenceValue = signal();
 
 	dx_resource_state_tracker::unlock();
 
-	for (command_list_entry entry : toBeQueued)
+	for (uint32 i = 0; i < numToBeQueued; ++i)
 	{
-		entry.fenceValue = fenceValue;
-		inFlightCommandLists.pushBack(entry);
+		toBeQueued[i].fenceValue = fenceValue;
+		inFlightCommandLists.pushBack(toBeQueued[i]);
 	}
 
-	if (extraComputeCommandLists.size() > 0)
+	if (numExtraComputeCommandLists)
 	{
+		PROFILE_BLOCK("Execute extra compute lists");
+
 		computeCommandQueue.waitForOtherQueue(*this);
-		computeCommandQueue.executeCommandLists(extraComputeCommandLists);
+		computeCommandQueue.executeCommandLists(extraComputeCommandLists, numExtraComputeCommandLists);
 	}
 
 	return fenceValue;

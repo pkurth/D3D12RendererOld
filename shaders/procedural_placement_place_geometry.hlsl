@@ -1,6 +1,6 @@
-#include "material.hlsli"
 #include "random.hlsli"
 #include "camera.hlsli"
+#include "placement.hlsli"
 
 struct cs_input
 {
@@ -12,160 +12,63 @@ struct cs_input
 
 static const float pi = 3.141592653589793238462643383279f;
 
-struct placement_point
-{
-	float4 position;
-	float3 normal;
-	uint id;
-};
-
-struct submesh_info
-{
-	float4 aabbMin;
-	float4 aabbMax;
-	uint numTriangles;
-	uint firstTriangle;
-	uint baseVertex;
-	uint textureID_usageFlags;
-};
-
-struct placement_lod
-{
-	uint firstSubmesh;
-	uint numSubmeshes;
-};
-
-struct placement_mesh
-{
-	placement_lod lods[4];
-	float3 lodDistances; // Last LOD has infinite distance.
-	uint numLODs;
-};
 
 cbuffer camera_frustum_cb : register(b0)
 {
 	camera_frustum_planes cameraFrustum;
 };
 
-struct D3D12_DRAW_INDEXED_ARGUMENTS
-{
-	uint IndexCountPerInstance;
-	uint InstanceCount;
-	uint StartIndexLocation;
-	int BaseVertexLocation;
-	uint StartInstanceLocation;
-};
-
-struct indirect_command
-{
-	float4x4 modelMatrix;
-	material_cb material;
-	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
-};
-
-struct indirect_depth_only_command
-{
-	float4x4 modelMatrix;
-	D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
-	uint padding[3];
-};
-
 StructuredBuffer<placement_point> placementPoints	: register(t0);
 StructuredBuffer<placement_mesh> meshes				: register(t1);
 StructuredBuffer<submesh_info> submeshes			: register(t2);
+StructuredBuffer<uint> submeshOffsets				: register(t3);
 
-RWStructuredBuffer<indirect_command> outCommands	: register(u0);
-RWStructuredBuffer<indirect_depth_only_command> outDepthOnlyCommands : register(u1);
-RWStructuredBuffer<uint> pointCounter				: register(u2);
-
+RWStructuredBuffer<uint> pointCount					: register(u0);
+RWStructuredBuffer<uint> submeshCounts				: register(u1);
+RWStructuredBuffer<float4x4> instanceData			: register(u2);
 
 #define BLOCK_SIZE 512
 
 
-static void placeGeometry(float4x4 modelMatrix, submesh_info mesh, float4 color, uint outIndex)
+static void placeGeometry(float4x4 modelMatrix, submesh_info mesh, uint submeshIndex)
 {
 	bool cull = cullModelSpaceAABB(cameraFrustum, mesh.aabbMin, mesh.aabbMax, modelMatrix);
 
-	indirect_command result;
-	result.modelMatrix = modelMatrix;
+	if (!cull)
+	{
+		uint offset = submeshOffsets[submeshIndex];
+		uint maxCount = submeshOffsets[submeshIndex + 1] - offset;
 
-	result.material.albedoTint = color;
-	result.material.textureID_usageFlags = mesh.textureID_usageFlags;
-	result.material.roughnessOverride = 1.f;
-	result.material.metallicOverride = 0.f;
+		uint index;
+		InterlockedAdd(submeshCounts[submeshIndex], -1, index);
+		index = maxCount - index;
 
-	result.drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
-	result.drawArguments.InstanceCount = cull ? 0 : 1;
-	result.drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
-	result.drawArguments.BaseVertexLocation = mesh.baseVertex;
-	result.drawArguments.StartInstanceLocation = 0;
-
-
-	indirect_depth_only_command depthOnlyResult;
-	depthOnlyResult.modelMatrix = result.modelMatrix;
-	depthOnlyResult.drawArguments = result.drawArguments;
-	depthOnlyResult.padding[0] = depthOnlyResult.padding[1] = depthOnlyResult.padding[2] = 0;
-
-	outCommands[outIndex] = result;
-	outDepthOnlyCommands[outIndex] = depthOnlyResult;
+		instanceData[offset + index] = modelMatrix;
+	}
 }
 
-groupshared uint groupCount;
-groupshared uint startOffset;
 
 [numthreads(BLOCK_SIZE, 1, 1)]
 void main(cs_input IN)
 {
-	if (IN.groupIndex == 0)
+	uint numPlacementPoints = pointCount[1];
+
+	if (IN.dispatchThreadID.x >= numPlacementPoints)
 	{
-		groupCount = 0;
+		return;
 	}
 
-	GroupMemoryBarrierWithGroupSync();
-
-	uint numPlacementPoints = pointCounter[1];
-	uint groupIndex = 0;
 
 	placement_point placementPoint = placementPoints[IN.dispatchThreadID.x];
-
-	uint firstSubmesh = 0;
-	uint numSubmeshes = 0;
-
-	if (IN.dispatchThreadID.x < numPlacementPoints)
-	{
-		placement_mesh mesh = meshes[placementPoint.id];
-
-		float4 nearPlane = cameraFrustum.planes[0];
-		float distance = dot(placementPoint.position, nearPlane);
-
-		uint numLODs = mesh.numLODs;
-		float4 comparison = (float4)distance > float4(mesh.lodDistances, 999999.f);
-		uint lodIndex = (uint)dot(float4(numLODs > 0, numLODs > 1, numLODs > 2, numLODs > 3), comparison);
-
-		lodIndex = min(lodIndex, numLODs - 1);
-
-		placement_lod lod = mesh.lods[lodIndex];
-
-		firstSubmesh = lod.firstSubmesh;
-		numSubmeshes = lod.numSubmeshes;
-	}
-
-	InterlockedAdd(groupCount, numSubmeshes, groupIndex);
-
-	GroupMemoryBarrierWithGroupSync();
-
-	if (IN.groupIndex == 0)
-	{
-		InterlockedAdd(pointCounter[0], groupCount, startOffset);
-	}
-
-	GroupMemoryBarrierWithGroupSync();
-
+	placement_lod lod = meshes[placementPoint.meshID].lods[placementPoint.lod];
+	
+	uint firstSubmesh = lod.firstSubmesh;
+	uint numSubmeshes = lod.numSubmeshes;
 
 	if (numSubmeshes > 0)
 	{
-		float3 position = placementPoints[IN.dispatchThreadID.x].position.xyz;
-		float3 yAxis = placementPoints[IN.dispatchThreadID.x].normal.xyz;
+		float3 position = placementPoint.position.xyz;
+		float3 yAxis = placementPoint.normal.xyz;
 
 		float3 xAxis = normalize(cross(yAxis, float3(0.f, 0.f, 1.f)));
 		float3 zAxis = cross(xAxis, yAxis);
@@ -190,13 +93,12 @@ void main(cs_input IN)
 			{ 0, 0, 0, 1 }
 		};
 
-
-
 		for (uint i = 0; i < numSubmeshes; ++i)
 		{
-			submesh_info mesh = submeshes[firstSubmesh + i];
+			uint submeshIndex = firstSubmesh + i;
+			submesh_info mesh = submeshes[submeshIndex];
 			float4 color = firstSubmesh == 0 ? float4(1, 0, 0, 1) : float4(1, 1, 1, 1);
-			placeGeometry(modelMatrix, mesh, color, startOffset + groupIndex + i);
+			placeGeometry(modelMatrix, mesh, submeshIndex);
 		}
 	}
 }
