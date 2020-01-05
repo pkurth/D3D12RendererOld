@@ -6,189 +6,58 @@
 
 #include <pix3.h>
 
-void indirect_draw_buffer::pushInternal(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info>& submeshes)
+
+void indirect_draw_buffer::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
+	dx_texture& irradiance, dx_texture& prefilteredEnvironment, dx_texture& brdf,
+	dx_texture* sunShadowMapCascades, uint32 numSunShadowMapCascades,
+	dx_texture& spotLightShadowMap,
+	light_probe_system& lightProbeSystem,
+	cpu_triangle_mesh<vertex_3PUNTL>& mesh)
 {
 	PROFILE_FUNCTION();
 
-	uint32 materialOffset = (uint32)indirectMaterials.size();
-	uint32 vertexOffset = (uint32)cpuMesh.vertices.size();
-	uint32 triangleOffset = (uint32)cpuMesh.triangles.size();
+	this->device = device;
 
-	cpuMesh.append(mesh);
-
-	for (submesh_info& s : submeshes)
-	{
-		s.baseVertex += vertexOffset;
-		s.firstTriangle += triangleOffset;
-
-		uint32 currentMaterialOffset = s.textureID_usageFlags >> 16;
-		currentMaterialOffset += materialOffset;
-		s.textureID_usageFlags = (s.textureID_usageFlags & 0xFFFF) | (currentMaterialOffset << 16);
-	}
-}
-
-void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes, std::vector<submesh_material_info>& materialInfos,
-	const mat4& transform, dx_command_list* commandList)
-{
-	PROFILE_FUNCTION();
-
-	pushInternal(mesh, submeshes);
-
-	uint32 materialOffset = (uint32)indirectMaterials.size();
-	indirectMaterials.resize(indirectMaterials.size() + materialInfos.size());
+	indirectMaterials.resize(mesh.allMaterials.size());
 
 	{
 		PROFILE_BLOCK("Load indirect textures");
 
-		for (uint32 i = 0; i < materialInfos.size(); ++i)
+		// TODO: Take care of duplicates.
+		for (uint32 i = 0; i < (uint32)mesh.allMaterials.size(); ++i)
 		{
-			const submesh_material_info& mat = materialInfos[i];
+			const submesh_material_info& mat = mesh.allMaterials[i];
 			if (mat.albedoName.length() > 0)
 			{
-				commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].albedo, stringToWString(mat.albedoName), texture_type_color);
+				commandList->loadTextureFromFile(indirectMaterials[i].albedo, stringToWString(mat.albedoName), texture_type_color);
 			}
 			if (mat.normalName.length() > 0)
 			{
-				commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].normal, stringToWString(mat.normalName), texture_type_noncolor);
+				commandList->loadTextureFromFile(indirectMaterials[i].normal, stringToWString(mat.normalName), texture_type_noncolor);
 			}
 			if (mat.roughnessName.length() > 0)
 			{
-				commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].roughness, stringToWString(mat.roughnessName), texture_type_noncolor);
+				commandList->loadTextureFromFile(indirectMaterials[i].roughness, stringToWString(mat.roughnessName), texture_type_noncolor);
 			}
 			if (mat.metallicName.length() > 0)
 			{
-				commandList->loadTextureFromFile(indirectMaterials[i + materialOffset].metallic, stringToWString(mat.metallicName), texture_type_noncolor);
+				commandList->loadTextureFromFile(indirectMaterials[i].metallic, stringToWString(mat.metallicName), texture_type_noncolor);
 			}
 		}
 	}
 
-	uint32 currentSize = (uint32)commands.size();
-	commands.resize(commands.size() + submeshes.size());
-	depthOnlyCommands.resize(commands.size() + submeshes.size());
-
-	for (uint32 i = 0; i < submeshes.size(); ++i)
-	{
-		submesh_info mesh = submeshes[i];
-
-		indirect_command& command = commands[i + currentSize];
-		indirect_depth_only_command& depthOnlyCommand = depthOnlyCommands[i + currentSize];
-
-		command.material.textureID_usageFlags = mesh.textureID_usageFlags;
-		command.material.albedoTint = vec4(1.f, 1.f, 1.f, 1.f);
-		command.material.roughnessOverride = 1.f;
-		command.material.metallicOverride = 0.f;
-
-		command.drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
-		command.drawArguments.InstanceCount = 1;
-		command.drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
-		command.drawArguments.BaseVertexLocation = mesh.baseVertex;
-		command.drawArguments.StartInstanceLocation = 0;
-
-		depthOnlyCommand.drawArguments = command.drawArguments;
-	}
-
-	numDrawCalls += (uint32)submeshes.size();
-}
-
-void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes, vec4 color, float roughness, float metallic,
-	const mat4& transform)
-{
-	PROFILE_FUNCTION();
-
-	pushInternal(mesh, submeshes);
-
-	uint32 currentSize = (uint32)commands.size();
-	commands.resize(commands.size() + submeshes.size());
-	depthOnlyCommands.resize(commands.size() + submeshes.size());
-
-	for (uint32 i = 0; i < submeshes.size(); ++i)
-	{
-		submesh_info mesh = submeshes[i];
-
-		indirect_command& command = commands[i + currentSize];
-		indirect_depth_only_command& depthOnlyCommand = depthOnlyCommands[i + currentSize];
-
-		command.material.textureID_usageFlags = 0;
-		command.material.albedoTint = color;
-		command.material.roughnessOverride = roughness;
-		command.material.metallicOverride = metallic;
-
-		command.drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
-		command.drawArguments.InstanceCount = 1;
-		command.drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
-		command.drawArguments.BaseVertexLocation = mesh.baseVertex;
-		command.drawArguments.StartInstanceLocation = 0;
-
-		depthOnlyCommand.drawArguments = command.drawArguments;
-	}
-
-	numDrawCalls += (uint32)submeshes.size();
-}
-
-void indirect_draw_buffer::push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes,
-	vec4* colors, float* roughnesses, float* metallics, const mat4* transforms, uint32 instanceCount)
-{
-	PROFILE_FUNCTION();
-
-	pushInternal(mesh, submeshes);
-
-	uint32 currentSize = (uint32)commands.size();
-	commands.resize(commands.size() + submeshes.size() * instanceCount);
-	depthOnlyCommands.resize(commands.size() + submeshes.size() * instanceCount);
-
-	for (uint32 instance = 0; instance < instanceCount; ++instance)
-	{
-		for (uint32 i = 0; i < submeshes.size(); ++i)
-		{
-			submesh_info mesh = submeshes[i];
-
-			indirect_command& command = commands[instance + instanceCount * i + currentSize];
-			indirect_depth_only_command& depthOnlyCommand = depthOnlyCommands[instance + instanceCount * i + currentSize];
-
-			command.material.textureID_usageFlags = 0;
-			command.material.albedoTint = colors[instance];
-			command.material.roughnessOverride = roughnesses[instance];
-			command.material.metallicOverride = metallics[instance];
-
-			command.drawArguments.IndexCountPerInstance = mesh.numTriangles * 3;
-			command.drawArguments.InstanceCount = 1;
-			command.drawArguments.StartIndexLocation = mesh.firstTriangle * 3;
-			command.drawArguments.BaseVertexLocation = mesh.baseVertex;
-			command.drawArguments.StartInstanceLocation = 0;
-
-			depthOnlyCommand.drawArguments = command.drawArguments;
-		}
-	}
-
-	numDrawCalls += (uint32)submeshes.size() * instanceCount;
-}
-
-void indirect_draw_buffer::finish(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
-	dx_texture& irradiance, dx_texture& prefilteredEnvironment, dx_texture& brdf,
-	dx_texture* sunShadowMapCascades, uint32 numSunShadowMapCascades,
-	dx_texture& spotLightShadowMap,
-	light_probe_system& lightProbeSystem)
-{
 	{
 		PROFILE_BLOCK("Upload indirect mesh to GPU");
-		indirectMesh.initialize(device, commandList, cpuMesh);
+		indirectMesh.initialize(device, commandList, mesh);
 
 		SET_NAME(indirectMesh.vertexBuffer.resource, "Indirect vertex buffer");
 		SET_NAME(indirectMesh.indexBuffer.resource, "Indirect index buffer");
 	}
 
 	{
-		commandBuffer.initialize(device, commands.data(), numDrawCalls, commandList);
-		depthOnlyCommandBuffer.initialize(device, depthOnlyCommands.data(), numDrawCalls, commandList);
-
-		SET_NAME(commandBuffer.resource, "Indirect command buffer");
-		SET_NAME(depthOnlyCommandBuffer.resource, "Indirect depth only command buffer");
-	}
-
-	{
 		PROFILE_BLOCK("Set up indirect descriptor heap");
 
-		descriptors.descriptorHeap.initialize(device, 
+		descriptors.descriptorHeap.initialize(device,
 			(uint32)indirectMaterials.size() * 4	// Materials.
 			+ 3										// PBR Textures.
 			+ MAX_NUM_SUN_SHADOW_CASCADES			// Sun shadow map cascades.
@@ -269,6 +138,78 @@ void indirect_draw_buffer::finish(ComPtr<ID3D12Device2> device, dx_command_list*
 			}
 		}
 	}
+}
+
+void indirect_draw_buffer::pushInstance(submesh_info submesh, mat4 transform)
+{
+	submesh_identifier id = submesh;
+	instances[id].push_back(transform);
+}
+
+void indirect_draw_buffer::pushInstance(std::vector<submesh_info>& submeshes, mat4 transform)
+{
+	for (submesh_info info : submeshes)
+	{
+		pushInstance(info, transform);
+	}
+}
+
+void indirect_draw_buffer::pushInstance(submesh_info submesh, mat4 transform, vec4 albedoTint, float roughnessOverride, float metallicOverride)
+{
+	submesh_identifier id(submesh, albedoTint, roughnessOverride, metallicOverride);
+	instances[id].push_back(transform);
+}
+
+void indirect_draw_buffer::finish(dx_command_list* commandList)
+{
+	PROFILE_FUNCTION();
+
+	numDrawCalls = (uint32)instances.size();
+
+	std::vector<indirect_command> commands(numDrawCalls);
+	std::vector<indirect_depth_only_command> depthOnlyCommands(numDrawCalls);
+
+	std::vector<mat4> instanceData;
+
+	uint32 i = 0;
+	for (auto& mesh : instances)
+	{
+		const submesh_identifier& id = mesh.first;
+		const std::vector<mat4>& matrices = mesh.second;
+
+		indirect_command& command = commands[i];
+		indirect_depth_only_command& doCommand = depthOnlyCommands[i];
+
+		command.material.albedoTint = id.albedoTint;
+		command.material.roughnessOverride = id.roughnessOverride;
+		command.material.metallicOverride = id.metallicOverride;
+		command.material.textureID_usageFlags = id.textureID_usageFlags;
+
+		command.drawArguments.StartIndexLocation = id.firstTriangle * 3;
+		command.drawArguments.IndexCountPerInstance = id.numTriangles * 3;
+		command.drawArguments.BaseVertexLocation = id.baseVertex;
+		command.drawArguments.InstanceCount = (uint32)matrices.size();
+		command.drawArguments.StartInstanceLocation = (uint32)instanceData.size();
+
+		doCommand.drawArguments = command.drawArguments;
+
+		append(instanceData, matrices);
+
+		++i;
+	}
+
+	for (mat4& m : instanceData)
+	{
+		m = comp_mat(m).transpose();
+	}
+
+	commandBuffer.initialize(device, commands.data(), numDrawCalls, commandList);
+	depthOnlyCommandBuffer.initialize(device, depthOnlyCommands.data(), numDrawCalls, commandList);
+	instanceBuffer.initialize(device, instanceData.data(), (uint32)instanceData.size(), commandList);
+
+	SET_NAME(commandBuffer.resource, "Indirect command buffer");
+	SET_NAME(depthOnlyCommandBuffer.resource, "Indirect depth only command buffer");
+	SET_NAME(instanceBuffer.resource, "Indirect instance buffer");
 }
 
 void indirect_pipeline::initialize(ComPtr<ID3D12Device2> device, const dx_render_target& renderTarget, DXGI_FORMAT shadowMapFormat)
@@ -470,7 +411,7 @@ void indirect_pipeline::render(dx_command_list* commandList, indirect_draw_buffe
 	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
 {
 	render(commandList, indirectBuffer.indirectMesh, indirectBuffer.descriptors,
-		indirectBuffer.commandBuffer, indirectBuffer.numDrawCalls, cameraCBAddress, sunCBAddress, spotLightCBAddress);
+		indirectBuffer.commandBuffer, indirectBuffer.numDrawCalls, indirectBuffer.instanceBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
 }
 
 void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
@@ -481,27 +422,7 @@ void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indi
 
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw indirect.");
 
-	setupPipeline(commandList, mesh, descriptors, commandBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
-
-	commandList->setVertexBuffer(1, instanceBuffer);
-
-	commandList->drawIndirect(
-		geometryCommandSignature,
-		numDrawCalls,
-		commandBuffer);
-
-	commandList->resetToDynamicDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-}
-
-void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
-	dx_buffer& commandBuffer, uint32 numDrawCalls,
-	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress, D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
-{
-	PROFILE_FUNCTION();
-
-	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw indirect.");
-
-	setupPipeline(commandList, mesh, descriptors, commandBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
+	setupPipeline(commandList, mesh, descriptors, commandBuffer, instanceBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
 
 	commandList->drawIndirect(
 		geometryCommandSignature,
@@ -513,17 +434,16 @@ void indirect_pipeline::render(dx_command_list* commandList, dx_mesh& mesh, indi
 
 void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const render_camera& camera, indirect_draw_buffer& indirectBuffer)
 {
-	renderDepthOnly(commandList, camera, indirectBuffer.indirectMesh, indirectBuffer.depthOnlyCommandBuffer, indirectBuffer.numDrawCalls);
+	renderDepthOnly(commandList, camera, indirectBuffer.indirectMesh, indirectBuffer.depthOnlyCommandBuffer, indirectBuffer.numDrawCalls,
+		indirectBuffer.instanceBuffer);
 }
 
 void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
 	dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls, dx_vertex_buffer& instanceBuffer)
 {
-	setupDepthOnlyPipeline(commandList, camera, mesh, depthOnlyCommandBuffer);
+	setupDepthOnlyPipeline(commandList, camera, mesh, depthOnlyCommandBuffer, instanceBuffer);
 
 	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw depth only indirect.");
-
-	commandList->setVertexBuffer(1, instanceBuffer);
 
 	commandList->drawIndirect(
 		depthOnlyCommandSignature,
@@ -531,20 +451,8 @@ void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const rend
 		depthOnlyCommandBuffer);
 }
 
-void indirect_pipeline::renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
-	dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls)
-{
-	setupDepthOnlyPipeline(commandList, camera, mesh, depthOnlyCommandBuffer);
-
-	PIXScopedEvent(commandList->getD3D12CommandList().Get(), PIX_COLOR(255, 255, 0), "Draw depth only indirect.");
-	
-	commandList->drawIndirect(
-		depthOnlyCommandSignature,
-		numDrawCalls,
-		depthOnlyCommandBuffer);
-}
-
-void indirect_pipeline::setupDepthOnlyPipeline(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh, dx_buffer& commandBuffer)
+void indirect_pipeline::setupDepthOnlyPipeline(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh, dx_buffer& commandBuffer,
+	dx_vertex_buffer& instanceBuffer)
 {
 	PROFILE_FUNCTION();
 
@@ -556,6 +464,7 @@ void indirect_pipeline::setupDepthOnlyPipeline(dx_command_list* commandList, con
 	commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	commandList->setVertexBuffer(0, mesh.vertexBuffer);
+	commandList->setVertexBuffer(1, instanceBuffer);
 	commandList->setIndexBuffer(mesh.indexBuffer);
 
 	// This only works, because the vertex shader expects the vp matrix as the first argument.
@@ -565,6 +474,7 @@ void indirect_pipeline::setupDepthOnlyPipeline(dx_command_list* commandList, con
 
 void indirect_pipeline::setupPipeline(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
 	dx_buffer& commandBuffer,
+	dx_vertex_buffer& instanceBuffer,
 	D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress,
 	D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress,
 	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress)
@@ -603,6 +513,7 @@ void indirect_pipeline::setupPipeline(dx_command_list* commandList, dx_mesh& mes
 	commandList->getD3D12CommandList()->SetGraphicsRootDescriptorTable(INDIRECT_ROOTPARAM_LIGHTPROBES, descriptors.lightProbeOffset);
 
 	commandList->setVertexBuffer(0, mesh.vertexBuffer);
+	commandList->setVertexBuffer(1, instanceBuffer);
 	commandList->setIndexBuffer(mesh.indexBuffer);
 
 }

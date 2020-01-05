@@ -48,38 +48,101 @@ struct indirect_descriptor_heap
 	CD3DX12_GPU_DESCRIPTOR_HANDLE lightProbeOffset;
 };
 
+struct submesh_identifier
+{
+	uint32 firstTriangle;
+	uint32 numTriangles;
+	uint32 baseVertex;
+	uint32 textureID_usageFlags;
+	float roughnessOverride;
+	float metallicOverride;
+	vec4 albedoTint;
+
+	submesh_identifier(submesh_info info)
+		: submesh_identifier(info, vec4(1.f, 1.f, 1.f, 1.f), 1.f, 0.f)
+	{}
+
+	submesh_identifier(submesh_info info, vec4 albedoTint, float roughness, float metallic)
+		: firstTriangle(info.firstTriangle)
+		, numTriangles(info.numTriangles)
+		, baseVertex(info.baseVertex)
+		, textureID_usageFlags(info.textureID_usageFlags)
+		, roughnessOverride(roughness)
+		, metallicOverride(metallic)
+		, albedoTint(albedoTint)
+	{}
+
+	bool operator==(const submesh_identifier& other) const
+	{
+		return firstTriangle == other.firstTriangle
+			&& numTriangles == other.numTriangles
+			&& baseVertex == other.baseVertex
+			&& textureID_usageFlags == other.textureID_usageFlags
+			&& roughnessOverride == other.roughnessOverride
+			&& metallicOverride == other.metallicOverride
+			&& albedoTint.x == other.albedoTint.x
+			&& albedoTint.y == other.albedoTint.y
+			&& albedoTint.z == other.albedoTint.z
+			&& albedoTint.w == other.albedoTint.w;
+	}
+};
+
+namespace std
+{
+	template<>
+	struct hash<submesh_identifier>
+	{
+		std::size_t operator()(const submesh_identifier& id) const noexcept
+		{
+			std::size_t seed = 0;
+
+			hash_combine(seed, id.firstTriangle);
+			hash_combine(seed, id.numTriangles);
+			hash_combine(seed, id.baseVertex);
+			hash_combine(seed, id.textureID_usageFlags);
+			hash_combine(seed, id.roughnessOverride);
+			hash_combine(seed, id.metallicOverride);
+			hash_combine(seed, id.albedoTint.x);
+			hash_combine(seed, id.albedoTint.y);
+			hash_combine(seed, id.albedoTint.z);
+			hash_combine(seed, id.albedoTint.w);
+
+			return seed;
+		}
+	};
+}
+
 struct indirect_draw_buffer
 {
-	void push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes, std::vector<submesh_material_info>& materialInfos, 
-		const mat4& transform, dx_command_list* commandList);
-	void push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes, vec4 color, float roughness, float metallic,
-		const mat4& transform);
-	void push(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info> submeshes, 
-		vec4* colors, float* roughnesses, float* metallics, const mat4* transforms, uint32 instanceCount);
-
-
-	void finish(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
+	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
 		dx_texture& irradiance, dx_texture& prefilteredEnvironment, dx_texture& brdf,
 		dx_texture* sunShadowMapCascades, uint32 numSunShadowMapCascades,
 		dx_texture& spotLightShadowMap,
-		light_probe_system& lightProbeSystem);
+		light_probe_system& lightProbeSystem,
+		cpu_triangle_mesh<vertex_3PUNTL>& mesh);
 
-	cpu_triangle_mesh<vertex_3PUNTL> cpuMesh;
+	void pushInstance(submesh_info submesh, mat4 transform);
+	void pushInstance(std::vector<submesh_info>& submeshes, mat4 transform);
+
+	void pushInstance(submesh_info submesh, mat4 transform, vec4 albedoTint, float roughnessOverride, float metallicOverride);
+
+	void finish(dx_command_list* commandList);
 
 	dx_mesh indirectMesh;
 	std::vector<dx_material> indirectMaterials;
 
-	std::vector<indirect_command> commands;
-	std::vector<indirect_depth_only_command> depthOnlyCommands;
-
 	dx_buffer commandBuffer;
 	dx_buffer depthOnlyCommandBuffer;
+	dx_vertex_buffer instanceBuffer;
 	uint32 numDrawCalls = 0;
 
 	indirect_descriptor_heap descriptors;
 
+	ComPtr<ID3D12Device2> device;
+
 private:
-	void pushInternal(cpu_triangle_mesh<vertex_3PUNTL>& mesh, std::vector<submesh_info>& submeshes);
+
+	std::unordered_map<submesh_identifier, std::vector<mat4>> instances;
 };
 
 struct indirect_pipeline
@@ -97,16 +160,8 @@ struct indirect_pipeline
 		D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress, 
 		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress);
 
-	void render(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
-		dx_buffer& commandBuffer, uint32 numDrawCalls,
-		D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress,
-		D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress,
-		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress);
-
 
 	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, indirect_draw_buffer& indirectBuffer);
-	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
-		dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls); 
 	void renderDepthOnly(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh,
 		dx_buffer& depthOnlyCommandBuffer, uint32 numDrawCalls, dx_vertex_buffer& instanceBuffer);
 
@@ -122,9 +177,11 @@ struct indirect_pipeline
 private:
 	void setupPipeline(dx_command_list* commandList, dx_mesh& mesh, indirect_descriptor_heap& descriptors,
 		dx_buffer& commandBuffer, 
+		dx_vertex_buffer& instanceBuffer,
 		D3D12_GPU_VIRTUAL_ADDRESS cameraCBAddress,
 		D3D12_GPU_VIRTUAL_ADDRESS sunCBAddress,
 		D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress);
 
-	void setupDepthOnlyPipeline(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh, dx_buffer& commandBuffer);
+	void setupDepthOnlyPipeline(dx_command_list* commandList, const render_camera& camera, dx_mesh& mesh, dx_buffer& commandBuffer,
+		dx_vertex_buffer& instanceBuffer);
 };

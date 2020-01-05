@@ -135,13 +135,16 @@ struct cpu_triangle_mesh
 	submesh_info pushSphere(uint16 slices, uint16 rows, float radius = 1.f);
 	submesh_info pushCapsule(uint16 slices, uint16 rows, float height, float radius = 1.f);
 
-	std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> pushFromFile(const std::string& filename);
+	std::vector<submesh_info> pushFromFile(const std::string& filename);
 
 	void append(cpu_triangle_mesh<vertex_t>& other)
 	{
 		::append(vertices, other.vertices);
 		::append(triangles, other.triangles);
 	}
+
+	std::vector<submesh_info> allSubmeshes;
+	std::vector<submesh_material_info> allMaterials;
 
 private:
 	submesh_info loadAssimpMesh(const aiMesh* mesh);
@@ -151,7 +154,7 @@ private:
 };
 
 template<typename vertex_t>
-inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> cpu_triangle_mesh<vertex_t>::pushFromFile(const std::string& filename)
+inline std::vector<submesh_info> cpu_triangle_mesh<vertex_t>::pushFromFile(const std::string& filename)
 {
 	fs::path path(filename);
 	assert(fs::exists(path));
@@ -240,12 +243,15 @@ inline std::pair<std::vector<submesh_info>, std::vector<submesh_material_info>> 
 				usageFlags |= USE_METALLIC_TEXTURE;
 			}
 			
+			materialIndex += (uint32)allSubmeshes.size();
 			submesh.textureID_usageFlags = (materialIndex << 16) | usageFlags;
 		}
 
+		::append(allSubmeshes, submeshes);
+		::append(allMaterials, submeshMaterials);
 	}
 
-	return { submeshes, submeshMaterials };
+	return submeshes;
 }
 
 template<typename vertex_t>
@@ -365,6 +371,7 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushQuad(float radius)
 	result.baseVertex = baseVertex;
 	result.aabbMin = vec4(vec3(1.f, 1.f, 0.f) * -radius, 1.f);
 	result.aabbMax = vec4(vec3(1.f, 1.f, 0.f) * radius, 1.f);
+	allSubmeshes.push_back(result);
 	return result;
 }
 
@@ -433,6 +440,7 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushCube(float radius, bool inv
 		result.baseVertex = baseVertex;
 		result.aabbMin = vec4(vec3(1.f, 1.f, 1.f) * -radius, 1.f);
 		result.aabbMax = vec4(vec3(1.f, 1.f, 1.f) * radius, 1.f);
+		allSubmeshes.push_back(result);
 		return result;
 	}
 	else
@@ -514,6 +522,7 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushCube(float radius, bool inv
 		result.baseVertex = baseVertex;
 		result.aabbMin = vec4(vec3(1.f, 1.f, 1.f) * -radius, 1.f);
 		result.aabbMax = vec4(vec3(1.f, 1.f, 1.f) * radius, 1.f);
+		allSubmeshes.push_back(result);
 		return result;
 	}
 }
@@ -623,6 +632,7 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushSphere(uint16 slices, uint1
 	result.baseVertex = baseVertex;
 	result.aabbMin = vec4(vec3(1.f, 1.f, 1.f) * -radius, 1.f);
 	result.aabbMax = vec4(vec3(1.f, 1.f, 1.f) * radius, 1.f);
+	allSubmeshes.push_back(result);
 	return result;
 }
 
@@ -746,6 +756,7 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::pushCapsule(uint16 slices, uint
 	result.baseVertex = baseVertex;
 	result.aabbMin = vec4(-radius, -halfHeight - radius, -radius, 1.f);
 	result.aabbMax = vec4(radius, halfHeight + radius, radius, 1.f);
+	allSubmeshes.push_back(result);
 	return result;
 }
 

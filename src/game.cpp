@@ -24,9 +24,9 @@
 		- Raytracing.
 */
 
-#define ENABLE_SPONZA 0
+#define ENABLE_SPONZA 1
 #define ENABLE_PARTICLES 0
-#define ENABLE_PROCEDURAL 1
+#define ENABLE_PROCEDURAL 0
 #define ENABLE_PROCEDURAL_SHADOWS 0
 
 void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 height, color_depth colorDepth)
@@ -240,106 +240,87 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		debugDisplay.initialize(device, commandList, lightingRT);
 	}
 
-#if ENABLE_SPONZA
+
 	{
-		PROFILE_BLOCK("Load sponza model");
+		PROFILE_BLOCK("Load environment");
 
-		cpu_triangle_mesh<vertex_3PUNTL> mesh;
-		auto [lodSubmeshes, lodMaterials] = mesh.pushFromFile("res/sponza/sponza.obj");
-
-		for (auto& vertex : mesh.vertices)
+		dx_texture equirectangular;
 		{
-			vec4 barycentric;
-			vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
+			PROFILE_BLOCK("Load HDRI");
+			commandList->loadTextureFromFile(equirectangular, L"res/hdris/sunset_in_the_chalk_quarry_4k_16bit.hdr", texture_type_noncolor);
+			SET_NAME(equirectangular.resource, "Equirectangular map");
 		}
-
-		indirectBuffer.push(mesh, lodSubmeshes, lodMaterials, createScaleMatrix(0.03f), commandList);
+		{
+			PROFILE_BLOCK("Convert to cubemap");
+			commandList->convertEquirectangularToCubemap(equirectangular, cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
+			SET_NAME(cubemap.resource, "Skybox");
+		}
+		{
+			PROFILE_BLOCK("Create irradiance map");
+			commandList->createIrradianceMap(cubemap, irradiance);
+			SET_NAME(irradiance.resource, "Global irradiance");
+		}
+		{
+			PROFILE_BLOCK("Prefilter environment");
+			commandList->prefilterEnvironmentMap(cubemap, prefilteredEnvironment, 256);
+			SET_NAME(prefilteredEnvironment.resource, "Prefiltered global specular");
+		}
 	}
-#endif
 
+
+
+
+	std::vector<submesh_info> sponzaSubmeshes;
+	std::vector<submesh_info> oakSubmeshes[3];
 	submesh_info cubeSubmesh;
 	submesh_info sphereSubmeshLOD0;
 	submesh_info sphereSubmeshLOD1;
 	submesh_info sphereSubmeshLOD2;
 	submesh_info sphereSubmeshLOD3;
 	{
-		PROFILE_BLOCK("Load sphere and cube model");
+		PROFILE_BLOCK("Load indirect meshes");
 
 		cpu_triangle_mesh<vertex_3PUNTL> mesh;
-		cubeSubmesh = mesh.pushCube(1.f);
-		sphereSubmeshLOD0 = mesh.pushSphere(15, 15);
-		sphereSubmeshLOD1 = mesh.pushSphere(11, 11);
-		sphereSubmeshLOD2 = mesh.pushSphere(7, 7);
-		sphereSubmeshLOD3 = mesh.pushSphere(3, 3);
 
-		vec4 colors[] = { vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f), vec4(1.f, 1.f, 1.f, 1.f) };
-		float roughnesses[] = { 0.f, 0.25f, 0.5f, 0.75f, 1.f, 1.f };
-		float metallics[] = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5 };
-		mat4 transforms[] = {
-			createModelMatrix(vec3(-10.f + 0.f * 4.f, 3.f, 0.f), quat::identity),
-			createModelMatrix(vec3(-10.f + 1.f * 4.f, 3.f, 0.f), quat::identity),
-			createModelMatrix(vec3(-10.f + 2.f * 4.f, 3.f, 0.f), quat::identity),
-			createModelMatrix(vec3(-10.f + 3.f * 4.f, 3.f, 0.f), quat::identity),
-			createModelMatrix(vec3(-10.f + 4.f * 4.f, 3.f, 0.f), quat::identity),
-			createModelMatrix(vec3(30.f, 10.f, 10.f), createQuaternionFromAxisAngle(vec3(1.f, 0.f, 0.f), 0.3f), 10.f),
-		};
-
-		// TODO: We cannot compute per vertex light probe indices for instanced objects.
-
-		indirectBuffer.push(mesh, { cubeSubmesh }, colors, roughnesses, metallics, transforms, 6);
-	}
-
-#if 0
-	{
-		PROFILE_BLOCK("Load flood light model");
-
-		cpu_triangle_mesh<vertex_3PUNTL> mesh;
-		auto [lodSubmeshes, lodMaterials] = mesh.pushFromFile("res/floodlight.fbx");
-
-		mat4 model = createModelMatrix(vec3(spotLight.worldSpacePosition.x, 0.f, spotLight.worldSpacePosition.z - 1.f),
-			createQuaternionFromAxisAngle(vec3(0.f, 1.f, 0.f), DirectX::XM_PIDIV2) *
-			createQuaternionFromAxisAngle(vec3(1.f, 0.f, 0.f), -DirectX::XM_PIDIV2),
-			0.03f);
-
-		for (auto& vertex : mesh.vertices)
+#if ENABLE_SPONZA
 		{
-			vec4 barycentric;
-			vertex.lightProbeTetrahedronIndex = lightProbeSystem.getEnclosingTetrahedron(vertex.position * 0.03f, 0, barycentric);
+			PROFILE_BLOCK("Sponza");
+			sponzaSubmeshes = mesh.pushFromFile("res/sponza/sponza.obj");
 		}
-
-		indirectBuffer.push(mesh, lodSubmeshes, vec4(1.f, 1.f, 1.f, 1.f), 0.5f, 1.f, model);
-	}
 #endif
-	
-	submesh_info oakSubmesh0[3];
-	submesh_info oakSubmesh1[3];
-	submesh_info oakSubmesh2[3];
-	{
-		PROFILE_BLOCK("Big oak model");
-
-
-		uint32 vertexOffset = 436;
-		uint32 triangleOffset = 820;
-
-
-		std::vector<submesh_info> submeshes;
-		std::vector<submesh_material_info> materials;
-
-		cpu_triangle_mesh<vertex_3PUNTL> mesh;
-		for (uint32 lod = 0; lod < 3; ++lod)
 		{
-			std::string name = "res/big_oak_lod" + std::to_string(lod) + ".obj";
-			auto [lodSubmeshes, lodMaterials] = mesh.pushFromFile(name);
+			PROFILE_BLOCK("Big oak model");
 
-			append(submeshes, lodSubmeshes);
-			append(materials, lodMaterials);
+			for (uint32 lod = 0; lod < 3; ++lod)
+			{
+				std::string name = "res/big_oak_lod" + std::to_string(lod) + ".obj";
+				oakSubmeshes[lod] = mesh.pushFromFile(name);
+			}
+		}
+		{
+			PROFILE_BLOCK("Sphere and cube");
 
-			oakSubmesh0[lod] = lodSubmeshes[0]; oakSubmesh0[lod].baseVertex += vertexOffset; oakSubmesh0[lod].firstTriangle += triangleOffset;
-			oakSubmesh1[lod] = lodSubmeshes[1]; oakSubmesh1[lod].baseVertex += vertexOffset; oakSubmesh1[lod].firstTriangle += triangleOffset;
-			oakSubmesh2[lod] = lodSubmeshes[2]; oakSubmesh2[lod].baseVertex += vertexOffset; oakSubmesh2[lod].firstTriangle += triangleOffset;
+			cubeSubmesh = mesh.pushCube(1.f);
+			sphereSubmeshLOD0 = mesh.pushSphere(15, 15);
+			sphereSubmeshLOD1 = mesh.pushSphere(11, 11);
+			sphereSubmeshLOD2 = mesh.pushSphere(7, 7);
+			sphereSubmeshLOD3 = mesh.pushSphere(3, 3);
 		}
 
-		indirectBuffer.push(mesh, submeshes, materials, createModelMatrix(vec3(0.f, 0.f, 8.f), quat::identity, 1.f), commandList);
+		indirectBuffer.initialize(device, commandList, irradiance, prefilteredEnvironment, brdf, sunShadowMapTexture, sun.numShadowCascades,
+			spotLightShadowMapTexture, lightProbeSystem, mesh);
+		
+#if ENABLE_SPONZA
+		indirectBuffer.pushInstance(sponzaSubmeshes, createScaleMatrix(0.03f));
+#endif
+
+		for (uint32 i = 0; i < 5; ++i)
+		{
+			indirectBuffer.pushInstance(sphereSubmeshLOD0, createModelMatrix(vec3(-10.f + i * 4.f, 3.f, 0.f), quat::identity), 
+				vec4(1.f, 1.f, 1.f, 1.f), i * 0.25f, 0.5f);
+		}
+
+		indirectBuffer.finish(commandList);
 	}
 
 
@@ -352,24 +333,24 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		sphereSubmeshLOD2,
 		sphereSubmeshLOD3,
 
-		oakSubmesh0[0],
-		oakSubmesh1[0],
-		oakSubmesh2[0],
+		oakSubmeshes[0][0],
+		oakSubmeshes[0][1],
+		oakSubmeshes[0][2],
 
-		oakSubmesh0[1],
-		oakSubmesh1[1],
-		oakSubmesh2[1],
+		oakSubmeshes[1][0],
+		oakSubmeshes[1][1],
+		oakSubmeshes[1][2],
 
-		oakSubmesh0[2],
-		oakSubmesh1[2],
-		oakSubmesh2[2],
+		oakSubmeshes[2][0],
+		oakSubmeshes[2][1],
+		oakSubmeshes[2][2],
 	};
 
 	placement_mesh cubePlacementMesh;
 	cubePlacementMesh.numLODs = 1; // Cube.
 	cubePlacementMesh.lods[0] = { 0, 1 };
 
-	placement_mesh spherePlacementMesh; 
+	placement_mesh spherePlacementMesh;
 	spherePlacementMesh.numLODs = 4; // Sphere.
 	spherePlacementMesh.lods[0] = { 1, 1 };
 	spherePlacementMesh.lods[1] = { 2, 1 };
@@ -433,36 +414,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	proceduralPlacement.initialize(device, commandList, placementTiles, placementSubmeshes);
 
-
-
-	{
-		PROFILE_BLOCK("Load environment");
-
-		dx_texture equirectangular;
-		{
-			PROFILE_BLOCK("Load HDRI");
-			commandList->loadTextureFromFile(equirectangular, L"res/hdris/sunset_in_the_chalk_quarry_4k_16bit.hdr", texture_type_noncolor);
-			SET_NAME(equirectangular.resource, "Equirectangular map");
-		}
-		{
-			PROFILE_BLOCK("Convert to cubemap");
-			commandList->convertEquirectangularToCubemap(equirectangular, cubemap, 1024, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
-			SET_NAME(cubemap.resource, "Skybox");
-		}
-		{
-			PROFILE_BLOCK("Create irradiance map");
-			commandList->createIrradianceMap(cubemap, irradiance);
-			SET_NAME(irradiance.resource, "Global irradiance");
-		}
-		{
-			PROFILE_BLOCK("Prefilter environment");
-			commandList->prefilterEnvironmentMap(cubemap, prefilteredEnvironment, 256);
-			SET_NAME(prefilteredEnvironment.resource, "Prefiltered global specular");
-		}
-	}
-
-	indirectBuffer.finish(device, commandList, irradiance, prefilteredEnvironment, brdf, sunShadowMapTexture, sun.numShadowCascades,
-		spotLightShadowMapTexture, lightProbeSystem);
 
 	{
 		PROFILE_BLOCK("Execute copy command list");
@@ -625,7 +576,7 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	D3D12_GPU_VIRTUAL_ADDRESS spotLightCBAddress = commandList->uploadDynamicConstantBuffer(spotLight);
 
 #if DEPTH_PREPASS
-	//indirect.renderDepthOnly(commandList, camera, indirectBuffer);
+	indirect.renderDepthOnly(commandList, camera, indirectBuffer);
 #if ENABLE_PROCEDURAL
 	indirect.renderDepthOnly(commandList, camera, indirectBuffer.indirectMesh, proceduralPlacement.depthOnlyCommandBuffer, 
 		proceduralPlacement.numDrawCalls, proceduralPlacement.instanceBuffer);
@@ -636,7 +587,7 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	commandList->transitionBarrier(lightProbeSystem.lightProbePositionBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	commandList->transitionBarrier(lightProbeSystem.lightProbeTetrahedraBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	//indirect.render(commandList, indirectBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
+	indirect.render(commandList, indirectBuffer, cameraCBAddress, sunCBAddress, spotLightCBAddress);
 #if ENABLE_PROCEDURAL
 	indirect.render(commandList, indirectBuffer.indirectMesh, indirectBuffer.descriptors, proceduralPlacement.commandBuffer, 
 		proceduralPlacement.numDrawCalls, proceduralPlacement.instanceBuffer,
@@ -689,7 +640,6 @@ uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR
 	commandList->transitionBarrier(prefilteredEnvironment, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	commandList->transitionBarrier(brdf, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-#if 0
 	// Render to sun shadow map.
 	{
 		PROFILE_BLOCK("Record shadow map commands");
@@ -703,6 +653,7 @@ uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR
 		commandList->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		commandList->setVertexBuffer(0, indirectBuffer.indirectMesh.vertexBuffer);
+		commandList->setVertexBuffer(1, indirectBuffer.instanceBuffer);
 		commandList->setIndexBuffer(indirectBuffer.indirectMesh.indexBuffer);
 
 		for (uint32 i = 0; i < sun.numShadowCascades; ++i)
@@ -719,7 +670,6 @@ uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR
 		commandList->transitionBarrier(spotLightShadowMapTexture,
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	}
-#endif
 
 
 	if (lightProbeRecording)

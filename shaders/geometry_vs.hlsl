@@ -41,8 +41,6 @@ vs_output main(vs_input IN)
 		IN.mRow3
 	};
 
-	m = transpose(m);
-
 	float4x4 mvp = mul(camera.vp, m);
 	OUT.position = mul(mvp, float4(IN.position, 1.f));
 	OUT.worldPosition = (mul(m, float4(IN.position, 1.f))).xyz;

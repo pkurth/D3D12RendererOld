@@ -43,7 +43,7 @@ static void placeGeometry(float4x4 modelMatrix, placement_submesh mesh, uint sub
 		InterlockedAdd(submeshCounts[submeshIndex], -1, index);
 		index = maxCount - index;
 
-		instanceData[offset + index] = modelMatrix;
+		instanceData[offset + index] = transpose(modelMatrix);
 	}
 }
 
