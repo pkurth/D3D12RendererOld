@@ -112,7 +112,7 @@ uint64 dx_command_queue::executeCommandLists(dx_command_list** commandLists, uin
 				freeTransitionCommandLists.pushBack(pendingCommandList);
 			}
 
-			d3d12CommandLists[numD3D12CommandLists++] = list->commandList.Get();
+			d3d12CommandLists[numD3D12CommandLists++] = list->getD3D12CommandList().Get();
 			toBeQueued[numToBeQueued++] = list;
 
 			dx_command_list* extraComputeCommandList = list->getComputeCommandList();

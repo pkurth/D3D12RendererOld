@@ -110,7 +110,7 @@ ray render_camera::getWorldSpaceRay(float relX, float relY) const
 {
 	float ndcX = 2.f * relX - 1.f;
 	float ndcY = -(2.f * relY - 1.f);
-	vec4 clip(ndcX, ndcY, -1.f, 1.f);
+	vec4 clip(ndcX, ndcY, 0.f, 1.f);
 	vec4 eye = invProjectionMatrix * clip;
 	eye.z = -1.f; eye.w = 0.f;
 

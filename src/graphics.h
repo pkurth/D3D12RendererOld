@@ -6,6 +6,9 @@
 
 extern CD3DX12_BLEND_DESC alphaBlendDesc;
 extern CD3DX12_BLEND_DESC additiveBlendDesc;
+extern CD3DX12_BLEND_DESC reverseSubtractiveBlendDesc;
+extern CD3DX12_BLEND_DESC minBlendDesc;
+extern CD3DX12_BLEND_DESC maxBlendDesc;
 
 extern CD3DX12_RASTERIZER_DESC defaultRasterizerDesc;
 extern CD3DX12_RASTERIZER_DESC noBackfaceCullRasterizerDesc;

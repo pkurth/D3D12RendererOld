@@ -291,6 +291,10 @@
     <FxCompile Include="shaders\procedural_placement_clear_buffer.hlsl" />
     <FxCompile Include="shaders\procedural_placement_create_commands.hlsl" />
     <FxCompile Include="shaders\draw_to_texture.hlsl" />
+    <FxCompile Include="shaders\placement_editor_ps.hlsl" />
+    <FxCompile Include="shaders\placement_editor_vs.hlsl" />
+    <FxCompile Include="shaders\placement_editor_apply_brush_vs.hlsl" />
+    <FxCompile Include="shaders\placement_editor_apply_brush_ps.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

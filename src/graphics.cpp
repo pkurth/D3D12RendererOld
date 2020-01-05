@@ -4,6 +4,9 @@
 
 CD3DX12_BLEND_DESC alphaBlendDesc;
 CD3DX12_BLEND_DESC additiveBlendDesc;
+CD3DX12_BLEND_DESC reverseSubtractiveBlendDesc;
+CD3DX12_BLEND_DESC minBlendDesc;
+CD3DX12_BLEND_DESC maxBlendDesc;
 
 CD3DX12_RASTERIZER_DESC defaultRasterizerDesc;
 CD3DX12_RASTERIZER_DESC noBackfaceCullRasterizerDesc;
@@ -29,6 +32,30 @@ void initializeCommonGraphicsItems()
 	additiveBlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
 	additiveBlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
 	additiveBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+
+	reverseSubtractiveBlendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	reverseSubtractiveBlendDesc.AlphaToCoverageEnable = false;
+	reverseSubtractiveBlendDesc.IndependentBlendEnable = false;
+	reverseSubtractiveBlendDesc.RenderTarget[0].BlendEnable = true;
+	reverseSubtractiveBlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
+	reverseSubtractiveBlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	reverseSubtractiveBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+
+	minBlendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	minBlendDesc.AlphaToCoverageEnable = false;
+	minBlendDesc.IndependentBlendEnable = false;
+	minBlendDesc.RenderTarget[0].BlendEnable = true;
+	minBlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_MIN;
+	minBlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	minBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+
+	maxBlendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	maxBlendDesc.AlphaToCoverageEnable = false;
+	maxBlendDesc.IndependentBlendEnable = false;
+	maxBlendDesc.RenderTarget[0].BlendEnable = true;
+	maxBlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_MAX;
+	maxBlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	maxBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
 
 	defaultRasterizerDesc = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 	defaultRasterizerDesc.FrontCounterClockwise = TRUE; // Righthanded coordinate system.

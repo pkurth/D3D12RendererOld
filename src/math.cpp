@@ -52,3 +52,18 @@ bool ray::intersectAABB(const bounding_box& aabb, float& t) const
 
 	return result;
 }
+
+bool bounding_box::intersectSphere(vec3 position, float radius) const
+{
+	float sqDist = 0.f;
+	for (int i = 0; i < 3; ++i)
+	{
+		// For each axis count any excess distance outside box extents
+		float v = position.data[i];
+		if (v < min.data[i]) sqDist += (min.data[i] - v) * (min.data[i] - v);
+		if (v > max.data[i]) sqDist += (v - max.data[i]) * (v - max.data[i]);
+	}
+
+	bool intersection = sqDist <= radius * radius;
+	return intersection;
+}

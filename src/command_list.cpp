@@ -14,6 +14,7 @@ void dx_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIS
 {
 	this->device = device;
 	this->commandListType = commandListType;
+	this->currentRenderTarget = nullptr;
 	checkResult(device->CreateCommandAllocator(commandListType, IID_PPV_ARGS(&commandAllocator)));
 	checkResult(device->CreateCommandList(0, commandListType, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList)));
 
@@ -114,6 +115,7 @@ void dx_command_list::copyResource(dx_resource& dstRes, const dx_resource& srcRe
 void dx_command_list::setScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv)
 {
 	commandList->OMSetRenderTargets(numRTVs, rtvs, FALSE, dsv);
+	this->currentRenderTarget = nullptr;
 }
 
 void dx_command_list::setRenderTarget(dx_render_target& renderTarget, uint32 arraySlice)
@@ -142,6 +144,8 @@ void dx_command_list::setRenderTarget(dx_render_target& renderTarget, uint32 arr
 	}
 
 	commandList->OMSetRenderTargets(numRTVs, rtvs, FALSE, dsv);
+
+	this->currentRenderTarget = &renderTarget;
 }
 
 void dx_command_list::clearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, float* clearColor)
@@ -259,7 +263,7 @@ void dx_command_list::copyTextureSubresource(dx_texture& texture, uint32 firstSu
 	}
 }
 
-void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips)
+void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips, D3D12_RESOURCE_FLAGS additionalFlags)
 {
 	PROFILE_FUNCTION();
 
@@ -316,6 +320,8 @@ void dx_command_list::loadTextureFromFile(dx_texture& texture, const std::wstrin
 			assert(false);
 			break;
 		}
+
+		textureDesc.Flags |= additionalFlags;
 
 		if (!genMips)
 		{
@@ -1146,7 +1152,7 @@ void dx_command_list::setVertexBuffer(uint32 slot, dx_vertex_buffer& buffer)
 	trackObject(buffer.resource);
 }
 
-void dx_command_list::setVertexBuffer(uint32 slot, D3D12_VERTEX_BUFFER_VIEW& buffer)
+void dx_command_list::setVertexBuffer(uint32 slot, const D3D12_VERTEX_BUFFER_VIEW& buffer)
 {
 	commandList->IASetVertexBuffers(slot, 1, &buffer);
 }

@@ -365,9 +365,15 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	oakPlacementMesh.lods[2] = { 11, 3 };
 	oakPlacementMesh.lodDistances = vec3(10.f, 20.f, 50.f);
 
-	commandList->loadTextureFromFile(cubeDensity, L"res/density.png", texture_type_noncolor, false);
-	commandList->loadTextureFromFile(sphereDensity, L"res/density2.png", texture_type_noncolor, false);
-	commandList->loadTextureFromFile(oakDensity, L"res/density3.png", texture_type_noncolor, false);
+
+	D3D12_RESOURCE_FLAGS densityFlags = D3D12_RESOURCE_FLAG_NONE;
+#if PROCEDURAL_PLACEMENT_ALLOW_SIMULTANEOUS_EDITING
+	densityFlags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+#endif
+
+	commandList->loadTextureFromFile(cubeDensity, L"res/density.png", texture_type_noncolor, false, densityFlags);
+	commandList->loadTextureFromFile(sphereDensity, L"res/density2.png", texture_type_noncolor, false, densityFlags);
+	commandList->loadTextureFromFile(oakDensity, L"res/density3.png", texture_type_noncolor, false, densityFlags);
 	SET_NAME(cubeDensity.resource, "Cube Density");
 	SET_NAME(sphereDensity.resource, "Sphere Density");
 	SET_NAME(oakDensity.resource, "Oak Density");
@@ -413,7 +419,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	//placementTiles.push_back(tile0);
 
 	proceduralPlacement.initialize(device, commandList, placementTiles, placementSubmeshes);
-	proceduralPlacementEditor.initialize();
+	proceduralPlacementEditor.initialize(device, lightingRT);
 
 
 	{
@@ -559,8 +565,6 @@ void dx_game::update(float dt)
 
 	sun.updateMatrices(camera);
 	spotLight.updateMatrices();
-
-	proceduralPlacementEditor.update(camera, proceduralPlacement, gui);
 }
 
 void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
@@ -755,6 +759,9 @@ uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR
 	commandList->clearDepth(lightingRT.depthStencilAttachment->getDepthStencilView());
 
 	renderScene(commandList, camera);
+
+
+	proceduralPlacementEditor.update(commandList, camera, proceduralPlacement, gui);
 
 	if (isDebugCamera)
 	{

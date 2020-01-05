@@ -36,7 +36,7 @@ public:
 
 
 	// Texture creation.
-	void loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips = true);
+	void loadTextureFromFile(dx_texture& texture, const std::wstring& filename, texture_type type, bool genMips = true, D3D12_RESOURCE_FLAGS additionalFlags = D3D12_RESOURCE_FLAG_NONE);
 	void loadTextureFromMemory(dx_texture& texture, const void* data, uint32 width, uint32 height, DXGI_FORMAT format, texture_type type, bool genMips = true);
 	void copyTextureForReadback(dx_texture& texture, ComPtr<ID3D12Resource>& readbackBuffer, uint32 numMips = 0);
 
@@ -134,7 +134,7 @@ public:
 	// Input assembly.
 	void setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology);
 	void setVertexBuffer(uint32 slot, dx_vertex_buffer& buffer);
-	void setVertexBuffer(uint32 slot, D3D12_VERTEX_BUFFER_VIEW& buffer);
+	void setVertexBuffer(uint32 slot, const D3D12_VERTEX_BUFFER_VIEW& buffer);
 	void setIndexBuffer(dx_index_buffer& buffer);
 
 	// Rasterizer.
@@ -149,6 +149,8 @@ public:
 	void clearStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, uint32 stencil = 0);
 	void clearDepthAndStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float depth = 1.f, uint32 stencil = 0);
 	void setStencilReference(uint32 stencilReference);
+
+	const dx_render_target* getCurrentRenderTarget() const { return currentRenderTarget; }
 
 	// Draw.
 	void draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance);
@@ -170,7 +172,7 @@ public:
 
 	void flushResourceBarriers();
 
-//private:
+private:
 	void trackObject(ComPtr<ID3D12Object> object);
 
 	void copyTextureSubresource(dx_texture& texture, uint32 firstSubresource, uint32 numSubresources, D3D12_SUBRESOURCE_DATA* subresourceData);
@@ -196,6 +198,8 @@ public:
 	dx_prefilter_environment_pso		prefilterEnvironmentPSO;
 	dx_integrate_brdf_pso				integrateBrdfPSO;
 	dx_cubemap_to_sh_pso				cubemapToSHPSO;
+
+	dx_render_target*					currentRenderTarget;
 };
 
 template<typename T>

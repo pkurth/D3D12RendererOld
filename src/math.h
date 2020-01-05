@@ -485,6 +485,8 @@ struct bounding_box
 		min = min - vec3(v, v, v);
 		max = max + vec3(v, v, v);
 	}
+
+	bool intersectSphere(vec3 position, float radius) const;
 };
 
 struct ray

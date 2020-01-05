@@ -14,6 +14,10 @@
 #define PROCEDURAL_TILE_SIZE 100.f
 #define PROCEDURAL_MIN_FOOTPRINT 4.f
 
+
+#define PROCEDURAL_PLACEMENT_ALLOW_SIMULTANEOUS_EDITING 1
+
+
 struct placement_lod
 {
 	uint32 firstSubmesh;
@@ -40,11 +44,12 @@ struct placement_tile
 	uint32 numMeshes;
 
 	placement_mesh meshes[4];
-	dx_texture* densities[4];
+	dx_texture* densities[4] = {};
 
 
 	// Filled out by placement system.
 	uint32 meshOffset;
+	bounding_box aabb;
 };
 
 struct procedural_placement
@@ -62,6 +67,7 @@ struct procedural_placement
 	dx_vertex_buffer instanceBuffer;
 
 	std::vector<placement_tile> tiles;
+	std::vector<dx_texture*> distinctDensityTextures;
 
 private:
 	uint32 maxNumInstances;

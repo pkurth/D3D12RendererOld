@@ -250,6 +250,14 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		}
 
 		tile.objectFootprint = max(tile.objectFootprint, PROCEDURAL_MIN_FOOTPRINT);
+
+
+		bounding_box tileBB = bounding_box::negativeInfinity();
+		vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
+		tileBB.grow(vec3(corner.x, tile.groundHeight, corner.y));
+		tileBB.grow(vec3(corner.x + PROCEDURAL_TILE_SIZE, tile.groundHeight + tile.maximumHeight, corner.y + PROCEDURAL_TILE_SIZE));
+		tile.aabb = tileBB;
+
 	}
 
 	radiusInUVSpace = sqrt(1.f / (2.f * sqrt(3.f) * arraysize(POISSON_SAMPLES)));
@@ -332,6 +340,19 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		SET_NAME(renderResources[i].instanceBuffer.resource, "Placement Instances");
 	}
 
+	std::set<dx_texture*> textureSet;
+
+
+	for (uint32 i = 0; i < (uint32)tiles.size(); ++i)
+	{
+		for (uint32 j = 0; j < tiles[i].numMeshes; ++j)
+		{
+			textureSet.insert(tiles[i].densities[j]);
+		}
+	}
+
+
+	distinctDensityTextures.insert(distinctDensityTextures.end(), textureSet.begin(), textureSet.end());
 
 
 
@@ -372,6 +393,11 @@ void procedural_placement::generate(const render_camera& camera)
 	instanceBuffer.view.SizeInBytes = maxNumInstances * sizeof(mat4);
 	instanceBuffer.view.StrideInBytes = sizeof(mat4);
 
+#if PROCEDURAL_PLACEMENT_ALLOW_SIMULTANEOUS_EDITING
+	// This is only necessary, if we use the density textures on the render queue as well (I think).
+	dx_command_queue::computeCommandQueue.waitForOtherQueue(dx_command_queue::renderCommandQueue);
+#endif
+
 	dx_command_list* commandList = dx_command_queue::computeCommandQueue.getAvailableCommandList();
 
 	camera_frustum_planes frustum = camera.getWorldSpaceFrustumPlanes();
@@ -397,6 +423,13 @@ void procedural_placement::generate(const render_camera& camera)
 		commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
 		commandList->transitionBarrier(instanceBufferInternal.resource, D3D12_RESOURCE_STATE_COMMON);
 
+
+#if PROCEDURAL_PLACEMENT_ALLOW_SIMULTANEOUS_EDITING
+		for (dx_texture* texture : distinctDensityTextures)
+		{
+			commandList->transitionBarrier(*texture, D3D12_RESOURCE_STATE_COMMON);
+		}
+#endif
 
 
 		/*commandList->transitionBarrier(submeshCountBuffer.resource, D3D12_RESOURCE_STATE_COMMON);
@@ -466,12 +499,9 @@ uint32 procedural_placement::generatePoints(dx_command_list* commandList, vec3 c
 	{
 		placement_tile& tile = tiles[tileIndex];
 
-		bounding_box tileBB = bounding_box::negativeInfinity();
 		vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
-		tileBB.grow(vec3(corner.x, tile.groundHeight, corner.y));
-		tileBB.grow(vec3(corner.x + PROCEDURAL_TILE_SIZE, tile.groundHeight + tile.maximumHeight, corner.y + PROCEDURAL_TILE_SIZE));
 
-		if (!frustum.cullWorldSpaceAABB(tileBB))
+		if (!frustum.cullWorldSpaceAABB(tile.aabb))
 		{
 			float footprint = tile.objectFootprint;
 			float diameterInWorldSpace = diameterInUVSpace * PROCEDURAL_TILE_SIZE;
@@ -506,7 +536,6 @@ uint32 procedural_placement::generatePoints(dx_command_list* commandList, vec3 c
 			commandList->uavBarrier(placementPointsBuffer.resource);
 			commandList->uavBarrier(numPlacementPointsBuffer.resource);
 			commandList->uavBarrier(submeshCountBuffer.resource);
-
 		}
 	}
 
