@@ -406,7 +406,9 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 #endif
 
 
-	proceduralPlacement.initialize(device, commandList, placementSubmeshes, grass0PlacementMesh, cubePlacementMesh, spherePlacementMesh);
+	proceduralPlacement.initialize(device, commandList, placementSubmeshes, 
+		{ grass0PlacementMesh, grass1PlacementMesh, grass2PlacementMesh, grass3PlacementMesh },
+		cubePlacementMesh, spherePlacementMesh);
 	proceduralPlacementEditor.initialize(device, lightingRT);
 
 
@@ -746,8 +748,9 @@ uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR
 
 	renderScene(commandList, camera);
 
-
+#if ENABLE_PROCEDURAL
 	proceduralPlacementEditor.update(commandList, camera, proceduralPlacement, gui, dt);
+#endif
 
 	if (isDebugCamera)
 	{

@@ -12,10 +12,10 @@
 struct placement_gen_points_cb
 {
 	vec4 cameraPosition;
+	uint32 options[4];
 	vec2 tileCorner;
 	float tileSize;
 	uint32 numDensityMaps;
-	uint32 meshOffset;
 	float groundHeight;
 
 	float uvScale;
@@ -38,8 +38,8 @@ struct placement_submesh
 // https://www.shadertoy.com/view/XlyXWW
 
 void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
-	std::vector<submesh_info>& submeshes,
-	const placement_mesh& grassMesh,
+	const std::vector<submesh_info>& submeshes,
+	const std::vector<placement_mesh>& grassMeshes,
 	const placement_mesh& cubeMesh,
 	const placement_mesh& sphereMesh)
 {
@@ -239,11 +239,13 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 	numTilesZ = 10;
 	this->tiles.resize(numTilesX * numTilesZ);
 
-	std::vector<placement_mesh> meshes = {
-		grassMesh,
-		cubeMesh,
-		sphereMesh,
-	};
+	std::vector<placement_mesh> meshes;
+	append(meshes, grassMeshes);
+	meshes.push_back(cubeMesh);
+	meshes.push_back(sphereMesh);
+
+	uint32 cubeMeshOffset = (uint32)grassMeshes.size();
+	uint32 sphereMeshOffset = cubeMeshOffset + 1;
 
 	uint32 i = 0;
 	for (int32 z = -numTilesZ / 2; z < numTilesZ / 2; ++z)
@@ -270,16 +272,20 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		}
 	}
 
-	layerDescriptions[placement_layer_grass_and_pebbles].meshOffset = 0;
-	layerDescriptions[placement_layer_grass_and_pebbles].numMeshes = 1;
+	layerDescriptions[placement_layer_grass_and_pebbles].numDensityMaps = 1;
 	layerDescriptions[placement_layer_grass_and_pebbles].objectFootprint = 2.f;
 	layerDescriptions[placement_layer_grass_and_pebbles].objectNames[0] = "Grass";
+	layerDescriptions[placement_layer_grass_and_pebbles].options[0].offset = 0;
+	layerDescriptions[placement_layer_grass_and_pebbles].options[0].count = (uint32)grassMeshes.size();
 
-	layerDescriptions[placement_layer_cubes_and_spheres].meshOffset = 1;
-	layerDescriptions[placement_layer_cubes_and_spheres].numMeshes = 2;
+	layerDescriptions[placement_layer_cubes_and_spheres].numDensityMaps = 2;
 	layerDescriptions[placement_layer_cubes_and_spheres].objectFootprint = 4.f;
 	layerDescriptions[placement_layer_cubes_and_spheres].objectNames[0] = "Cubes";
+	layerDescriptions[placement_layer_cubes_and_spheres].options[0].offset = cubeMeshOffset;
+	layerDescriptions[placement_layer_cubes_and_spheres].options[0].count = 1;
 	layerDescriptions[placement_layer_cubes_and_spheres].objectNames[1] = "Spheres";
+	layerDescriptions[placement_layer_cubes_and_spheres].options[1].offset = sphereMeshOffset;
+	layerDescriptions[placement_layer_cubes_and_spheres].options[1].count = 1;
 
 
 	radiusInUVSpace = sqrt(1.f / (2.f * sqrt(3.f) * arraysize(POISSON_SAMPLES)));
@@ -520,8 +526,11 @@ uint32 procedural_placement::generatePoints(dx_command_list* commandList, vec3 c
 					cb.tileCorner = corner;
 					cb.tileSize = PROCEDURAL_TILE_SIZE;
 					cb.groundHeight = tile.groundHeight;
-					cb.meshOffset = desc.meshOffset;
-					cb.numDensityMaps = desc.numMeshes;
+					for (uint32 o = 0; o < desc.numDensityMaps; ++o)
+					{
+						cb.options[o] = (desc.options[o].offset << 16) | (desc.options[o].count);
+					}
+					cb.numDensityMaps = desc.numDensityMaps;
 					cb.uvScale = 1.f / scaling;
 					cb.uvOffset = 1.f / scaling;
 

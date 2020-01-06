@@ -41,11 +41,17 @@ enum placement_layer_name
 };
 )
 
+struct placement_option
+{
+	uint32 offset;
+	uint32 count;
+};
+
 struct placement_layer_description
 {
 	float objectFootprint; // Diameter of one object in world space.
-	uint32 meshOffset;
-	uint32 numMeshes;
+	placement_option options[4];
+	uint32 numDensityMaps;
 
 	const char* objectNames[4];
 };
@@ -78,8 +84,8 @@ struct placement_tile
 struct procedural_placement
 {
 	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, 
-		std::vector<submesh_info>& submeshes, 
-		const placement_mesh& grassMesh,
+		const std::vector<submesh_info>& submeshes, 
+		const std::vector<placement_mesh>& grassMeshes,
 		const placement_mesh& cubeMesh,
 		const placement_mesh& sphereMesh
 	);

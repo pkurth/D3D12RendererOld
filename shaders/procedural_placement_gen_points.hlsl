@@ -15,10 +15,11 @@ struct cs_input
 cbuffer placement_cb : register(b0)
 {
 	float4 cameraPosition;
+	uint4 options;
+
 	float2 tileCorner;
 	float tileSize;
 	uint numDensityMaps;
-	uint meshOffset;
 	float groundHeight;
 
 	float uvScale;
@@ -92,7 +93,11 @@ void main(cs_input IN)
 		float2 xz = uv * tileSize + tileCorner;
 		float3 position = float3(xz.x, groundHeight, xz.y);
 
-		uint meshIndex = index + meshOffset;
+		uint option = options[index];
+		uint meshCount = option & 0xFFFF;
+		uint meshIndex = (uint)(random(xz) * meshCount);
+		meshIndex = min(meshIndex, meshCount - 1);
+		meshIndex = (option >> 16) + meshIndex;
 
 
 		// Calculate LOD.

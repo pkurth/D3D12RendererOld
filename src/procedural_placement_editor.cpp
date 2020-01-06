@@ -194,7 +194,7 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 			gui.slider("Brush hardness", brushHardness, 0.f, 1.f);
 			gui.slider("Brush strength", brushStrength, 0.f, 1.f);
 			gui.radio("Layer", placementLayerNames, placement_layer_count, (uint32&)layerIndex);
-			gui.radio("Object type", placement.layerDescriptions[layerIndex].objectNames, placement.layerDescriptions[layerIndex].numMeshes, objectIndex);
+			gui.radio("Object type", placement.layerDescriptions[layerIndex].objectNames, placement.layerDescriptions[layerIndex].numDensityMaps, objectIndex);
 		}
 		gui.textF("Mouse position: %.3f, %.3f", mousePosition.x, mousePosition.y);
 
