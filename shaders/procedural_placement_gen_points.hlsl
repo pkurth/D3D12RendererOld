@@ -27,8 +27,8 @@ cbuffer placement_cb : register(b0)
 
 SamplerState densitySampler							: register(s0);
 StructuredBuffer<float2> samplePoints				: register(t0);
-Texture2D<float> densityMaps[4]						: register(t1); // TODO: Pack these together?
-StructuredBuffer<placement_mesh> meshes				: register(t5);
+Texture2D<float4> densityMap						: register(t1);
+StructuredBuffer<placement_mesh> meshes				: register(t2);
 
 RWStructuredBuffer<placement_point> placementPoints : register(u0);
 RWStructuredBuffer<uint> pointCount					: register(u1);
@@ -54,18 +54,14 @@ void main(cs_input IN)
 	uint index = 100;
 	if (all(uv >= 0.f && uv <= 1.f))
 	{
-		float4 densities = (float4)4; // Initialize to high.
-		float densitySum = 0;
-		[unroll]
-		for (uint i = 0; i < numDensityMaps; ++i)
-		{
-			float density = densityMaps[i].SampleLevel(densitySampler, uv, 0);
-			densities[i] = density;
-			densitySum += density;
-		}
+		float4 densities = densityMap.SampleLevel(densitySampler, uv, 0);
+		float densitySum = dot(densities, (float4)1.f);
 
 		densitySum = max(densitySum, 1.f); // Only normalize if we are above 1.
 		densities /= densitySum;
+
+		float4 unusedChannels = float4(numDensityMaps < 1, numDensityMaps < 2, numDensityMaps < 3, numDensityMaps < 4);
+		densities += unusedChannels; // Initialize unused channels to high.
 
 		densities.y += densities.x;
 		densities.z += densities.y;

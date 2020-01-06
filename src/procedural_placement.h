@@ -12,7 +12,7 @@
 
 
 #define PROCEDURAL_TILE_SIZE 100.f
-#define PROCEDURAL_MIN_FOOTPRINT 4.f
+#define PROCEDURAL_MIN_FOOTPRINT 1.5f
 
 
 #define PROCEDURAL_PLACEMENT_ALLOW_SIMULTANEOUS_EDITING 1
@@ -31,20 +31,26 @@ struct placement_mesh
 	uint32 numLODs;
 };
 
+struct placement_layer
+{
+
+};
+
 struct placement_tile
 {
 	// Multiples of tile size.
 	int32 cornerX;
 	int32 cornerZ;
 
-	float groundHeight;
+	float groundHeight; // TODO: Replace this with heightmap.
 	float maximumHeight;
 
 	float objectFootprint; // Diameter of one object in world space.
 	uint32 numMeshes;
 
 	placement_mesh meshes[4];
-	dx_texture* densities[4] = {};
+	dx_texture* densities = nullptr; // Packed into 4 channels.
+	const char* layerNames[4];
 
 
 	// Filled out by placement system.
@@ -83,8 +89,6 @@ private:
 		dx_structured_buffer instanceBuffer;
 	};
 
-
-	D3D12_CPU_DESCRIPTOR_HANDLE defaultSRV;
 
 	dx_structured_buffer samplePointsBuffer;
 	dx_structured_buffer placementPointsBuffer;

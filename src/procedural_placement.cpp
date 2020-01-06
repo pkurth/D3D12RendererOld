@@ -120,7 +120,7 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		ComPtr<ID3DBlob> shaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/procedural_placement_gen_points.cso", &shaderBlob));
 
-		CD3DX12_DESCRIPTOR_RANGE1 srvs(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 0); // Sample positions, density map(s) and meshes.
+		CD3DX12_DESCRIPTOR_RANGE1 srvs(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0); // Sample positions, density map and meshes.
 		CD3DX12_DESCRIPTOR_RANGE1 uavs(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); // Generated points, point count and submesh count.
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
@@ -345,34 +345,14 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 
 	for (uint32 i = 0; i < (uint32)tiles.size(); ++i)
 	{
-		for (uint32 j = 0; j < tiles[i].numMeshes; ++j)
+		if (tiles[i].densities)
 		{
-			textureSet.insert(tiles[i].densities[j]);
+			textureSet.insert(tiles[i].densities);
 		}
 	}
 
 
 	distinctDensityTextures.insert(distinctDensityTextures.end(), textureSet.begin(), textureSet.end());
-
-
-
-
-	dx_descriptor_allocation allocation = dx_descriptor_allocator::allocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4);
-	defaultSRV = allocation.getDescriptorHandle(0);
-
-	for (uint32 i = 0; i < 4; ++i)
-	{
-		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		srvDesc.Format = DXGI_FORMAT_R8_UNORM;
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.Texture2D.MipLevels = -1;
-
-		device->CreateShaderResourceView(
-			nullptr, &srvDesc,
-			allocation.getDescriptorHandle(i)
-		);
-	}
 }
 
 void procedural_placement::generate(const render_camera& camera)
@@ -487,7 +467,7 @@ uint32 procedural_placement::generatePoints(dx_command_list* commandList, vec3 c
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS, 2, 1, submeshCountBuffer.uav);
 
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 0, 1, samplePointsBuffer.srv);
-	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 5, 1, meshBuffer.srv);
+	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 2, 1, meshBuffer.srv);
 
 	uint32 maxNumGeneratedPlacementPoints = 0;
 
@@ -523,12 +503,7 @@ uint32 procedural_placement::generatePoints(dx_command_list* commandList, vec3 c
 
 			commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, cb);
 
-			for (uint32 i = 0; i < tile.numMeshes; ++i)
-			{
-				commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1 + i, *tile.densities[i], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			}
-
-			commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1 + tile.numMeshes, 4 - tile.numMeshes, defaultSRV);
+			commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1, *tile.densities, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 
 			commandList->dispatch(numGroupsPerDim, numGroupsPerDim, 1);

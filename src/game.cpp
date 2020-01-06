@@ -277,6 +277,7 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	submesh_info sphereSubmeshLOD1;
 	submesh_info sphereSubmeshLOD2;
 	submesh_info sphereSubmeshLOD3;
+	std::vector<submesh_info> grassSubmeshes;
 	{
 		PROFILE_BLOCK("Load indirect meshes");
 
@@ -306,6 +307,15 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			sphereSubmeshLOD2 = mesh.pushSphere(7, 7);
 			sphereSubmeshLOD3 = mesh.pushSphere(3, 3);
 		}
+		{
+			PROFILE_BLOCK("Grass");
+
+			append(grassSubmeshes, mesh.pushFromFile("res/grass0.obj"));
+			append(grassSubmeshes, mesh.pushFromFile("res/grass1.obj"));
+			append(grassSubmeshes, mesh.pushFromFile("res/grass2.obj"));
+			append(grassSubmeshes, mesh.pushFromFile("res/grass3.obj"));
+			append(grassSubmeshes, mesh.pushFromFile("res/grass4.obj"));
+		}
 
 		indirectBuffer.initialize(device, commandList, irradiance, prefilteredEnvironment, brdf, sunShadowMapTexture, sun.numShadowCascades,
 			spotLightShadowMapTexture, lightProbeSystem, mesh);
@@ -314,11 +324,13 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		indirectBuffer.pushInstance(sponzaSubmeshes, createScaleMatrix(0.03f));
 #endif
 
-		for (uint32 i = 0; i < 5; ++i)
+		indirectBuffer.pushInstance(grassSubmeshes, createModelMatrix(vec3(0,10,0), createQuaternionFromAxisAngle(vec3(-1, 0, 0), DirectX::XM_PIDIV2), 10));
+
+		/*for (uint32 i = 0; i < 5; ++i)
 		{
 			indirectBuffer.pushInstance(sphereSubmeshLOD0, createModelMatrix(vec3(-10.f + i * 4.f, 3.f, 0.f), quat::identity), 
 				vec4(1.f, 1.f, 1.f, 1.f), i * 0.25f, 0.5f);
-		}
+		}*/
 
 		indirectBuffer.finish(commandList);
 	}
@@ -344,14 +356,19 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		oakSubmeshes[2][0],
 		oakSubmeshes[2][1],
 		oakSubmeshes[2][2],
+
+		grassSubmeshes[0],
+		grassSubmeshes[1],
+		grassSubmeshes[2],
+		grassSubmeshes[3],
 	};
 
 	placement_mesh cubePlacementMesh;
-	cubePlacementMesh.numLODs = 1; // Cube.
+	cubePlacementMesh.numLODs = 1;
 	cubePlacementMesh.lods[0] = { 0, 1 };
 
 	placement_mesh spherePlacementMesh;
-	spherePlacementMesh.numLODs = 4; // Sphere.
+	spherePlacementMesh.numLODs = 4;
 	spherePlacementMesh.lods[0] = { 1, 1 };
 	spherePlacementMesh.lods[1] = { 2, 1 };
 	spherePlacementMesh.lods[2] = { 3, 1 };
@@ -365,18 +382,30 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	oakPlacementMesh.lods[2] = { 11, 3 };
 	oakPlacementMesh.lodDistances = vec3(10.f, 20.f, 50.f);
 
+	placement_mesh grass0PlacementMesh;
+	grass0PlacementMesh.numLODs = 1;
+	grass0PlacementMesh.lods[0] = { 14, 1 };
+
+	placement_mesh grass1PlacementMesh;
+	grass1PlacementMesh.numLODs = 1;
+	grass1PlacementMesh.lods[0] = { 15, 1 };
+
+	placement_mesh grass2PlacementMesh;
+	grass2PlacementMesh.numLODs = 1;
+	grass2PlacementMesh.lods[0] = { 16, 1 };
+
+	placement_mesh grass3PlacementMesh;
+	grass3PlacementMesh.numLODs = 1;
+	grass3PlacementMesh.lods[0] = { 17, 1 };
+
 
 	D3D12_RESOURCE_FLAGS densityFlags = D3D12_RESOURCE_FLAG_NONE;
 #if PROCEDURAL_PLACEMENT_ALLOW_SIMULTANEOUS_EDITING
 	densityFlags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 #endif
 
-	commandList->loadTextureFromFile(cubeDensity, L"res/density.png", texture_type_noncolor, false, densityFlags);
-	commandList->loadTextureFromFile(sphereDensity, L"res/density2.png", texture_type_noncolor, false, densityFlags);
-	commandList->loadTextureFromFile(oakDensity, L"res/density3.png", texture_type_noncolor, false, densityFlags);
-	SET_NAME(cubeDensity.resource, "Cube Density");
-	SET_NAME(sphereDensity.resource, "Sphere Density");
-	SET_NAME(oakDensity.resource, "Oak Density");
+	commandList->loadTextureFromFile(density, L"res/density_black.png", texture_type_noncolor, false, densityFlags);
+	SET_NAME(density.resource, "Density");
 
 	placement_tile tile0;
 	tile0.cornerX = 0;
@@ -386,21 +415,41 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	tile0.numMeshes = 2;
 	tile0.meshes[0] = cubePlacementMesh;
 	tile0.meshes[1] = spherePlacementMesh;
-	tile0.densities[0] = &cubeDensity;
-	tile0.densities[1] = &sphereDensity;
-	tile0.objectFootprint = PROCEDURAL_MIN_FOOTPRINT;
+	tile0.densities = &density;
+	tile0.layerNames[0] = "Cubes";
+	tile0.layerNames[1] = "Spheres";
+	tile0.objectFootprint = 4.f;
 
-#if 1
-	placement_tile tile1;
-	tile1.cornerX = 1;
-	tile1.cornerZ = 0;
-	tile1.groundHeight = 0.f;
-	tile1.maximumHeight = 20.f;
-	tile1.numMeshes = 1; // Oak.
-	tile1.meshes[0] = oakPlacementMesh;
-	tile1.densities[0] = &oakDensity;
-	tile1.objectFootprint = 8.f;
-#endif
+	//placement_tile tile1;
+	//tile1.cornerX = 1;
+	//tile1.cornerZ = 0;
+	//tile1.groundHeight = 0.f;
+	//tile1.maximumHeight = 20.f;
+	//tile1.numMeshes = 1; // Oak.
+	//tile1.meshes[0] = oakPlacementMesh;
+	//tile1.densities[0] = &oakDensity;
+	//tile1.layerNames[0] = "Oaks";
+	//tile1.objectFootprint = 8.f;
+
+	//placement_tile tile2;
+	//tile2.cornerX = 1;
+	//tile2.cornerZ = 0;
+	//tile2.groundHeight = 0.f;
+	//tile2.maximumHeight = 20.f;
+	//tile2.numMeshes = 4;
+	//tile2.meshes[0] = grass0PlacementMesh;
+	//tile2.meshes[1] = grass1PlacementMesh;
+	//tile2.meshes[2] = grass2PlacementMesh;
+	//tile2.meshes[3] = grass3PlacementMesh;
+	//tile2.densities[0] = &oakDensity;
+	//tile2.densities[1] = &oakDensity;
+	//tile2.densities[2] = &oakDensity;
+	//tile2.densities[3] = &oakDensity;
+	//tile2.layerNames[0] = "Grass";
+	//tile2.layerNames[1] = "Grass";
+	//tile2.layerNames[2] = "Grass";
+	//tile2.layerNames[3] = "Grass";
+	//tile2.objectFootprint = PROCEDURAL_MIN_FOOTPRINT;
 
 	std::vector<placement_tile> placementTiles;
 	for (int32 z = -5; z < 5; ++z)
@@ -445,8 +494,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 			commandList->transitionBarrier(indirectBuffer.indirectMaterials[i].metallic, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		}
 
-		commandList->transitionBarrier(cubeDensity, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		
 		{
 			PROFILE_BLOCK("Execute transition command list");
 
@@ -761,7 +808,7 @@ uint64 dx_game::render(ComPtr<ID3D12Resource> backBuffer, CD3DX12_CPU_DESCRIPTOR
 	renderScene(commandList, camera);
 
 
-	proceduralPlacementEditor.update(commandList, camera, proceduralPlacement, gui);
+	proceduralPlacementEditor.update(commandList, camera, proceduralPlacement, gui, dt);
 
 	if (isDebugCamera)
 	{

@@ -25,7 +25,8 @@ struct procedural_placement_editor
 {
 	void initialize(ComPtr<ID3D12Device2> device, const dx_render_target& renderTarget);
 
-	void update(dx_command_list* commandList, const render_camera& camera, procedural_placement& placement, debug_gui& gui);
+	void update(dx_command_list* commandList, const render_camera& camera, procedural_placement& placement, debug_gui& gui,
+		float dt);
 
 	bool mouseDownCallback(mouse_button_event event);
 	bool mouseUpCallback(mouse_button_event event);

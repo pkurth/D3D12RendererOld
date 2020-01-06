@@ -52,9 +52,7 @@ private:
 	present_pipeline present;
 
 	procedural_placement proceduralPlacement;
-	dx_texture cubeDensity;
-	dx_texture sphereDensity;
-	dx_texture oakDensity;
+	dx_texture density;
 
 	procedural_placement_editor proceduralPlacementEditor;
 

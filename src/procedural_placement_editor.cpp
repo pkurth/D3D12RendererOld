@@ -11,6 +11,7 @@ struct brush_cb
 	float brushRadius;
 	float brushHardness;
 	float brushStrength;
+	uint32 channel;
 };
 
 void procedural_placement_editor::initialize(ComPtr<ID3D12Device2> device, const dx_render_target& renderTarget)
@@ -115,7 +116,7 @@ void procedural_placement_editor::initialize(ComPtr<ID3D12Device2> device, const
 
 		D3D12_RT_FORMAT_ARRAY applyBrushRTFormat = {};
 		applyBrushRTFormat.NumRenderTargets = 1;
-		applyBrushRTFormat.RTFormats[0] = DXGI_FORMAT_R8_UNORM;
+		applyBrushRTFormat.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 		struct pipeline_state_stream
 		{
@@ -176,7 +177,8 @@ void procedural_placement_editor::initialize(ComPtr<ID3D12Device2> device, const
 	registerMouseMoveCallback(BIND(mouseMoveCallback));
 }
 
-void procedural_placement_editor::update(dx_command_list* commandList, const render_camera& camera, procedural_placement& placement, debug_gui& gui)
+void procedural_placement_editor::update(dx_command_list* commandList, const render_camera& camera, procedural_placement& placement, debug_gui& gui,
+	float dt)
 {
 #if PROCEDURAL_PLACEMENT_ALLOW_SIMULTANEOUS_EDITING
 
@@ -185,15 +187,13 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 	
 	DEBUG_TAB(gui, "Procedural placement")
 	{
-		const char* densities[] = { "1", "2", "3", "4" };
-
 		DEBUG_GROUP(gui, "Brush")
 		{
 			gui.radio("Brush type", placementBrushNames, placement_brush_count, (uint32&)brushType);
 			gui.slider("Brush radius", brushRadius, 0.1f, 50.f);
 			gui.slider("Brush hardness", brushHardness, 0.f, 1.f);
 			gui.slider("Brush strength", brushStrength, 0.f, 1.f);
-			gui.radio("Density map index", densities, 4, densityMapIndex);
+			gui.radio("Density map", placement.tiles[0].layerNames, placement.tiles[0].numMeshes, densityMapIndex);
 		}
 		gui.textF("Mouse position: %.3f, %.3f", mousePosition.x, mousePosition.y);
 
@@ -229,7 +229,8 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 		brushCB.brushPosition = hitPosition;
 		brushCB.brushRadius = brushRadius;
 		brushCB.brushHardness = (1.f - brushHardness) * 5.f;
-		brushCB.brushStrength = brushStrength;
+		brushCB.brushStrength = brushStrength * 10.f * dt;
+		brushCB.channel = densityMapIndex;
 
 
 		vertex_3PU vertices[] =
@@ -257,13 +258,13 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 
 			for (placement_tile& tile : placement.tiles)
 			{
-				if (tile.densities[densityMapIndex])
+				if (tile.densities)
 				{
 					bounding_box tileBB = tile.aabb;
 
 					if (tile.aabb.intersectSphere(hitPosition, brushRadius))
 					{
-						densityRT.attachColorTexture(0, *tile.densities[densityMapIndex]);
+						densityRT.attachColorTexture(0, *tile.densities);
 						commandList->setRenderTarget(densityRT);
 						commandList->setViewport(densityRT.viewport);
 
@@ -289,6 +290,8 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 			commandList->setViewport(currentRT.viewport);
 		}
 
+		brushCB.brushStrength /= dt; // Remove the delta time (added above) for the visualization.
+
 		// Render tiles.
 		{
 			PROFILE_BLOCK("Render tiles");
@@ -304,7 +307,7 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 
 			for (placement_tile& tile : placement.tiles)
 			{
-				if (tile.densities[densityMapIndex])
+				if (tile.densities)
 				{
 					vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
 
@@ -323,7 +326,7 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 						};
 
 						commandList->setGraphics32BitConstants(PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_MODEL, modelCB);
-						commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_TEX, 0, *tile.densities[densityMapIndex], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+						commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_TEX, 0, *tile.densities, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 						commandList->draw(4, 1, 0, 0);
 					}
 				}
