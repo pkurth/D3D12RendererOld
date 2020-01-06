@@ -324,7 +324,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		indirectBuffer.pushInstance(sponzaSubmeshes, createScaleMatrix(0.03f));
 #endif
 
-		indirectBuffer.pushInstance(grassSubmeshes, createModelMatrix(vec3(0,10,0), createQuaternionFromAxisAngle(vec3(-1, 0, 0), DirectX::XM_PIDIV2), 10));
+		// This has scale 0. I don't actually want this object but the buffer must not be 0.. TODO: Fix this.
+		indirectBuffer.pushInstance(grassSubmeshes, createModelMatrix(vec3(0,0,0), quat::identity, 0));
 
 		/*for (uint32 i = 0; i < 5; ++i)
 		{
@@ -404,70 +405,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 	densityFlags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 #endif
 
-	commandList->loadTextureFromFile(density, L"res/density_black.png", texture_type_noncolor, false, densityFlags);
-	SET_NAME(density.resource, "Density");
 
-	placement_tile tile0;
-	tile0.cornerX = 0;
-	tile0.cornerZ = 0;
-	tile0.groundHeight = 0.f;
-	tile0.maximumHeight = 20.f;
-	tile0.numMeshes = 2;
-	tile0.meshes[0] = cubePlacementMesh;
-	tile0.meshes[1] = spherePlacementMesh;
-	tile0.densities = &density;
-	tile0.layerNames[0] = "Cubes";
-	tile0.layerNames[1] = "Spheres";
-	tile0.objectFootprint = 4.f;
-
-	//placement_tile tile1;
-	//tile1.cornerX = 1;
-	//tile1.cornerZ = 0;
-	//tile1.groundHeight = 0.f;
-	//tile1.maximumHeight = 20.f;
-	//tile1.numMeshes = 1; // Oak.
-	//tile1.meshes[0] = oakPlacementMesh;
-	//tile1.densities[0] = &oakDensity;
-	//tile1.layerNames[0] = "Oaks";
-	//tile1.objectFootprint = 8.f;
-
-	//placement_tile tile2;
-	//tile2.cornerX = 1;
-	//tile2.cornerZ = 0;
-	//tile2.groundHeight = 0.f;
-	//tile2.maximumHeight = 20.f;
-	//tile2.numMeshes = 4;
-	//tile2.meshes[0] = grass0PlacementMesh;
-	//tile2.meshes[1] = grass1PlacementMesh;
-	//tile2.meshes[2] = grass2PlacementMesh;
-	//tile2.meshes[3] = grass3PlacementMesh;
-	//tile2.densities[0] = &oakDensity;
-	//tile2.densities[1] = &oakDensity;
-	//tile2.densities[2] = &oakDensity;
-	//tile2.densities[3] = &oakDensity;
-	//tile2.layerNames[0] = "Grass";
-	//tile2.layerNames[1] = "Grass";
-	//tile2.layerNames[2] = "Grass";
-	//tile2.layerNames[3] = "Grass";
-	//tile2.objectFootprint = PROCEDURAL_MIN_FOOTPRINT;
-
-	std::vector<placement_tile> placementTiles;
-	for (int32 z = -5; z < 5; ++z)
-	{
-		for (int32 x = -5; x < 5; ++x)
-		{
-			placement_tile& tile = tile0;
-
-			tile.cornerX = x;
-			tile.cornerZ = z;
-
-			placementTiles.push_back(tile);
-		}
-	}
-
-	//placementTiles.push_back(tile0);
-
-	proceduralPlacement.initialize(device, commandList, placementTiles, placementSubmeshes);
+	proceduralPlacement.initialize(device, commandList, placementSubmeshes, grass0PlacementMesh, cubePlacementMesh, spherePlacementMesh);
 	proceduralPlacementEditor.initialize(device, lightingRT);
 
 

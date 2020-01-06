@@ -38,7 +38,10 @@ struct placement_submesh
 // https://www.shadertoy.com/view/XlyXWW
 
 void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList,
-	std::vector<placement_tile>& tiles, std::vector<submesh_info>& submeshes)
+	std::vector<submesh_info>& submeshes,
+	const placement_mesh& grassMesh,
+	const placement_mesh& cubeMesh,
+	const placement_mesh& sphereMesh)
 {
 	{
 		ComPtr<ID3DBlob> shaderBlob;
@@ -232,33 +235,52 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		SET_NAME(createCommandsPipelineState, "Procedural Placement Create Commands Pipeline");
 	}
 
-	this->tiles = tiles;
+	numTilesX = 10;
+	numTilesZ = 10;
+	this->tiles.resize(numTilesX * numTilesZ);
 
-	std::vector<placement_mesh> meshes;
-	meshes.reserve(tiles.size() * 4);
-	for (uint32 i = 0; i < (uint32)tiles.size(); ++i)
+	std::vector<placement_mesh> meshes = {
+		grassMesh,
+		cubeMesh,
+		sphereMesh,
+	};
+
+	uint32 i = 0;
+	for (int32 z = -numTilesZ / 2; z < numTilesZ / 2; ++z)
 	{
-		placement_tile& tile = this->tiles[i];
-		assert(tile.numMeshes > 0);
-		assert(tile.numMeshes <= 4);
-
-		tile.meshOffset = (uint32)meshes.size();
-
-		for (uint32 j = 0; j < tile.numMeshes; ++j)
+		for (int32 x = -numTilesX / 2; x < numTilesX / 2; ++x)
 		{
-			meshes.push_back(tile.meshes[j]);
+			placement_tile& tile = this->tiles[i];
+			
+			tile.cornerX = x;
+			tile.cornerZ = z;
+
+			tile.groundHeight = 0.f;
+			tile.maximumHeight = 20.f;
+
+			bounding_box tileBB = bounding_box::negativeInfinity();
+			vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
+			tileBB.grow(vec3(corner.x, tile.groundHeight, corner.y));
+			tileBB.grow(vec3(corner.x + PROCEDURAL_TILE_SIZE, tile.groundHeight + tile.maximumHeight, corner.y + PROCEDURAL_TILE_SIZE));
+			tile.aabb = tileBB;
+
+			tile.device = device;
+
+			++i;
 		}
-
-		tile.objectFootprint = max(tile.objectFootprint, PROCEDURAL_MIN_FOOTPRINT);
-
-
-		bounding_box tileBB = bounding_box::negativeInfinity();
-		vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
-		tileBB.grow(vec3(corner.x, tile.groundHeight, corner.y));
-		tileBB.grow(vec3(corner.x + PROCEDURAL_TILE_SIZE, tile.groundHeight + tile.maximumHeight, corner.y + PROCEDURAL_TILE_SIZE));
-		tile.aabb = tileBB;
-
 	}
+
+	layerDescriptions[placement_layer_grass_and_pebbles].meshOffset = 0;
+	layerDescriptions[placement_layer_grass_and_pebbles].numMeshes = 1;
+	layerDescriptions[placement_layer_grass_and_pebbles].objectFootprint = 2.f;
+	layerDescriptions[placement_layer_grass_and_pebbles].objectNames[0] = "Grass";
+
+	layerDescriptions[placement_layer_cubes_and_spheres].meshOffset = 1;
+	layerDescriptions[placement_layer_cubes_and_spheres].numMeshes = 2;
+	layerDescriptions[placement_layer_cubes_and_spheres].objectFootprint = 4.f;
+	layerDescriptions[placement_layer_cubes_and_spheres].objectNames[0] = "Cubes";
+	layerDescriptions[placement_layer_cubes_and_spheres].objectNames[1] = "Spheres";
+
 
 	radiusInUVSpace = sqrt(1.f / (2.f * sqrt(3.f) * arraysize(POISSON_SAMPLES)));
 	float diameterInUVSpace = radiusInUVSpace * 2.f;
@@ -340,19 +362,6 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		SET_NAME(renderResources[i].instanceBuffer.resource, "Placement Instances");
 	}
 
-	std::set<dx_texture*> textureSet;
-
-
-	for (uint32 i = 0; i < (uint32)tiles.size(); ++i)
-	{
-		if (tiles[i].densities)
-		{
-			textureSet.insert(tiles[i].densities);
-		}
-	}
-
-
-	distinctDensityTextures.insert(distinctDensityTextures.end(), textureSet.begin(), textureSet.end());
 }
 
 void procedural_placement::generate(const render_camera& camera)
@@ -405,10 +414,7 @@ void procedural_placement::generate(const render_camera& camera)
 
 
 #if PROCEDURAL_PLACEMENT_ALLOW_SIMULTANEOUS_EDITING
-		for (dx_texture* texture : distinctDensityTextures)
-		{
-			commandList->transitionBarrier(*texture, D3D12_RESOURCE_STATE_COMMON);
-		}
+		transitionAllTexturesToCommon(commandList);
 #endif
 
 
@@ -435,6 +441,20 @@ void procedural_placement::generate(const render_camera& camera)
 		numDrawCallsBuffer.copyBackToCPU(numDraws, 2 * sizeof(uint32));
 		flushApplication();
 		int a = 0;*/
+	}
+}
+
+void procedural_placement::transitionAllTexturesToCommon(dx_command_list* commandList)
+{
+	for (placement_tile& tile : tiles)
+	{
+		for (uint32 i = 0; i < placement_layer_count; ++i)
+		{
+			if (tile.layers[i].active)
+			{
+				commandList->transitionBarrier(tile.layers[i].densities, D3D12_RESOURCE_STATE_COMMON);
+			}
+		}
 	}
 }
 
@@ -483,34 +503,42 @@ uint32 procedural_placement::generatePoints(dx_command_list* commandList, vec3 c
 
 		if (!frustum.cullWorldSpaceAABB(tile.aabb))
 		{
-			float footprint = tile.objectFootprint;
-			float diameterInWorldSpace = diameterInUVSpace * PROCEDURAL_TILE_SIZE;
+			for (uint32 i = 0; i < placement_layer_count; ++i)
+			{
+				placement_layer& layer = tile.layers[i];
+				placement_layer_description& desc = layerDescriptions[i];
+				if (layer.active)
+				{
+					float footprint = desc.objectFootprint;
+					float diameterInWorldSpace = diameterInUVSpace * PROCEDURAL_TILE_SIZE;
 
-			float scaling = diameterInWorldSpace / footprint;
-			uint32 numGroupsPerDim = (uint32)ceil(scaling);
+					float scaling = diameterInWorldSpace / footprint;
+					uint32 numGroupsPerDim = (uint32)ceil(scaling);
 
-			placement_gen_points_cb cb;
-			cb.cameraPosition = vec4(cameraPosition, 1.f);
-			cb.tileCorner = corner;
-			cb.tileSize = PROCEDURAL_TILE_SIZE;
-			cb.groundHeight = tile.groundHeight;
-			cb.meshOffset = tile.meshOffset;
-			cb.numDensityMaps = tile.numMeshes;
-			cb.uvScale = 1.f / scaling;
-			cb.uvOffset = 1.f / scaling;
+					placement_gen_points_cb cb;
+					cb.cameraPosition = vec4(cameraPosition, 1.f);
+					cb.tileCorner = corner;
+					cb.tileSize = PROCEDURAL_TILE_SIZE;
+					cb.groundHeight = tile.groundHeight;
+					cb.meshOffset = desc.meshOffset;
+					cb.numDensityMaps = desc.numMeshes;
+					cb.uvScale = 1.f / scaling;
+					cb.uvOffset = 1.f / scaling;
 
-			maxNumGeneratedPlacementPoints += numGroupsPerDim * numGroupsPerDim * arraysize(POISSON_SAMPLES);
+					maxNumGeneratedPlacementPoints += numGroupsPerDim * numGroupsPerDim * arraysize(POISSON_SAMPLES);
 
-			commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, cb);
+					commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, cb);
 
-			commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1, *tile.densities, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 1, layer.densities, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 
-			commandList->dispatch(numGroupsPerDim, numGroupsPerDim, 1);
+					commandList->dispatch(numGroupsPerDim, numGroupsPerDim, 1);
 
-			commandList->uavBarrier(placementPointsBuffer.resource);
-			commandList->uavBarrier(numPlacementPointsBuffer.resource);
-			commandList->uavBarrier(submeshCountBuffer.resource);
+					commandList->uavBarrier(placementPointsBuffer.resource);
+					commandList->uavBarrier(numPlacementPointsBuffer.resource);
+					commandList->uavBarrier(submeshCountBuffer.resource);
+				}
+			}
 		}
 	}
 
@@ -578,6 +606,7 @@ void procedural_placement::createCommands(dx_command_list* commandList)
 
 	commandList->transitionBarrier(commandBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	commandList->transitionBarrier(depthOnlyCommandBuffer.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	commandList->transitionBarrier(submeshOffsetBuffer.resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 	commandList->setCompute32BitConstants(PROCEDURAL_PLACEMENT_ROOTPARAM_CB, submeshBuffer.count);
 	commandList->stageDescriptors(PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS, 0, 1, submeshCountBuffer.srv);
@@ -590,4 +619,32 @@ void procedural_placement::createCommands(dx_command_list* commandList)
 
 	commandList->uavBarrier(commandBuffer.resource);
 	commandList->uavBarrier(depthOnlyCommandBuffer.resource);
+}
+
+void placement_tile::allocateLayer(placement_layer_name layerName)
+{
+	if (layers[layerName].active)
+	{
+		return;
+	}
+
+	placement_layer& layer = layers[layerName];
+	layer.active = true;
+
+
+	DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(format, 512, 512);
+	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	desc.MipLevels = 1;
+
+	D3D12_CLEAR_VALUE clearValue;
+	clearValue.Format = desc.Format;
+	clearValue.Color[0] = 0.f;
+	clearValue.Color[1] = 0.f;
+	clearValue.Color[2] = 0.f;
+	clearValue.Color[3] = 0.f;
+
+	layer.densities.initialize(device, desc, &clearValue);
+	dx_resource_state_tracker::addGlobalResourceState(layer.densities.resource.Get(), D3D12_RESOURCE_STATE_COMMON, 1);
+	
 }

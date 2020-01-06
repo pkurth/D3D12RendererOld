@@ -31,9 +31,29 @@ struct placement_mesh
 	uint32 numLODs;
 };
 
+STRINGIFY_ENUM(placementLayerNames,
+enum placement_layer_name
+{
+	placement_layer_grass_and_pebbles,	"Grass and pebbles",
+	placement_layer_cubes_and_spheres,	"Cubes and spheres",
+
+	placement_layer_count,				"Count",
+};
+)
+
+struct placement_layer_description
+{
+	float objectFootprint; // Diameter of one object in world space.
+	uint32 meshOffset;
+	uint32 numMeshes;
+
+	const char* objectNames[4];
+};
+
 struct placement_layer
 {
-
+	bool active = false;
+	dx_texture densities; // Packed into 4 channels.
 };
 
 struct placement_tile
@@ -45,25 +65,28 @@ struct placement_tile
 	float groundHeight; // TODO: Replace this with heightmap.
 	float maximumHeight;
 
-	float objectFootprint; // Diameter of one object in world space.
-	uint32 numMeshes;
-
-	placement_mesh meshes[4];
-	dx_texture* densities = nullptr; // Packed into 4 channels.
-	const char* layerNames[4];
-
+	placement_layer layers[placement_layer_count];
 
 	// Filled out by placement system.
-	uint32 meshOffset;
 	bounding_box aabb;
+
+
+	ComPtr<ID3D12Device2> device;
+	void allocateLayer(placement_layer_name layerName);
 };
 
 struct procedural_placement
 {
 	void initialize(ComPtr<ID3D12Device2> device, dx_command_list* commandList, 
-		std::vector<placement_tile>& tiles, std::vector<submesh_info>& submeshes);
+		std::vector<submesh_info>& submeshes, 
+		const placement_mesh& grassMesh,
+		const placement_mesh& cubeMesh,
+		const placement_mesh& sphereMesh
+	);
 
 	void generate(const render_camera& camera);
+
+	void transitionAllTexturesToCommon(dx_command_list* commandList);
 	
 	uint32 numDrawCalls;
 
@@ -72,8 +95,11 @@ struct procedural_placement
 	dx_structured_buffer depthOnlyCommandBuffer;
 	dx_vertex_buffer instanceBuffer;
 
+	int32 numTilesX;
+	int32 numTilesZ;
 	std::vector<placement_tile> tiles;
-	std::vector<dx_texture*> distinctDensityTextures;
+
+	placement_layer_description layerDescriptions[placement_layer_count];
 
 private:
 	uint32 maxNumInstances;

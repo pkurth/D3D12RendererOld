@@ -42,7 +42,7 @@ void procedural_placement_editor::initialize(ComPtr<ID3D12Device2> device, const
 		rootParameters[PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_CB].InitAsConstants(sizeof(brush_cb) / sizeof(float), 1, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_TEX].InitAsDescriptorTable(1, &textures, D3D12_SHADER_VISIBILITY_PIXEL);
 
-		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearWrapSampler(0);
+		CD3DX12_STATIC_SAMPLER_DESC sampler = staticLinearClampSampler(0);
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.Flags = rootSignatureFlags;
@@ -193,7 +193,8 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 			gui.slider("Brush radius", brushRadius, 0.1f, 50.f);
 			gui.slider("Brush hardness", brushHardness, 0.f, 1.f);
 			gui.slider("Brush strength", brushStrength, 0.f, 1.f);
-			gui.radio("Density map", placement.tiles[0].layerNames, placement.tiles[0].numMeshes, densityMapIndex);
+			gui.radio("Layer", placementLayerNames, placement_layer_count, (uint32&)layerIndex);
+			gui.radio("Object type", placement.layerDescriptions[layerIndex].objectNames, placement.layerDescriptions[layerIndex].numMeshes, objectIndex);
 		}
 		gui.textF("Mouse position: %.3f, %.3f", mousePosition.x, mousePosition.y);
 
@@ -230,7 +231,7 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 		brushCB.brushRadius = brushRadius;
 		brushCB.brushHardness = (1.f - brushHardness) * 5.f;
 		brushCB.brushStrength = brushStrength * 10.f * dt;
-		brushCB.channel = densityMapIndex;
+		brushCB.channel = objectIndex;
 
 
 		vertex_3PU vertices[] =
@@ -258,31 +259,37 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 
 			for (placement_tile& tile : placement.tiles)
 			{
-				if (tile.densities)
+				bounding_box tileBB = tile.aabb;
+
+				if (tile.aabb.intersectSphere(hitPosition, brushRadius))
 				{
-					bounding_box tileBB = tile.aabb;
+					placement_layer& layer = tile.layers[layerIndex];
 
-					if (tile.aabb.intersectSphere(hitPosition, brushRadius))
+					if (!layer.active)
 					{
-						densityRT.attachColorTexture(0, *tile.densities);
-						commandList->setRenderTarget(densityRT);
-						commandList->setViewport(densityRT.viewport);
-
-						vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
-
-						mat4 m = createTranslationMatrix(corner.x, tile.groundHeight, corner.y);
-
-						struct
-						{
-							mat4 m;
-						} modelCB =
-						{
-							m,
-						};
-
-						commandList->setGraphics32BitConstants(PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_MODEL, modelCB);
-						commandList->draw(4, 1, 0, 0);
+						tile.allocateLayer(layerIndex);
 					}
+
+					assert(layer.active);
+
+					densityRT.attachColorTexture(0, layer.densities);
+					commandList->setRenderTarget(densityRT);
+					commandList->setViewport(densityRT.viewport);
+
+					vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
+
+					mat4 m = createTranslationMatrix(corner.x, tile.groundHeight, corner.y);
+
+					struct
+					{
+						mat4 m;
+					} modelCB =
+					{
+						m,
+					};
+
+					commandList->setGraphics32BitConstants(PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_MODEL, modelCB);
+					commandList->draw(4, 1, 0, 0);
 				}
 			}
 
@@ -307,12 +314,12 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 
 			for (placement_tile& tile : placement.tiles)
 			{
-				if (tile.densities)
+				if (!frustum.cullWorldSpaceAABB(tile.aabb))
 				{
-					vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
-
-					if (!frustum.cullWorldSpaceAABB(tile.aabb))
+					placement_layer& layer = tile.layers[layerIndex];
+					if (layer.active)
 					{
+						vec2 corner(tile.cornerX * PROCEDURAL_TILE_SIZE, tile.cornerZ * PROCEDURAL_TILE_SIZE);
 						mat4 m = createTranslationMatrix(corner.x, tile.groundHeight, corner.y);
 
 						struct
@@ -326,19 +333,14 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 						};
 
 						commandList->setGraphics32BitConstants(PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_MODEL, modelCB);
-						commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_TEX, 0, *tile.densities, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+						commandList->setShaderResourceView(PROCEDURAL_PLACEMENT_EDITOR_ROOTPARAM_TEX, 0, layer.densities, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 						commandList->draw(4, 1, 0, 0);
 					}
 				}
-
 			}
 		}
 
-
-		for (dx_texture* texture : placement.distinctDensityTextures)
-		{
-			commandList->transitionBarrier(*texture, D3D12_RESOURCE_STATE_COMMON);
-		}
+		placement.transitionAllTexturesToCommon(commandList);
 	}
 
 #endif

@@ -37,7 +37,8 @@ struct procedural_placement_editor
 	float brushRadius = 10.f;
 	float brushStrength = 1.f;
 	float brushHardness = 0.8f;
-	uint32 densityMapIndex = 0;
+	placement_layer_name layerIndex = (placement_layer_name)0;
+	uint32 objectIndex = 0;
 
 	vec2 mousePosition;
 	bool mouseDown;
