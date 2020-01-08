@@ -57,6 +57,8 @@ struct debug_gui_interaction
 {
 	bool click;
 	bool hover;
+	bool downEvent;
+	bool upEvent;
 	float scroll;
 };
 
@@ -104,6 +106,7 @@ public:
 	bool mouseScrollCallback(mouse_scroll_event event);
 
 	vec2 mousePosition;
+	bool mouseDown;
 private:
 	enum event_type
 	{

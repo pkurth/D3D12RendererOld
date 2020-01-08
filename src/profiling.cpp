@@ -271,6 +271,10 @@ static uint32 displayProfileBlock(profile_display_state& state, debug_gui& gui, 
 
 static float frameWidth60FPS = 500.f;
 static uint64 lastFrameGlobalHighlightIndex = -1;
+static float callstackLeftOffset = 150.f;
+static uint32 interactionGUID = 0;
+static float scrollAnchor;
+static bool scrolling;
 
 static void displayProfileInfo(debug_gui& gui)
 {
@@ -282,7 +286,7 @@ static void displayProfileInfo(debug_gui& gui)
 	const float barWidth = 3.f;
 	const float barSpacing = 4.f;
 	const float bottom = 400.f;
-	const float leftOffset = 5.f;
+	const float barLeftOffset = 5.f;
 
 	DEBUG_TAB(gui, "Profiling")
 	{
@@ -310,7 +314,7 @@ static void displayProfileInfo(debug_gui& gui)
 			}
 
 			float height = frame->timeInSeconds / 0.0167f * chartHeight60FPS;
-			float left = frameIndex * barSpacing + leftOffset;
+			float left = frameIndex * barSpacing + barLeftOffset;
 			float right = left + barWidth;
 			float top = bottom - height;
 
@@ -333,8 +337,8 @@ static void displayProfileInfo(debug_gui& gui)
 			}
 		}
 
-		gui.quad(leftOffset, MAX_NUM_RECORDED_FRAMES * barSpacing, bottom - chartHeight30FPS - 1, bottom - chartHeight30FPS, 0xFFFFFFFF);
-		gui.quad(leftOffset, MAX_NUM_RECORDED_FRAMES * barSpacing, bottom - chartHeight60FPS - 1, bottom - chartHeight60FPS, 0xFFFFFFFF);
+		gui.quad(barLeftOffset, MAX_NUM_RECORDED_FRAMES * barSpacing, bottom - chartHeight30FPS - 1, bottom - chartHeight30FPS, 0xFFFFFFFF);
+		gui.quad(barLeftOffset, MAX_NUM_RECORDED_FRAMES * barSpacing, bottom - chartHeight60FPS - 1, bottom - chartHeight60FPS, 0xFFFFFFFF);
 
 		gui.textAt(MAX_NUM_RECORDED_FRAMES * barSpacing + 3.f, bottom - chartHeight30FPS - 1, 0xFFFFFFFF, "33.3 ms");
 		gui.textAt(MAX_NUM_RECORDED_FRAMES * barSpacing + 3.f, bottom - chartHeight60FPS - 1, 0xFFFFFFFF, "16.7 ms");
@@ -345,27 +349,26 @@ static void displayProfileInfo(debug_gui& gui)
 			float barHeight = 25.f;
 			float barSpacing = 30.f;
 			float frameWidth30FPS = frameWidth60FPS * 2.f;
-			float leftOffset = 150.f;
 
 			profile_frame* frame = recordedProfileFrames + highlightFrameIndex;
 			if (frame->endClock != 0)
 			{
 				if (frame->globalFrameID == -1)
 				{
-					gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Initialization");
+					gui.textAtF(callstackLeftOffset, topOffset - 60, 0xFFFFFFFF, "Initialization");
 
 					frameWidth60FPS = 2.f;
 					frameWidth30FPS = frameWidth60FPS * 2.f;
 				}
 				else
 				{
-					gui.textAtF(leftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %llu (%f ms)", frame->globalFrameID, frame->timeInSeconds * 1000.f);
+					gui.textAtF(callstackLeftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %llu (%f ms)", frame->globalFrameID, frame->timeInSeconds * 1000.f);
 				}
 
 				profile_display_state state;
 				state.colorIndex = 0;
 				state.frameWidth60FPS = frameWidth60FPS;
-				state.leftOffset = leftOffset;
+				state.leftOffset = callstackLeftOffset;
 				state.mouseHoverX = -1.f;
 				state.barHeight = barHeight;
 
@@ -380,9 +383,9 @@ static void displayProfileInfo(debug_gui& gui)
 
 					if (numLanesInThread)
 					{
-						gui.textAtF(leftOffset - 100.f, top + barHeight - 3, 0xFFFFFFFF, "Thread %u", threadIndex);
+						gui.textAtF(callstackLeftOffset - 100.f, top + barHeight - 3, 0xFFFFFFFF, "Thread %u", threadIndex);
 						top += numLanesInThread * barHeight + 2;
-						gui.quad(leftOffset - 100.f, leftOffset + frameWidth30FPS, top, top + 1, 0xFFFFFFFF);
+						gui.quad(callstackLeftOffset - 100.f, callstackLeftOffset + frameWidth30FPS, top, top + 1, 0xFFFFFFFF);
 					}
 				}
 
@@ -392,34 +395,53 @@ static void displayProfileInfo(debug_gui& gui)
 
 				if (frame->globalFrameID != -1)
 				{
-					gui.quad(leftOffset, leftOffset + 1, top, bottom, 0xFFFFFFFF);
-					gui.quad(leftOffset + frameWidth60FPS, leftOffset + frameWidth60FPS + 1, top, bottom, 0xFFFFFFFF);
-					gui.quad(leftOffset + frameWidth30FPS, leftOffset + frameWidth30FPS + 1, top, bottom, 0xFFFFFFFF);
+					gui.quad(callstackLeftOffset, callstackLeftOffset + 1, top, bottom, 0xFFFFFFFF);
+					gui.quad(callstackLeftOffset + frameWidth60FPS, callstackLeftOffset + frameWidth60FPS + 1, top, bottom, 0xFFFFFFFF);
+					gui.quad(callstackLeftOffset + frameWidth30FPS, callstackLeftOffset + frameWidth30FPS + 1, top, bottom, 0xFFFFFFFF);
 
-					gui.textAt(leftOffset, top, 0xFFFFFFFF, "0 ms");
-					gui.textAt(leftOffset + frameWidth60FPS, top, 0xFFFFFFFF, "16.7 ms");
-					gui.textAt(leftOffset + frameWidth30FPS, top, 0xFFFFFFFF, "33.3 ms");
+					gui.textAt(callstackLeftOffset, top, 0xFFFFFFFF, "0 ms");
+					gui.textAt(callstackLeftOffset + frameWidth60FPS, top, 0xFFFFFFFF, "16.7 ms");
+					gui.textAt(callstackLeftOffset + frameWidth30FPS, top, 0xFFFFFFFF, "33.3 ms");
 
 					float millisecondSpacing = frameWidth30FPS / 33.3f;
 					for (uint32 i = 1; i <= 33; ++i)
 					{
 						uint32 color = (i % 5 == 0) ? 0xEAFFFFFF : 0x7AFFFFFF;
-						gui.quad(leftOffset + i * millisecondSpacing, leftOffset + i * millisecondSpacing + 1.f, top, bottom, color);
+						gui.quad(callstackLeftOffset + i * millisecondSpacing, callstackLeftOffset + i * millisecondSpacing + 1.f, top, bottom, color);
 					}
 				}
 
 				if (state.mouseHoverX > 0.f)
 				{
 					gui.quad(state.mouseHoverX, state.mouseHoverX + 1.f, top, bottom, color_32(255, 255, 0, 255));
-					float time = (state.mouseHoverX - leftOffset) / frameWidth30FPS * 33.3f;
+					float time = (state.mouseHoverX - callstackLeftOffset) / frameWidth30FPS * 33.3f;
 					gui.textAtF(state.mouseHoverX, top, color_32(255, 255, 0, 255), "%.3f ms", time);
 				}
 
-				float scroll = gui.quadScroll(leftOffset, 10000.f, topOffset, bottom, 0x0);
-				frameWidth60FPS += scroll * 30.f;
-				if (frameWidth60FPS < 200.f)
+				debug_gui_interaction interaction = gui.interactableQuad((uint64)&interactionGUID, callstackLeftOffset, 10000.f, topOffset, bottom, 0x0);
+				if (interaction.scroll != 0.f)
 				{
-					frameWidth60FPS = 200.f;
+					float oldWidth = frameWidth60FPS;
+					float oldRelMouseX = inverseLerp(callstackLeftOffset, callstackLeftOffset + frameWidth60FPS, gui.mousePosition.x);
+					frameWidth60FPS += interaction.scroll * 60.f;
+					if (frameWidth60FPS < 200.f)
+					{
+						frameWidth60FPS = 200.f;
+					}
+					callstackLeftOffset = gui.mousePosition.x - oldRelMouseX * frameWidth60FPS;
+				}
+				if (gui.mouseDown && interaction.downEvent)
+				{
+					scrollAnchor = gui.mousePosition.x - callstackLeftOffset;
+					scrolling = true;
+				}
+				if (!gui.mouseDown)
+				{
+					scrolling = false;
+				}
+				else if (scrolling)
+				{
+					callstackLeftOffset = gui.mousePosition.x - scrollAnchor;
 				}
 			}
 

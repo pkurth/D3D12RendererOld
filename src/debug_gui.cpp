@@ -452,6 +452,15 @@ debug_gui_interaction debug_gui::interactableQuad(uint64 guid, float left, float
 		color = (DEBUG_GUI_HOVERED_COLOR & 0xFFFFFF) | (color & 0xFF000000);
 		result.hover = true;
 		result.scroll = mouseScroll;
+
+		if (lastEventType == event_type_down)
+		{
+			result.downEvent = true;
+		}
+		if (lastEventType == event_type_up)
+		{
+			result.upEvent = true;
+		}
 	}
 	quad(left, right, top, bottom, color);
 
@@ -541,6 +550,7 @@ bool debug_gui::mouseDownCallback(mouse_button_event event)
 	if (event.button == mouse_left)
 	{
 		lastEventType = event_type_down;
+		mouseDown = true;
 	}
 	return false;
 }
@@ -551,6 +561,7 @@ bool debug_gui::mouseUpCallback(mouse_button_event event)
 	if (event.button == mouse_left)
 	{
 		lastEventType = event_type_up;
+		mouseDown = false;
 	}
 	return false;
 }
