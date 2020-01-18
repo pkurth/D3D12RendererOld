@@ -36,6 +36,7 @@ enum placement_layer_name
 {
 	placement_layer_grass_and_pebbles,	"Grass and pebbles",
 	placement_layer_cubes_and_spheres,	"Cubes and spheres",
+	placement_layer_trees,				"Trees",
 
 	placement_layer_count,				"Count",
 };
@@ -87,7 +88,8 @@ struct procedural_placement
 		const std::vector<submesh_info>& submeshes, 
 		const std::vector<placement_mesh>& grassMeshes,
 		const placement_mesh& cubeMesh,
-		const placement_mesh& sphereMesh
+		const placement_mesh& sphereMesh,
+		const placement_mesh& treeMesh
 	);
 
 	void generate(const render_camera& camera);

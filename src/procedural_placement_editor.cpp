@@ -193,10 +193,15 @@ void procedural_placement_editor::update(dx_command_list* commandList, const ren
 			gui.slider("Brush radius", brushRadius, 0.1f, 50.f);
 			gui.slider("Brush hardness", brushHardness, 0.f, 1.f);
 			gui.slider("Brush strength", brushStrength, 0.f, 1.f);
+		}
+
+		DEBUG_GROUP(gui, "Layer")
+		{
 			gui.radio("Layer", placementLayerNames, placement_layer_count, (uint32&)layerIndex);
+			gui.slider("Footprint", placement.layerDescriptions[layerIndex].objectFootprint, PROCEDURAL_MIN_FOOTPRINT, 10.f);
 			gui.radio("Object type", placement.layerDescriptions[layerIndex].objectNames, placement.layerDescriptions[layerIndex].numDensityMaps, objectIndex);
 		}
-		gui.textF("Mouse position: %.3f, %.3f", mousePosition.x, mousePosition.y);
+
 
 		ray r = camera.getWorldSpaceRay(mousePosition.x, mousePosition.y);
 		camera_frustum_planes frustum = camera.getWorldSpaceFrustumPlanes();

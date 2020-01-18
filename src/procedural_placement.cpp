@@ -41,7 +41,8 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 	const std::vector<submesh_info>& submeshes,
 	const std::vector<placement_mesh>& grassMeshes,
 	const placement_mesh& cubeMesh,
-	const placement_mesh& sphereMesh)
+	const placement_mesh& sphereMesh,
+	const placement_mesh& treeMesh)
 {
 	{
 		ComPtr<ID3DBlob> shaderBlob;
@@ -243,9 +244,11 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 	append(meshes, grassMeshes);
 	meshes.push_back(cubeMesh);
 	meshes.push_back(sphereMesh);
+	meshes.push_back(treeMesh);
 
 	uint32 cubeMeshOffset = (uint32)grassMeshes.size();
 	uint32 sphereMeshOffset = cubeMeshOffset + 1;
+	uint32 treeMeshOffset = sphereMeshOffset + 1;
 
 	uint32 i = 0;
 	for (int32 z = -numTilesZ / 2; z < numTilesZ / 2; ++z)
@@ -286,6 +289,12 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 	layerDescriptions[placement_layer_cubes_and_spheres].objectNames[1] = "Spheres";
 	layerDescriptions[placement_layer_cubes_and_spheres].options[1].offset = sphereMeshOffset;
 	layerDescriptions[placement_layer_cubes_and_spheres].options[1].count = 1;
+
+	layerDescriptions[placement_layer_trees].numDensityMaps = 1;
+	layerDescriptions[placement_layer_trees].objectFootprint = 6.f;
+	layerDescriptions[placement_layer_trees].objectNames[0] = "Trees";
+	layerDescriptions[placement_layer_trees].options[0].offset = treeMeshOffset;
+	layerDescriptions[placement_layer_trees].options[0].count = 1;
 
 
 	radiusInUVSpace = sqrt(1.f / (2.f * sqrt(3.f) * arraysize(POISSON_SAMPLES)));

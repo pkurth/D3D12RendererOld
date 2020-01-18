@@ -408,7 +408,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 
 	proceduralPlacement.initialize(device, commandList, placementSubmeshes, 
 		{ grass0PlacementMesh, grass1PlacementMesh, grass2PlacementMesh, grass3PlacementMesh },
-		cubePlacementMesh, spherePlacementMesh);
+		cubePlacementMesh, spherePlacementMesh,
+		oakPlacementMesh);
 	proceduralPlacementEditor.initialize(device, lightingRT);
 
 

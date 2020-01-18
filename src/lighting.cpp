@@ -94,6 +94,9 @@ void light_probe_system::initialize(ComPtr<ID3D12Device2> device, dx_command_lis
 	lightProbeRT.attachDepthStencilTexture(lightProbeDepthTexture);
 
 
+	dx_resource_state_tracker::addGlobalResourceState(lightProbeHDRTexture.resource.Get(), D3D12_RESOURCE_STATE_COMMON, hdrTextureDesc.DepthOrArraySize);
+	dx_resource_state_tracker::addGlobalResourceState(lightProbeDepthTexture.resource.Get(), D3D12_RESOURCE_STATE_COMMON, depthDesc.DepthOrArraySize);
+	
 
 
 	// Visualization pipelines.
