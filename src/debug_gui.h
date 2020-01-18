@@ -107,6 +107,9 @@ public:
 
 	vec2 mousePosition;
 	bool mouseDown;
+
+	float textHeight;
+
 private:
 	enum event_type
 	{
@@ -145,7 +148,6 @@ private:
 	void endGroupInternal();
 
 
-	float textHeight;
 	dx_font font;
 
 

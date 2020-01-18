@@ -269,12 +269,62 @@ static uint32 displayProfileBlock(profile_display_state& state, debug_gui& gui, 
 	return result;
 }
 
-static float frameWidth60FPS = 500.f;
-static uint64 lastFrameGlobalHighlightIndex = -1;
-static float callstackLeftOffset = 150.f;
+struct profile_block_statistics
+{
+	uint32 numCalls;
+	float totalDuration;
+	float averageDuration;
+};
+
+static void accumulateTimings(profile_block* topLevelBlock, std::unordered_map<const char*, profile_block_statistics>& outTimings)
+{
+	for (profile_block* block = topLevelBlock; block; block = block->nextSibling)
+	{
+		float duration = ((float)(block->endClock - block->startClock) / (float)performanceFrequency);
+
+		profile_block_statistics& stat = outTimings[block->info];
+		++stat.numCalls;
+		stat.totalDuration += duration;
+
+		accumulateTimings(block->firstChild, outTimings);
+	}
+}
+
+static std::unordered_map<const char*, profile_block_statistics> accumulateTimings(profile_frame* frame)
+{
+	std::unordered_map<const char*, profile_block_statistics> timings;
+
+	for (uint32 threadIndex = 0; threadIndex < MAX_NUM_RECORDED_THREADS; ++threadIndex)
+	{
+		profile_block* topLevelBlock = frame->firstTopLevelBlockPerThread[threadIndex];
+
+		accumulateTimings(topLevelBlock, timings);
+	}
+
+	for (auto& it : timings)
+	{
+		it.second.averageDuration = it.second.totalDuration / it.second.numCalls;
+	}
+
+	return timings;
+}
+
+static std::unordered_map<const char*, profile_block_statistics> selectedFrameAccumulatedTimings;
+
+static float normalFrameWidth60FPS = 500.f;
+static float initializationFrameWidth60FPS = 2.f;
+
+static float normalCallstackLeftOffset = 150.f;
+static float initializationCallstackLeftOffset = 150.f;
+
+static float frameWidth60FPS;
+static float callstackLeftOffset;
+
 static uint32 interactionGUID = 0;
 static float scrollAnchor;
 static bool scrolling;
+
+static profile_display_mode displayMode;
 
 static void displayProfileInfo(debug_gui& gui)
 {
@@ -300,6 +350,7 @@ static void displayProfileInfo(debug_gui& gui)
 				}
 			}
 		}
+		gui.radio("Display mode", displayModeNames, profile_display_mode_count, (uint32&)displayMode);
 
 		uint32 initColor = color_32(0, 255, 0, 255);
 		uint32 frameColor = color_32(255, 0, 0, 255);
@@ -326,6 +377,10 @@ static void displayProfileInfo(debug_gui& gui)
 				if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Initialization"))
 				{
 					highlightFrameIndex = frameIndex;
+					frameWidth60FPS = initializationFrameWidth60FPS;
+					callstackLeftOffset = initializationCallstackLeftOffset;
+
+					selectedFrameAccumulatedTimings = accumulateTimings(frame);
 				}
 			}
 			else
@@ -333,6 +388,10 @@ static void displayProfileInfo(debug_gui& gui)
 				if (gui.quadButton((uint64)frame, left, right, top, bottom, color, "Frame %llu (%f ms)", frame->globalFrameID, frame->timeInSeconds * 1000.f))
 				{
 					highlightFrameIndex = frameIndex;
+					frameWidth60FPS = normalFrameWidth60FPS;
+					callstackLeftOffset = normalCallstackLeftOffset;
+
+					selectedFrameAccumulatedTimings = accumulateTimings(frame);
 				}
 			}
 		}
@@ -355,103 +414,138 @@ static void displayProfileInfo(debug_gui& gui)
 			{
 				if (frame->globalFrameID == -1)
 				{
-					gui.textAtF(callstackLeftOffset, topOffset - 60, 0xFFFFFFFF, "Initialization");
-
-					frameWidth60FPS = 2.f;
-					frameWidth30FPS = frameWidth60FPS * 2.f;
+					gui.textAtF(callstackLeftOffset, topOffset - 60, 0xFFFFFFFF, "Initialization (%fs)", frame->timeInSeconds);
 				}
 				else
 				{
 					gui.textAtF(callstackLeftOffset, topOffset - 60, 0xFFFFFFFF, "Frame %llu (%f ms)", frame->globalFrameID, frame->timeInSeconds * 1000.f);
 				}
 
-				profile_display_state state;
-				state.colorIndex = 0;
-				state.frameWidth60FPS = frameWidth60FPS;
-				state.leftOffset = callstackLeftOffset;
-				state.mouseHoverX = -1.f;
-				state.barHeight = barHeight;
-
-
-				// Display call stacks.
-				uint32 currentLane = 0;
-				for (uint32 threadIndex = 0; threadIndex < MAX_NUM_RECORDED_THREADS; ++threadIndex)
+				if (displayMode == profile_display_callstack)
 				{
-					float top = currentLane * barSpacing + topOffset;
-					uint32 numLanesInThread = displayProfileBlock(state, gui, frame, frame->firstTopLevelBlockPerThread[threadIndex], top);
-					currentLane += numLanesInThread;
+					profile_display_state state;
+					state.colorIndex = 0;
+					state.frameWidth60FPS = frameWidth60FPS;
+					state.leftOffset = callstackLeftOffset;
+					state.mouseHoverX = -1.f;
+					state.barHeight = barHeight;
 
-					if (numLanesInThread)
+
+					// Display call stacks.
+					uint32 currentLane = 0;
+					for (uint32 threadIndex = 0; threadIndex < MAX_NUM_RECORDED_THREADS; ++threadIndex)
 					{
-						gui.textAtF(callstackLeftOffset - 100.f, top + barHeight - 3, 0xFFFFFFFF, "Thread %u", threadIndex);
-						top += numLanesInThread * barHeight + 2;
-						gui.quad(callstackLeftOffset - 100.f, callstackLeftOffset + frameWidth30FPS, top, top + 1, 0xFFFFFFFF);
+						float top = currentLane * barSpacing + topOffset;
+						uint32 numLanesInThread = displayProfileBlock(state, gui, frame, frame->firstTopLevelBlockPerThread[threadIndex], top);
+						currentLane += numLanesInThread;
+
+						if (numLanesInThread)
+						{
+							gui.textAtF(callstackLeftOffset - 100.f, top + barHeight - 3, 0xFFFFFFFF, "Thread %u", threadIndex);
+							top += numLanesInThread * barHeight + 2;
+							gui.quad(callstackLeftOffset - 100.f, callstackLeftOffset + frameWidth30FPS, top, top + 1, 0xFFFFFFFF);
+						}
+					}
+
+					// Display millisecond spacings.
+					float top = topOffset - 30.f;
+					float bottom = topOffset + currentLane * barSpacing + 30.f;
+
+					if (frame->globalFrameID != -1)
+					{
+						gui.quad(callstackLeftOffset, callstackLeftOffset + 1, top, bottom, 0xFFFFFFFF);
+						gui.quad(callstackLeftOffset + frameWidth60FPS, callstackLeftOffset + frameWidth60FPS + 1, top, bottom, 0xFFFFFFFF);
+						gui.quad(callstackLeftOffset + frameWidth30FPS, callstackLeftOffset + frameWidth30FPS + 1, top, bottom, 0xFFFFFFFF);
+
+						gui.textAt(callstackLeftOffset, top, 0xFFFFFFFF, "0 ms");
+						gui.textAt(callstackLeftOffset + frameWidth60FPS, top, 0xFFFFFFFF, "16.7 ms");
+						gui.textAt(callstackLeftOffset + frameWidth30FPS, top, 0xFFFFFFFF, "33.3 ms");
+
+						float millisecondSpacing = frameWidth30FPS / 33.3f;
+						for (uint32 i = 1; i <= 33; ++i)
+						{
+							uint32 color = (i % 5 == 0) ? 0xEAFFFFFF : 0x7AFFFFFF;
+							gui.quad(callstackLeftOffset + i * millisecondSpacing, callstackLeftOffset + i * millisecondSpacing + 1.f, top, bottom, color);
+						}
+					}
+					else
+					{
+						float secondSpacing = frameWidth30FPS / 33.3f * 1000.f;
+						uint32 lengthInSeconds = (uint32)ceil(frame->timeInSeconds);
+						for (uint32 i = 0; i < lengthInSeconds; ++i)
+						{
+							uint32 color = (i % 5 == 0) ? 0xEAFFFFFF : 0x7AFFFFFF;
+							gui.quad(callstackLeftOffset + i * secondSpacing, callstackLeftOffset + i * secondSpacing + 1.f, top, bottom, color);
+							gui.textAtF(callstackLeftOffset + i * secondSpacing, top, 0xFFFFFFFF, "%us", i);
+						}
+					}
+
+					if (state.mouseHoverX > 0.f)
+					{
+						gui.quad(state.mouseHoverX, state.mouseHoverX + 1.f, top, bottom, color_32(255, 255, 0, 255));
+						float time = (state.mouseHoverX - callstackLeftOffset) / frameWidth30FPS * 33.3f;
+						gui.textAtF(state.mouseHoverX, top, color_32(255, 255, 0, 255), "%.3f ms", time);
+					}
+
+					debug_gui_interaction interaction = gui.interactableQuad((uint64)&interactionGUID, callstackLeftOffset, 10000.f, topOffset, bottom, 0x0);
+					if (interaction.scroll != 0.f)
+					{
+						float oldWidth = frameWidth60FPS;
+						float oldRelMouseX = inverseLerp(callstackLeftOffset, callstackLeftOffset + frameWidth60FPS, gui.mousePosition.x);
+						frameWidth60FPS += interaction.scroll * 60.f;
+
+						if (frame->globalFrameID == -1)
+						{
+							if (frameWidth60FPS < 1.f)
+							{
+								frameWidth60FPS = 1.f;
+							}
+						}
+						else
+						{
+							if (frameWidth60FPS < 200.f)
+							{
+								frameWidth60FPS = 200.f;
+							}
+						}
+						callstackLeftOffset = gui.mousePosition.x - oldRelMouseX * frameWidth60FPS;
+					}
+					if (gui.mouseDown && interaction.downEvent)
+					{
+						scrollAnchor = gui.mousePosition.x - callstackLeftOffset;
+						scrolling = true;
+					}
+					if (!gui.mouseDown)
+					{
+						scrolling = false;
+					}
+					else if (scrolling)
+					{
+						callstackLeftOffset = gui.mousePosition.x - scrollAnchor;
+					}
+
+
+					if (frame->globalFrameID == -1)
+					{
+						initializationFrameWidth60FPS = frameWidth60FPS;
+						initializationCallstackLeftOffset = callstackLeftOffset;
+					}
+					else
+					{
+						normalFrameWidth60FPS = frameWidth60FPS;
+						normalCallstackLeftOffset = callstackLeftOffset;
 					}
 				}
-
-				// Display millisecond spacings.
-				float top = topOffset - 30.f;
-				float bottom = topOffset + currentLane * barSpacing + 30.f;
-
-				if (frame->globalFrameID != -1)
+				else
 				{
-					gui.quad(callstackLeftOffset, callstackLeftOffset + 1, top, bottom, 0xFFFFFFFF);
-					gui.quad(callstackLeftOffset + frameWidth60FPS, callstackLeftOffset + frameWidth60FPS + 1, top, bottom, 0xFFFFFFFF);
-					gui.quad(callstackLeftOffset + frameWidth30FPS, callstackLeftOffset + frameWidth30FPS + 1, top, bottom, 0xFFFFFFFF);
-
-					gui.textAt(callstackLeftOffset, top, 0xFFFFFFFF, "0 ms");
-					gui.textAt(callstackLeftOffset + frameWidth60FPS, top, 0xFFFFFFFF, "16.7 ms");
-					gui.textAt(callstackLeftOffset + frameWidth30FPS, top, 0xFFFFFFFF, "33.3 ms");
-
-					float millisecondSpacing = frameWidth30FPS / 33.3f;
-					for (uint32 i = 1; i <= 33; ++i)
+					uint32 row = 0;
+					for (auto& it : selectedFrameAccumulatedTimings)
 					{
-						uint32 color = (i % 5 == 0) ? 0xEAFFFFFF : 0x7AFFFFFF;
-						gui.quad(callstackLeftOffset + i * millisecondSpacing, callstackLeftOffset + i * millisecondSpacing + 1.f, top, bottom, color);
+						gui.textAtF(150, topOffset + row * gui.textHeight, 0xFFFFFFFF, "%s: %f ms", it.first, it.second.totalDuration * 1000.f);
+						++row;
 					}
-				}
-
-				if (state.mouseHoverX > 0.f)
-				{
-					gui.quad(state.mouseHoverX, state.mouseHoverX + 1.f, top, bottom, color_32(255, 255, 0, 255));
-					float time = (state.mouseHoverX - callstackLeftOffset) / frameWidth30FPS * 33.3f;
-					gui.textAtF(state.mouseHoverX, top, color_32(255, 255, 0, 255), "%.3f ms", time);
-				}
-
-				debug_gui_interaction interaction = gui.interactableQuad((uint64)&interactionGUID, callstackLeftOffset, 10000.f, topOffset, bottom, 0x0);
-				if (interaction.scroll != 0.f)
-				{
-					float oldWidth = frameWidth60FPS;
-					float oldRelMouseX = inverseLerp(callstackLeftOffset, callstackLeftOffset + frameWidth60FPS, gui.mousePosition.x);
-					frameWidth60FPS += interaction.scroll * 60.f;
-					if (frameWidth60FPS < 200.f)
-					{
-						frameWidth60FPS = 200.f;
-					}
-					callstackLeftOffset = gui.mousePosition.x - oldRelMouseX * frameWidth60FPS;
-				}
-				if (gui.mouseDown && interaction.downEvent)
-				{
-					scrollAnchor = gui.mousePosition.x - callstackLeftOffset;
-					scrolling = true;
-				}
-				if (!gui.mouseDown)
-				{
-					scrolling = false;
-				}
-				else if (scrolling)
-				{
-					callstackLeftOffset = gui.mousePosition.x - scrollAnchor;
 				}
 			}
-
-			if (frame->globalFrameID != lastFrameGlobalHighlightIndex)
-			{
-				// Sum up timings.
-				//std::unordered_map<const char*, float> timings;
-			}
-
-			lastFrameGlobalHighlightIndex = frame->globalFrameID;
 		}
 	}
 }

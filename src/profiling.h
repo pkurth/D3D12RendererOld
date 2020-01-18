@@ -25,6 +25,16 @@ struct profile_event
 	};
 };
 
+STRINGIFY_ENUM(displayModeNames,
+	enum profile_display_mode
+{
+	profile_display_callstack, "Display callstack",
+	profile_display_timings_list, "Display timings list",
+
+	profile_display_mode_count, "Count",
+};
+)
+
 static_assert(sizeof(profile_event) == 24, "Profile event struct is misaligned or something.");
 
 #define MAX_NUM_PROFILE_EVENTS 16384
