@@ -62,17 +62,15 @@ static float sampleShadowMap(float4x4 vp, float3 worldPosition, Texture2D<float>
 	lightUV.y = 1.f - lightUV.y;
 
 	float visibility = 0.f;
-	uint count = 0;
 
-	for (int y = -2; y <= 2; ++y)
+	for (float y = -1.5f; y <= 1.5f; y += 1.f)
 	{
-		for (int x = -2; x <= 2; ++x)
+		for (float x = -1.5f; x <= 1.5f; x += 1.f)
 		{
 			visibility += shadowMap.SampleCmpLevelZero(shadowMapSampler, lightUV + float2(x, y) * texelSize, lightProjected.z - bias);
-			++count;
 		}
 	}
-	visibility /= count;
+	visibility /= 16.f;
 	return visibility;
 }
 

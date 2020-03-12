@@ -23,7 +23,7 @@ void initializeCommonGraphicsItems();
 CD3DX12_STATIC_SAMPLER_DESC staticPointClampSampler(uint32 shaderRegister);
 CD3DX12_STATIC_SAMPLER_DESC staticLinearClampSampler(uint32 shaderRegister);
 CD3DX12_STATIC_SAMPLER_DESC staticLinearWrapSampler(uint32 shaderRegister);
-CD3DX12_STATIC_SAMPLER_DESC staticPointBorderComparisonSampler(uint32 shaderRegister);
+CD3DX12_STATIC_SAMPLER_DESC staticShadowMapSampler(uint32 shaderRegister);
 
 #if defined(PROFILE) || defined(_DEBUG)
 #define SET_NAME(obj, name) checkResult(obj->SetName(L##name));

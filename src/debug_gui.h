@@ -84,6 +84,10 @@ public:
 	bool multislider(const char* name, float* values, uint32 numValues, float min, float max, float minDistance);
 	bool radio(const char* name, const char** values, uint32 numValues, uint32& currentValue);
 
+	void graph(float* values, uint32 numValues, float min, float max);
+	void graph(float (*eval_func)(void* data, float normX), uint32 numValues, float min, float max, void* data, 
+		void (*manip_func)(void* data, debug_gui& gui) = nullptr);
+
 	void quad(float left, float right, float top, float bottom, uint32 color);
 	bool quadButton(uint64 guid, float left, float right, float top, float bottom, uint32 color, const char* formatOnHover = nullptr, ...);
 	bool quadHover(float left, float right, float top, float bottom, uint32 color);

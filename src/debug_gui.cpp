@@ -860,6 +860,105 @@ bool debug_gui::radio(const char* name, const char** values, uint32 numValues, u
 	return originalValue != currentValue;
 }
 
+void debug_gui::graph(float* values, uint32 numValues, float min, float max)
+{
+	assert(numValues > 1);
+
+	const float graphSize = 200.f;
+
+	float stepSize = 1.f / (numValues - 1);
+
+	for (uint32 i = 0; i < numValues - 1; ++i)
+	{
+		float x0 = graphSize * i * stepSize;
+		float y0 = remap(values[i], min, max, 0.f, graphSize);
+		float x1 = graphSize * (i + 1) * stepSize;
+		float y1 = remap(values[i + 1], min, max, 0.f, graphSize);
+
+		y0 = graphSize - y0 + cursorY;
+		y1 = graphSize - y1 + cursorY;
+
+		float cursorX = getCursorX();
+		x0 += cursorX;
+		x1 += cursorX;
+
+		float thickness = 1.5f;
+
+		vec2 p0(x0, y0);
+		vec2 p1(x1, y1);
+		vec2 d(x1 - x0, y1 - y0);
+
+		vec2 n(-d.y, d.x);
+		float l = sqrt(n.x * n.x + n.y * n.y); // Must be > 0.
+		n.x *= thickness / l;
+		n.y *= thickness / l;
+
+		uint32 color = 0xFFFFFFFF;
+		currentShapeVertices.push_back({ p0 - n, color });
+		currentShapeVertices.push_back({ p1 - n, color });
+		currentShapeVertices.push_back({ p0 + n, color });
+		currentShapeVertices.push_back({ p1 + n, color });
+	}
+
+	cursorY += graphSize;
+}
+
+void debug_gui::graph(float(* eval_func)(void* data, float normX), uint32 numValues, float min, float max, void* data, 
+	void(* manip_func)(void* data, debug_gui& gui))
+{
+	float origCursorY = cursorY;
+
+	if (manip_func)
+	{
+		level += 21;
+		manip_func(data, *this);
+		level -= 21;
+	}
+
+	assert(numValues > 1);
+
+	const float graphSize = 200.f;
+
+	float stepSize = 1.f / (numValues - 1);
+
+	for (uint32 i = 0; i < numValues - 1; ++i)
+	{
+		float x0 = graphSize * i * stepSize;
+		float y0 = remap(eval_func(data, i * stepSize), min, max, 0.f, graphSize);
+		float x1 = graphSize * (i + 1) * stepSize;
+		float y1 = remap(eval_func(data, (i + 1) * stepSize), min, max, 0.f, graphSize);
+
+		y0 = graphSize - y0 + origCursorY;
+		y1 = graphSize - y1 + origCursorY;
+
+		float cursorX = getCursorX();
+		x0 += cursorX;
+		x1 += cursorX;
+
+		float thickness = 1.5f;
+
+		vec2 p0(x0, y0);
+		vec2 p1(x1, y1);
+		vec2 d(x1 - x0, y1 - y0);
+
+		vec2 n(-d.y, d.x);
+		float l = sqrt(n.x * n.x + n.y * n.y); // Must be > 0.
+		n.x *= thickness / l;
+		n.y *= thickness / l;
+
+		uint32 color = 0xFFFFFFFF;
+		currentShapeVertices.push_back({ p0 - n, color });
+		currentShapeVertices.push_back({ p1 - n, color });
+		currentShapeVertices.push_back({ p0 + n, color });
+		currentShapeVertices.push_back({ p1 + n, color });
+	}
+
+	if (cursorY < origCursorY + graphSize)
+	{
+		cursorY = origCursorY + graphSize;
+	}
+}
+
 bool debug_gui::beginGroupInternal(const char* name, bool& isOpen)
 {
 	const float scale = 1.1f;

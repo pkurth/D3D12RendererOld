@@ -100,11 +100,10 @@ ps_output main(ps_input IN)
 
 		float currentPixelDepth = dot(camera.forward.xyz, camToP);
 		float4 comparison = float4(currentPixelDepth, currentPixelDepth, currentPixelDepth, currentPixelDepth) > cascadeDistances;
-		float index = dot(float4(numCascades > 0, numCascades > 1, numCascades > 2, numCascades > 3), comparison);
-
-		index = min(index, float(numCascades - 1));
-
-		int currentCascadeIndex = int(index);
+		
+		int currentCascadeIndex = dot(float4(numCascades > 0, numCascades > 1, numCascades > 2, numCascades > 3), comparison);
+		currentCascadeIndex = min(currentCascadeIndex, numCascades - 1);
+		
 		int nextCascadeIndex = min(numCascades - 1, currentCascadeIndex + 1);
 
 		float4 bias = sun.bias;

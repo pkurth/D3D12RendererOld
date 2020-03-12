@@ -85,13 +85,13 @@ void procedural_placement::initialize(ComPtr<ID3D12Device2> device, dx_command_l
 		ComPtr<ID3DBlob> shaderBlob;
 		checkResult(D3DReadFileToBlob(L"shaders/bin/procedural_placement_prefix_sum.cso", &shaderBlob));
 
-		CD3DX12_DESCRIPTOR_RANGE1 inputBuffer(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-		CD3DX12_DESCRIPTOR_RANGE1 outputBuffer(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+		CD3DX12_DESCRIPTOR_RANGE1 srvs(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+		CD3DX12_DESCRIPTOR_RANGE1 uavs(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_CB].InitAsConstants(1, 0);
-		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS].InitAsDescriptorTable(1, &inputBuffer);
-		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS].InitAsDescriptorTable(1, &outputBuffer);
+		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_SRVS].InitAsDescriptorTable(1, &srvs);
+		rootParameters[PROCEDURAL_PLACEMENT_ROOTPARAM_UAVS].InitAsDescriptorTable(1, &uavs);
 
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};

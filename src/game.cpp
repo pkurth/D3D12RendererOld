@@ -24,7 +24,7 @@
 		- Raytracing.
 */
 
-#define ENABLE_SPONZA 0
+#define ENABLE_SPONZA 1
 #define ENABLE_PARTICLES 0
 #define ENABLE_PROCEDURAL 1
 #define ENABLE_PROCEDURAL_SHADOWS 0
@@ -515,7 +515,41 @@ void dx_game::update(float dt)
 		DEBUG_GROUP(gui, "Camera")
 		{
 			gui.textF("Camera position: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
-			gui.slider("Near plane", camera.nearPlane, 0.1f, 10.f);
+			gui.slider("Near plane", camera.nearPlane, 0.1f, 10.f);			
+		}
+
+		DEBUG_GROUP(gui, "Tone mapping")
+		{
+			auto tonemappingSettings = [](void* data, debug_gui& gui)
+			{
+				aces_tonemap_params& tonemapParams = *(aces_tonemap_params*)data;
+				gui.slider("Shoulder strength", tonemapParams.A, 0.f, 1.f);
+				gui.slider("Linear strength", tonemapParams.B, 0.f, 1.f);
+				gui.slider("Linear angle", tonemapParams.C, 0.f, 1.f);
+				gui.slider("Toe strength", tonemapParams.D, 0.f, 1.f);
+				gui.slider("Toe numerator", tonemapParams.E, 0.f, 1.f);
+				gui.slider("Toe denominator", tonemapParams.F, 0.f, 1.f);
+				gui.slider("Linear white", tonemapParams.linearWhite, 0.f, 50.f);
+				gui.slider("Exposure", tonemapParams.exposure, -2.f, 2.f);
+			};
+
+			auto tonemappingEval = [](void* data, float normX)
+			{
+				aces_tonemap_params& tonemapParams = *(aces_tonemap_params*)data;
+				float A = tonemapParams.A;
+				float B = tonemapParams.B;
+				float C = tonemapParams.C;
+				float D = tonemapParams.D;
+				float E = tonemapParams.E;
+				float F = tonemapParams.F;
+
+				normX *= 10.f;
+				normX *= exp2(tonemapParams.exposure);
+				return (((normX * (A * normX + C * B) + D * E) / (normX * (A * normX + B) + D * F)) - (E / F)) /
+					(((tonemapParams.linearWhite * (A * tonemapParams.linearWhite + C * B) + D * E) / (tonemapParams.linearWhite * (A * tonemapParams.linearWhite + B) + D * F)) - (E / F));
+			};
+
+			gui.graph(tonemappingEval, 30, 0.f, 1.f, &present.tonemapParams, tonemappingSettings);
 		}
 
 		DEBUG_GROUP(gui, "Lighting")

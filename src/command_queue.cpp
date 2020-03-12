@@ -237,7 +237,7 @@ void dx_command_queue::processInFlightCommandLists()
 
 void dx_command_queue::waitForOtherQueue(dx_command_queue& other)
 {
-	commandQueue->Wait(other.fence.Get(), other.fenceValue);
+	commandQueue->Wait(other.fence.Get(), other.signal());
 }
 
 void dx_command_queue::dx_transition_command_list::initialize(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE commandListType)

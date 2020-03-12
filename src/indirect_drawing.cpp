@@ -292,7 +292,7 @@ void indirect_pipeline::initialize(ComPtr<ID3D12Device2> device, const dx_render
 	{
 		staticLinearWrapSampler(0),
 		staticLinearClampSampler(1),
-		staticPointBorderComparisonSampler(2),
+		staticShadowMapSampler(2),
 	};
 
 	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};

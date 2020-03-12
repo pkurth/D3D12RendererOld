@@ -74,6 +74,16 @@ void present_pipeline::initialize(ComPtr<ID3D12Device2> device, const D3D12_RT_F
 
 	SET_NAME(rootSignature.rootSignature, "Present Root Signature");
 	SET_NAME(pipelineState, "Present Pipeline");
+
+
+	tonemapParams.exposure = 0.2f;
+	tonemapParams.A = 0.22f;
+	tonemapParams.B = 0.3f;
+	tonemapParams.C = 0.1f;
+	tonemapParams.D = 0.2f;
+	tonemapParams.E = 0.01f;
+	tonemapParams.F = 0.3f;
+	tonemapParams.linearWhite = 11.2f;
 }
 
 void present_pipeline::render(dx_command_list* commandList, dx_texture& hdrTexture)
@@ -96,31 +106,8 @@ void present_pipeline::render(dx_command_list* commandList, dx_texture& hdrTextu
 		0, 0.f
 	};
 
-	struct tonemap_cb
-	{
-		float A; // Shoulder strength.
-		float B; // Linear strength.
-		float C; // Linear angle.
-		float D; // Toe strength.
-		float E; // Toe Numerator.
-		float F; // Toe denominator.
-		// Note E/F = Toe angle.
-		float linearWhite;
-		float exposure; // 0 is default.
-	};
-
-	tonemap_cb tonemapCB;
-	tonemapCB.exposure = 0.2f;
-	tonemapCB.A = 0.22f;
-	tonemapCB.B = 0.3f;
-	tonemapCB.C = 0.1f;
-	tonemapCB.D = 0.2f;
-	tonemapCB.E = 0.01f;
-	tonemapCB.F = 0.3f;
-	tonemapCB.linearWhite = 11.2f;
-
 	commandList->setGraphics32BitConstants(PRESENT_ROOTPARAM_MODE, presentCB);
-	commandList->setGraphics32BitConstants(PRESENT_ROOTPARAM_TONEMAP, tonemapCB);
+	commandList->setGraphics32BitConstants(PRESENT_ROOTPARAM_TONEMAP, tonemapParams);
 
 	commandList->setShaderResourceView(PRESENT_ROOTPARAM_TEXTURE, 0, hdrTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
