@@ -14,7 +14,8 @@ void debug_gui::initialize(ComPtr<ID3D12Device2> device, dx_command_list* comman
 	resizeIndexBuffer(commandList, 2048);
 	level = 0;
 	font.initialize(commandList, "consola", 25, true);
-	textHeight = font.height * 0.75f;
+	baselineTextHeight = font.height * 0.75f;
+	textHeight = baselineTextHeight * guiScale;
 	cursorY = 0.00001f;
 	lastEventType = event_type_none;
 	activeID = 0;
@@ -470,7 +471,7 @@ debug_gui_interaction debug_gui::interactableQuad(uint64 guid, float left, float
 
 void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewport)
 {
-	assert(level == 0);
+	assert(abs(level) < 0.01f);
 
 	uint32 numFontIndices = (uint32)currentFontVertices.size() / 4 * 6;
 	uint32 numShapeIndices = (uint32)currentShapeVertices.size() / 4 * 6;
@@ -542,6 +543,7 @@ void debug_gui::render(dx_command_list* commandList, const D3D12_VIEWPORT& viewp
 	lastEventType = event_type_none;
 	mouseScroll = 0.f;
 	allTabsSeenThisFrame.clear();
+	textHeight = baselineTextHeight * guiScale;
 }
 
 bool debug_gui::mouseDownCallback(mouse_button_event event)
@@ -631,7 +633,7 @@ bool debug_gui::buttonInternal(uint64 id, const char* name, uint32 color, float 
 	if (isTab)
 	{
 		uint32 right = button >> 2;
-		tabAdvance = right + 100.f;
+		tabAdvance = right + 100.f * guiScale;
 	}
 
 	return button & 2;
@@ -672,7 +674,7 @@ bool debug_gui::button(const char* name)
 bool debug_gui::slider(const char* name, float& v, float min, float max)
 {
 	float left = getCursorX();
-	float right = left + 200.f;
+	float right = left + 200.f * guiScale;
 	float y = cursorY + textHeight * 0.75f;
 	float top = y - 1.5f;
 	float bottom = y + 1.5f;
@@ -731,7 +733,7 @@ bool debug_gui::slider(const char* name, float& v, float min, float max)
 bool debug_gui::multislider(const char* name, float* values, uint32 numValues, float min, float max, float minDistance)
 {
 	float left = getCursorX();
-	float right = left + 200.f;
+	float right = left + 200.f * guiScale;
 	float y = cursorY + textHeight * 0.75f;
 	float top = y - 1.5f;
 	float bottom = y + 1.5f;
@@ -864,7 +866,7 @@ void debug_gui::graph(float* values, uint32 numValues, float min, float max)
 {
 	assert(numValues > 1);
 
-	const float graphSize = 200.f;
+	const float graphSize = 200.f * guiScale;
 
 	float stepSize = 1.f / (numValues - 1);
 
@@ -910,29 +912,31 @@ void debug_gui::graph(float(* eval_func)(void* data, float normX), uint32 numVal
 
 	if (manip_func)
 	{
-		level += 21;
+		level += 21 * guiScale;
 		manip_func(data, *this);
-		level -= 21;
+		level -= 21 * guiScale;
 	}
 
 	assert(numValues > 1);
 
-	const float graphSize = 200.f;
+	const float graphSize = 200.f * guiScale;
 
 	float stepSize = 1.f / (numValues - 1);
 
+	float cursorX = getCursorX();
+
+	float x0 = 0.f;
+	float y0 = remap(eval_func(data, 0.f), min, max, 0.f, graphSize);
+
+	x0 += cursorX;
+	y0 = graphSize - y0 + origCursorY;
+
 	for (uint32 i = 0; i < numValues - 1; ++i)
 	{
-		float x0 = graphSize * i * stepSize;
-		float y0 = remap(eval_func(data, i * stepSize), min, max, 0.f, graphSize);
 		float x1 = graphSize * (i + 1) * stepSize;
 		float y1 = remap(eval_func(data, (i + 1) * stepSize), min, max, 0.f, graphSize);
 
-		y0 = graphSize - y0 + origCursorY;
 		y1 = graphSize - y1 + origCursorY;
-
-		float cursorX = getCursorX();
-		x0 += cursorX;
 		x1 += cursorX;
 
 		float thickness = 1.5f;
@@ -951,6 +955,9 @@ void debug_gui::graph(float(* eval_func)(void* data, float normX), uint32 numVal
 		currentShapeVertices.push_back({ p1 - n, color });
 		currentShapeVertices.push_back({ p0 + n, color });
 		currentShapeVertices.push_back({ p1 + n, color });
+
+		x0 = x1;
+		y0 = y1;
 	}
 
 	if (cursorY < origCursorY + graphSize)
@@ -983,7 +990,7 @@ void debug_gui::endGroupInternal()
 
 bool debug_gui::tab(const char* name)
 {
-	assert(level == 0);
+	assert(abs(level) < 0.01f);
 
 	const float scale = 1.5f;
 

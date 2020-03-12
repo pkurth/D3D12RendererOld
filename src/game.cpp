@@ -511,6 +511,7 @@ void dx_game::update(float dt)
 
 	DEBUG_TAB(gui, "General")
 	{
+		gui.slider("GUI scale", gui.guiScale, 0.1f, 1.5f);
 		gui.textF("Performance: %.2f fps (%.3f ms)", 1.f / dt, dt * 1000.f);
 		DEBUG_GROUP(gui, "Camera")
 		{

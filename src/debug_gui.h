@@ -113,8 +113,11 @@ public:
 	bool mouseDown;
 
 	float textHeight;
+	float guiScale = 1.f;
 
 private:
+	float baselineTextHeight;
+
 	enum event_type
 	{
 		event_type_none,
@@ -156,7 +159,7 @@ private:
 
 
 	float cursorY;
-	uint32 level;
+	float level;
 
 	std::vector<uint64> allTabsSeenThisFrame;
 
