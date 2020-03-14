@@ -3,6 +3,7 @@
 #include "common.h"
 #include "math.h"
 #include "material.h"
+#include "skeleton.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/Exporter.hpp>
@@ -44,6 +45,17 @@ struct vertex_3PUNTL
 	uint32 lightProbeTetrahedronIndex;
 };
 
+struct vertex_3PUNTLW
+{
+	vec3 position;
+	vec2 uv;
+	vec3 normal;
+	vec3 tangent;
+	uint32 lightProbeTetrahedronIndex;
+	uint8 skinIndices[4];
+	uint8 skinWeights[4];
+};
+
 struct indexed_triangle16
 {
 	uint16 a, b, c;
@@ -68,6 +80,8 @@ defineHasMember(position);
 defineHasMember(normal);
 defineHasMember(tangent);
 defineHasMember(uv);
+defineHasMember(skinIndices);
+defineHasMember(skinWeights);
 
 template <typename vertex_t>
 void setPosition(vertex_t& v, vec3 p)
@@ -105,6 +119,35 @@ void setUV(vertex_t& v, vec2 uv)
 	}
 }
 
+inline mat4 readAssimpMatrix(const aiMatrix4x4& m)
+{
+	mat4 result;
+	result.m00 = m.a1; result.m10 = m.b1; result.m20 = m.c1; result.m30 = m.d1;
+	result.m01 = m.a2; result.m11 = m.b2; result.m21 = m.c2; result.m31 = m.d2;
+	result.m02 = m.a3; result.m12 = m.b3; result.m22 = m.c3; result.m32 = m.d3;
+	result.m03 = m.a4; result.m13 = m.b4; result.m23 = m.c4; result.m33 = m.d4;
+	return result;
+}
+
+inline vec3 readAssimpVector(const aiVectorKey& v)
+{
+	vec3 result;
+	result.x = v.mValue.x;
+	result.y = v.mValue.y;
+	result.z = v.mValue.z;
+	return result;
+}
+
+inline quat readAssimpQuaternion(const aiQuatKey& q)
+{
+	quat result;
+	result.x = q.mValue.x;
+	result.y = q.mValue.y;
+	result.z = q.mValue.z;
+	result.w = q.mValue.w;
+	return result;
+}
+
 struct submesh_info
 {
 	bounding_box aabb;
@@ -134,7 +177,7 @@ struct cpu_triangle_mesh
 	submesh_info pushSphere(uint16 slices, uint16 rows, float radius = 1.f);
 	submesh_info pushCapsule(uint16 slices, uint16 rows, float height, float radius = 1.f);
 
-	std::vector<submesh_info> pushFromFile(const std::string& filename);
+	std::vector<submesh_info> pushFromFile(const std::string& filename, animation_skeleton* skeleton = nullptr);
 
 	void append(cpu_triangle_mesh<vertex_t>& other)
 	{
@@ -146,14 +189,40 @@ struct cpu_triangle_mesh
 	std::vector<submesh_material_info> allMaterials;
 
 private:
-	submesh_info loadAssimpMesh(const aiMesh* mesh);
+	submesh_info loadAssimpMesh(const aiMesh* mesh, animation_skeleton* skeleton);
 	submesh_material_info loadAssimpMaterial(const aiMaterial* material, const fs::path& parent);
 
 	std::vector<submesh_info> splitSubmesh(submesh_info submesh, float maxDim, uint32 maxNumTriangles);
+
+	void readSkeleton(const aiNode* node, animation_skeleton& skel, uint32& insertIndex, uint32 parentID = NO_PARENT);
 };
 
 template<typename vertex_t>
-inline std::vector<submesh_info> cpu_triangle_mesh<vertex_t>::pushFromFile(const std::string& filename)
+void cpu_triangle_mesh<vertex_t>::readSkeleton(const aiNode* node, animation_skeleton& skel, uint32& insertIndex, uint32 parentID)
+{
+	for (uint32 i = 0; i < skel.skeletonJoints.size(); ++i)
+	{
+		if (node->mName.C_Str() == skel.skeletonJoints[i].name)
+		{
+			skel.skeletonJoints[i].parentID = parentID;
+
+			std::swap(skel.skeletonJoints[i], skel.skeletonJoints[insertIndex]);
+			parentID = insertIndex;
+
+			++insertIndex;
+
+			break;
+		}
+	}
+
+	for (uint32 i = 0; i < node->mNumChildren; ++i)
+	{
+		readSkeleton(node->mChildren[i], skel, insertIndex, parentID);
+	}
+}
+
+template<typename vertex_t>
+inline std::vector<submesh_info> cpu_triangle_mesh<vertex_t>::pushFromFile(const std::string& filename, animation_skeleton* skeleton)
 {
 	fs::path path(filename);
 	assert(fs::exists(path));
@@ -202,9 +271,50 @@ inline std::vector<submesh_info> cpu_triangle_mesh<vertex_t>::pushFromFile(const
 
 	if (scene)
 	{
+		if (skeleton)
+		{
+			for (uint32 i = 0; i < scene->mNumMeshes; ++i)
+			{
+				const aiMesh* mesh = scene->mMeshes[i];
+
+				if (mesh->HasBones())
+				{
+					for (uint32 boneID = 0; boneID < mesh->mNumBones; ++boneID)
+					{
+						const aiBone* bone = mesh->mBones[boneID];
+						std::string name = bone->mName.C_Str();
+
+						bool alreadyPresent = false;
+						for (skeleton_joint& j : skeleton->skeletonJoints)
+						{
+							if (j.name == name)
+							{
+								alreadyPresent = true;
+								break;
+							}
+						}
+
+						if (!alreadyPresent)
+						{
+							skeleton_joint joint;
+							joint.name = name;
+							joint.invBindMatrix = readAssimpMatrix(bone->mOffsetMatrix);
+							joint.bindTransform = trs(joint.invBindMatrix.invert());
+							skeleton->skeletonJoints.push_back(joint);
+						}
+					}
+				}
+			}
+
+			uint32 insertIndex = 0;
+			readSkeleton(scene->mRootNode, *skeleton, insertIndex);
+		}
+
 		for (uint32 i = 0; i < scene->mNumMeshes; ++i)
 		{
-			submesh_info sub = loadAssimpMesh(scene->mMeshes[i]);
+			const aiMesh* mesh = scene->mMeshes[i];
+
+			submesh_info sub = loadAssimpMesh(mesh, skeleton);
 #if 1
 			submeshes.push_back(sub);
 #else
@@ -254,7 +364,7 @@ inline std::vector<submesh_info> cpu_triangle_mesh<vertex_t>::pushFromFile(const
 }
 
 template<typename vertex_t>
-inline submesh_info cpu_triangle_mesh<vertex_t>::loadAssimpMesh(const aiMesh* mesh)
+inline submesh_info cpu_triangle_mesh<vertex_t>::loadAssimpMesh(const aiMesh* mesh, animation_skeleton* skeleton)
 {
 	uint32 baseVertex = (uint32)vertices.size();
 	uint32 firstTriangle = (uint32)triangles.size();
@@ -293,8 +403,60 @@ inline submesh_info cpu_triangle_mesh<vertex_t>::loadAssimpMesh(const aiMesh* me
 		setNormal(vertices[i + baseVertex], normal);
 		setTangent(vertices[i + baseVertex], tangent);
 		setUV(vertices[i + baseVertex], uv);
+
+
+		if constexpr (hasMember(vertex_t, skinIndices) && hasMember(vertex_t, skinWeights))
+		{
+			vertices[i + baseVertex].skinWeights[0] =
+				vertices[i + baseVertex].skinWeights[1] =
+				vertices[i + baseVertex].skinWeights[2] =
+				vertices[i + baseVertex].skinWeights[3] = 0;
+		}
 	}
 
+	if constexpr (hasMember(vertex_t, skinIndices) && hasMember(vertex_t, skinWeights))
+	{
+		if (skeleton && mesh->HasBones())
+		{
+			uint32 numBones = mesh->mNumBones;
+			assert(numBones < 256);
+
+			for (uint32 boneID = 0; boneID < numBones; ++boneID)
+			{
+				const aiBone* bone = mesh->mBones[boneID];
+				uint32 jointID = -1;
+				for (uint32 i = 0; i < (uint32)skeleton->skeletonJoints.size(); ++i)
+				{
+					skeleton_joint& j = skeleton->skeletonJoints[i];
+					if (j.name == bone->mName.C_Str())
+					{
+						jointID = i;
+						break;
+					}
+				}
+				assert(jointID != -1);
+
+				for (uint32 weightID = 0; weightID < bone->mNumWeights; ++weightID)
+				{
+					uint32 vertexID = bone->mWeights[weightID].mVertexId;
+					float weight = bone->mWeights[weightID].mWeight;
+
+					assert(vertexID + baseVertex < (uint32)vertices.size());
+					vertex_t& vertex = vertices[vertexID + baseVertex];
+					
+					for (uint32 i = 0; i < 4; ++i)
+					{
+						if (vertex.skinWeights[i] == 0)
+						{
+							vertex.skinIndices[i] = (uint8)jointID;
+							vertex.skinWeights[i] = (uint8)(weight * 255);
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
 
 	for (uint32 i = 0; i < mesh->mNumFaces; ++i)
 	{

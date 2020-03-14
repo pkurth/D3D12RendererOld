@@ -20,6 +20,8 @@
 #include "procedural_placement.h"
 #include "procedural_placement_editor.h"
 
+#include "tree.h"
+
 
 #define CAMERA_SENSITIVITY 4.f
 #define CAMERA_MOVEMENT_SPEED 10.f
@@ -50,6 +52,8 @@ private:
 	particle_pipeline particles;
 	sky_pipeline sky;
 	present_pipeline present;
+
+	tree_pipeline tree;
 
 	procedural_placement proceduralPlacement;
 

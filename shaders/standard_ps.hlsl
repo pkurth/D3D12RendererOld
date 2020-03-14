@@ -24,31 +24,31 @@ ConstantBuffer<directional_light> sun		: register(b3);
 ConstantBuffer<spot_light> spotLight		: register(b4);
 
 
-SamplerState linearWrapSampler				: register(s0, space0);
-SamplerState brdfSampler					: register(s1, space0);
-SamplerComparisonState shadowMapSampler		: register(s2, space0);
+SamplerState linearWrapSampler				: register(s0);
+SamplerState brdfSampler					: register(s1);
+SamplerComparisonState shadowMapSampler		: register(s2);
 
 
 
 // BRDF.
-TextureCube<float4> irradianceTexture		: register(t0, space0);
-TextureCube<float4> environmentTexture		: register(t1, space0);
-Texture2D<float4> brdf						: register(t2, space0);
+TextureCube<float4> irradianceTexture		: register(t0, space1);
+TextureCube<float4> environmentTexture		: register(t1, space1);
+Texture2D<float4> brdf						: register(t2, space1);
 
 // Materials.
-Texture2D<float4> albedoTextures[]	: register(t0, space1);
-Texture2D<float4> normalTextures[]	: register(t0, space2);
-Texture2D<float> roughnessTextures[]	: register(t0, space3);
-Texture2D<float> metallicTextures[]	: register(t0, space4);
+Texture2D<float4> albedoTextures[]			: register(t0, space2);
+Texture2D<float4> normalTextures[]			: register(t0, space3);
+Texture2D<float> roughnessTextures[]		: register(t0, space4);
+Texture2D<float> metallicTextures[]			: register(t0, space5);
 
 // Shadow maps.
-Texture2D<float> sunShadowMapCascades[4]	: register(t0, space5);
-Texture2D<float> spotLightShadowMap			: register(t4, space5);
+Texture2D<float> sunShadowMapCascades[4]	: register(t0, space6);
+Texture2D<float> spotLightShadowMap			: register(t4, space6);
 
 // Light probes.
-StructuredBuffer<float4> lightProbePositions					: register(t0, space6);
-StructuredBuffer<packed_spherical_harmonics> sphericalHarmonics	: register(t1, space6);
-StructuredBuffer<light_probe_tetrahedron> lightProbeTetrahedra	: register(t2, space6);
+StructuredBuffer<float4> lightProbePositions					: register(t0, space7);
+StructuredBuffer<packed_spherical_harmonics> sphericalHarmonics	: register(t1, space7);
+StructuredBuffer<light_probe_tetrahedron> lightProbeTetrahedra	: register(t2, space7);
 
 
 ps_output main(ps_input IN)

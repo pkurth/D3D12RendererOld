@@ -20,6 +20,8 @@ cbuffer placement_cb : register(b0)
 	float2 tileCorner;
 	float tileSize;
 	uint numDensityMaps;
+
+	float3 groundNormal;
 	float groundHeight;
 
 	float uvScale;
@@ -123,7 +125,7 @@ void main(cs_input IN)
 
 		placement_point result;
 		result.position = position;
-		result.normal = float3(0.f, 1.f, 0.f);
+		result.normal = groundNormal;
 		result.meshID = meshIndex;
 		result.lod = lodIndex;
 		placementPoints[groupStartOffset + innerGroupIndex] = result;

@@ -24,7 +24,7 @@
 		- Raytracing.
 */
 
-#define ENABLE_SPONZA 1
+#define ENABLE_SPONZA 0
 #define ENABLE_PARTICLES 0
 #define ENABLE_PROCEDURAL 1
 #define ENABLE_PROCEDURAL_SHADOWS 0
@@ -336,7 +336,6 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		indirectBuffer.finish(commandList);
 	}
 
-
 	std::vector<submesh_info> placementSubmeshes =
 	{
 		cubeSubmesh,
@@ -412,6 +411,8 @@ void dx_game::initialize(ComPtr<ID3D12Device2> device, uint32 width, uint32 heig
 		oakPlacementMesh);
 	proceduralPlacementEditor.initialize(device, lightingRT);
 
+
+	tree.initialize(device, commandList, lightingRT, sunShadowMapRT->depthStencilFormat);
 
 	{
 		PROFILE_BLOCK("Execute copy command list");
@@ -606,6 +607,7 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 	indirect.renderDepthOnly(commandList, camera, indirectBuffer.indirectMesh, proceduralPlacement.depthOnlyCommandBuffer, 
 		proceduralPlacement.numDrawCalls, proceduralPlacement.instanceBuffer);
 #endif
+	tree.renderDepthOnly(commandList, camera);
 #endif
 
 	commandList->transitionBarrier(lightProbeSystem.packedSphericalHarmonicsBuffer.resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -618,6 +620,7 @@ void dx_game::renderScene(dx_command_list* commandList, render_camera& camera)
 		proceduralPlacement.numDrawCalls, proceduralPlacement.instanceBuffer,
 		cameraCBAddress, sunCBAddress, spotLightCBAddress);
 #endif
+	tree.render(commandList, cameraCBAddress, sunCBAddress, spotLightCBAddress, indirectBuffer.descriptors);
 	sky.render(commandList, cameraCBAddress, cubemap);
 }
 

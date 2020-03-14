@@ -16,6 +16,8 @@ struct placement_gen_points_cb
 	vec2 tileCorner;
 	float tileSize;
 	uint32 numDensityMaps;
+
+	vec3 groundNormal;
 	float groundHeight;
 
 	float uvScale;
@@ -534,6 +536,7 @@ uint32 procedural_placement::generatePoints(dx_command_list* commandList, vec3 c
 					cb.cameraPosition = vec4(cameraPosition, 1.f);
 					cb.tileCorner = corner;
 					cb.tileSize = PROCEDURAL_TILE_SIZE;
+					cb.groundNormal = vec3(0.f, 1.f, 0.f);
 					cb.groundHeight = tile.groundHeight;
 					for (uint32 o = 0; o < desc.numDensityMaps; ++o)
 					{

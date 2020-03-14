@@ -111,6 +111,12 @@
     <ClCompile Include="src\procedural_placement_editor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\tree.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\skeleton.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\common.h">
@@ -257,6 +263,12 @@
     <ClInclude Include="src\procedural_placement_editor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\tree.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\skeleton.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\generate_mips.hlsl" />
@@ -286,7 +298,6 @@
     <FxCompile Include="shaders\procedural_placement_gen_points.hlsl" />
     <FxCompile Include="shaders\procedural_placement_place_geometry.hlsl" />
     <FxCompile Include="shaders\geometry_vs.hlsl" />
-    <FxCompile Include="shaders\geometry_ps.hlsl" />
     <FxCompile Include="shaders\procedural_placement_prefix_sum.hlsl" />
     <FxCompile Include="shaders\procedural_placement_clear_buffer.hlsl" />
     <FxCompile Include="shaders\procedural_placement_create_commands.hlsl" />
@@ -295,6 +306,8 @@
     <FxCompile Include="shaders\placement_editor_vs.hlsl" />
     <FxCompile Include="shaders\placement_editor_apply_brush_vs.hlsl" />
     <FxCompile Include="shaders\placement_editor_apply_brush_ps.hlsl" />
+    <FxCompile Include="shaders\tree_vs.hlsl" />
+    <FxCompile Include="shaders\standard_ps.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

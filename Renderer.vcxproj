@@ -173,8 +173,10 @@
     <ClCompile Include="src\resource.cpp" />
     <ClCompile Include="src\resource_state_tracker.cpp" />
     <ClCompile Include="src\root_signature.cpp" />
+    <ClCompile Include="src\skeleton.cpp" />
     <ClCompile Include="src\sky.cpp" />
     <ClCompile Include="src\texture.cpp" />
+    <ClCompile Include="src\tree.cpp" />
     <ClCompile Include="src\upload_buffer.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\window.cpp" />
@@ -222,10 +224,12 @@
     <ClInclude Include="src\math.h" />
     <ClInclude Include="src\resource_state_tracker.h" />
     <ClInclude Include="src\root_signature.h" />
+    <ClInclude Include="src\skeleton.h" />
     <ClInclude Include="src\sky.h" />
     <ClInclude Include="src\texture.h" />
     <ClInclude Include="src\thread_safe_queue.h" />
     <ClInclude Include="src\thread_safe_vector.h" />
+    <ClInclude Include="src\tree.h" />
     <ClInclude Include="src\upload_buffer.h" />
     <ClInclude Include="src\window.h" />
   </ItemGroup>
@@ -404,6 +408,11 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Pixel</ShaderType>
     </FxCompile>
+    <FxCompile Include="shaders\tree_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
     <FxCompile Include="shaders\unlit_flat_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Pixel</ShaderType>
@@ -455,7 +464,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <FxCompile Include="shaders\geometry_ps.hlsl">
+    <FxCompile Include="shaders\standard_ps.hlsl">
       <FileType>Document</FileType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>

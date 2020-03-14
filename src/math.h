@@ -283,6 +283,11 @@ inline comp_vec operator*(const comp_mat& m, const comp_vec& v)
 	return DirectX::XMVector4Transform(v, m);
 }
 
+inline comp_mat operator*(const comp_mat& m, float s)
+{
+	return m * DirectX::XMMatrixScaling(s, s, s);
+}
+
 inline comp_vec operator*(comp_vec v, float s)
 {
 	return DirectX::XMVectorScale(v, s);
@@ -423,9 +428,72 @@ struct trs
 	vec3 position;
 	float scale;
 
+	trs() {}
+
 	trs(vec3 position, quat rotation, float scale = 1.f)
 		: position(position), rotation(rotation), scale(scale) { }
+
+	explicit trs(const mat4& m)
+	{
+		vec3 c0(m.m00, m.m10, m.m20);
+		scale = sqrt(dot3(c0, c0));
+		float invScale = 1.f / scale;
+
+		position.x = m.m03;
+		position.y = m.m13;
+		position.z = m.m23;
+
+		mat4 R = m;
+		R.m03 = R.m13 = R.m23 = 0.f;
+		R = R * invScale;
+
+		float tr = m.m00 + m.m11 + m.m22;
+
+		if (tr > 0.f)
+		{
+			float s = sqrtf(tr + 1.f) * 2.f; // S=4*qw 
+			rotation.w = 0.25f * s;
+			rotation.x = (R.m21 - R.m12) / s;
+			rotation.y = (R.m02 - R.m20) / s;
+			rotation.z = (R.m10 - R.m01) / s;
+		}
+		else if ((R.m00 > R.m11) && (R.m00 > R.m22))
+		{
+			float s = sqrtf(1.f + R.m00 - R.m11 - R.m22) * 2.f; // S=4*qx 
+			rotation.w = (R.m21 - R.m12) / s;
+			rotation.x = 0.25f * s;
+			rotation.y = (R.m01 + R.m10) / s;
+			rotation.z = (R.m02 + R.m20) / s;
+		}
+		else if (R.m11 > R.m22)
+		{
+			float s = sqrtf(1.f + R.m11 - R.m00 - R.m22) * 2.f; // S=4*qy
+			rotation.w = (R.m02 - R.m20) / s;
+			rotation.x = (R.m01 + R.m10) / s;
+			rotation.y = 0.25f * s;
+			rotation.z = (R.m12 + R.m21) / s;
+		}
+		else
+		{
+			float s = sqrtf(1.f + R.m22 - R.m00 - R.m11) * 2.f; // S=4*qz
+			rotation.w = (R.m10 - R.m01) / s;
+			rotation.x = (R.m02 + R.m20) / s;
+			rotation.y = (R.m12 + R.m21) / s;
+			rotation.z = 0.25f * s;
+		}
+	}
+
+	static const trs identity;
 };
+
+inline trs operator*(const trs& a, const trs& b)
+{
+	trs result;
+	result.position = a.rotation * (a.scale * b.position) + a.position;
+	result.rotation = a.rotation * b.rotation;
+	result.scale = a.scale * b.scale;
+	return result;
+}
 
 template <typename T>
 inline T bucketize(T problemSize, size_t bucketSize)
